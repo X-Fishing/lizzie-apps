@@ -1,0 +1,1503 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a0a2e">
+<title>Lizzie Semijoias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js"></script>
+<style>
+:root {
+  --plum: #1a0a2e;
+  --rose: #c9748a;
+  --gold: #d4a84b;
+  --blush: #f5e6ec;
+  --cream: #faf7f2;
+  --text: #2d1f35;
+  --muted: #8a7590;
+  --border: rgba(201,116,138,0.2);
+  --card: rgba(255,255,255,0.85);
+  --success: #4caf82;
+  --warning: #e8a838;
+  --danger: #e05555;
+  --info: #5b9bd5;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--text); }
+
+/* SPLASH / AUTH */
+#splash {
+  position: fixed; inset: 0; z-index: 1000;
+  background: linear-gradient(145deg, #1a0a2e 0%, #2d1248 50%, #1a0a2e 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 32px;
+}
+#splash .logo-wrap { text-align: center; }
+#splash .logo-icon {
+  font-size: 52px; display: block; margin-bottom: 12px;
+  filter: drop-shadow(0 0 20px rgba(212,168,75,0.5));
+  animation: float 3s ease-in-out infinite;
+}
+@keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
+#splash h1 {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 38px; font-weight: 300; letter-spacing: 4px;
+  color: #fff; text-transform: uppercase;
+}
+#splash .tagline {
+  font-size: 12px; letter-spacing: 3px; color: var(--gold);
+  text-transform: uppercase; margin-top: 4px;
+}
+.auth-box {
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(212,168,75,0.2);
+  border-radius: 16px; padding: 32px; width: 340px; max-width: 90vw;
+}
+.auth-tabs { display: flex; gap: 0; margin-bottom: 24px; }
+.auth-tab {
+  flex: 1; padding: 10px; text-align: center; cursor: pointer;
+  font-size: 13px; font-weight: 500; letter-spacing: 1px; text-transform: uppercase;
+  color: rgba(255,255,255,0.4); border-bottom: 2px solid transparent;
+  transition: all 0.3s;
+}
+.auth-tab.active { color: var(--gold); border-color: var(--gold); }
+.auth-form { display: flex; flex-direction: column; gap: 14px; }
+.auth-form input, .auth-form select {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 10px; padding: 12px 16px; font-size: 14px; color: #fff;
+  font-family: 'DM Sans', sans-serif; outline: none; transition: border 0.3s;
+  width: 100%;
+}
+.auth-form input::placeholder { color: rgba(255,255,255,0.3); }
+.auth-form input:focus { border-color: var(--gold); }
+.auth-form select option { background: #2d1248; }
+.btn-gold {
+  background: linear-gradient(135deg, var(--gold), #b8902f);
+  border: none; border-radius: 10px; padding: 13px; font-size: 14px;
+  font-weight: 500; color: #fff; cursor: pointer; transition: all 0.3s;
+  font-family: 'DM Sans', sans-serif; letter-spacing: 0.5px;
+}
+.btn-gold:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(212,168,75,0.4); }
+.auth-msg { font-size: 12px; text-align: center; padding: 8px; border-radius: 8px; }
+.auth-msg.error { background: rgba(224,85,85,0.15); color: #ff8a8a; }
+.auth-msg.success { background: rgba(76,175,130,0.15); color: #7de8b4; }
+
+/* PENDING APPROVAL */
+#pending-screen {
+  position: fixed; inset: 0; z-index: 999;
+  background: linear-gradient(145deg, #1a0a2e, #2d1248);
+  display: none; align-items: center; justify-content: center;
+  flex-direction: column; gap: 20px; text-align: center; padding: 32px;
+}
+#pending-screen .big-icon { font-size: 64px; }
+#pending-screen h2 { font-family: 'Cormorant Garamond', serif; font-size: 28px; color: var(--gold); }
+#pending-screen p { color: rgba(255,255,255,0.6); font-size: 14px; line-height: 1.6; max-width: 280px; }
+
+/* MAIN APP */
+#app { display: none; min-height: 100vh; flex-direction: column; }
+
+/* TOP BAR */
+.topbar {
+  background: var(--plum);
+  padding: 14px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+  position: sticky; top: 0; z-index: 100;
+  box-shadow: 0 2px 20px rgba(0,0,0,0.3);
+}
+.topbar-logo {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 22px; font-weight: 300; letter-spacing: 3px;
+  color: var(--gold); text-transform: uppercase;
+}
+.topbar-right { display: flex; align-items: center; gap: 12px; }
+.user-badge {
+  background: rgba(201,116,138,0.2); border: 1px solid var(--rose);
+  border-radius: 20px; padding: 4px 12px; font-size: 11px;
+  color: var(--rose); font-weight: 500; letter-spacing: 0.5px;
+}
+.btn-icon {
+  background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.5);
+  font-size: 18px; padding: 4px; transition: color 0.3s;
+}
+.btn-icon:hover { color: var(--gold); }
+
+/* NAV */
+.nav {
+  background: #fff; border-top: 1px solid var(--border);
+  display: flex; position: fixed; bottom: 0; left: 0; right: 0; z-index: 100;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+}
+.nav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  padding: 10px 4px; cursor: pointer; transition: all 0.3s; border: none; background: none;
+  color: var(--muted); font-size: 10px; font-weight: 500; letter-spacing: 0.5px;
+  text-transform: uppercase; font-family: 'DM Sans', sans-serif;
+}
+.nav-item .nav-icon { font-size: 20px; margin-bottom: 3px; }
+.nav-item.active { color: var(--rose); }
+.nav-item.active .nav-icon { transform: scale(1.1); }
+
+/* CONTENT */
+.content { flex: 1; padding: 20px 16px 90px; max-width: 600px; margin: 0 auto; width: 100%; }
+
+/* SECTION HEADER */
+.section-header {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;
+}
+.section-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 26px; font-weight: 400; color: var(--plum);
+}
+.section-subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* CARDS */
+.card {
+  background: var(--card); border-radius: 16px;
+  border: 1px solid var(--border); padding: 18px;
+  margin-bottom: 14px; box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+  transition: all 0.3s;
+}
+.card:hover { box-shadow: 0 4px 20px rgba(0,0,0,0.08); transform: translateY(-1px); }
+
+/* STATUS BADGES */
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 20px;
+  font-size: 11px; font-weight: 500; letter-spacing: 0.3px;
+}
+.badge-aberta { background: rgba(91,155,213,0.12); color: var(--info); }
+.badge-em_conserto { background: rgba(232,168,56,0.12); color: var(--warning); }
+.badge-pronta { background: rgba(76,175,130,0.12); color: var(--success); }
+.badge-entregue { background: rgba(138,117,144,0.12); color: var(--muted); }
+.badge-pendente { background: rgba(224,85,85,0.12); color: var(--danger); }
+.badge-parcial { background: rgba(232,168,56,0.12); color: var(--warning); }
+.badge-quitado { background: rgba(76,175,130,0.12); color: var(--success); }
+.badge-ativo { background: rgba(76,175,130,0.12); color: var(--success); }
+
+/* GARANTIA CARD */
+.garantia-card { cursor: pointer; }
+.garantia-header { display: flex; gap: 14px; align-items: flex-start; }
+.garantia-foto {
+  width: 70px; height: 70px; border-radius: 12px;
+  object-fit: cover; flex-shrink: 0;
+  background: var(--blush); display: flex; align-items: center; justify-content: center;
+  font-size: 28px; border: 1px solid var(--border);
+}
+.garantia-foto img { width: 100%; height: 100%; object-fit: cover; border-radius: 11px; }
+.garantia-info { flex: 1; min-width: 0; }
+.garantia-item { font-weight: 500; font-size: 15px; color: var(--plum); margin-bottom: 4px; }
+.garantia-cliente { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+.garantia-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+.garantia-prazo { font-size: 12px; color: var(--muted); }
+.prazo-vencendo { color: var(--warning); font-weight: 500; }
+.prazo-vencido { color: var(--danger); font-weight: 500; }
+
+/* STATS */
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+.stat-card {
+  background: var(--card); border-radius: 14px;
+  border: 1px solid var(--border); padding: 16px; text-align: center;
+}
+.stat-num {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 36px; font-weight: 300; color: var(--plum); line-height: 1;
+}
+.stat-label { font-size: 11px; color: var(--muted); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
+.stat-rose .stat-num { color: var(--rose); }
+.stat-gold .stat-num { color: var(--gold); }
+.stat-green .stat-num { color: var(--success); }
+
+/* FORM */
+.form-group { margin-bottom: 16px; }
+.form-label { font-size: 12px; font-weight: 500; color: var(--muted); letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 6px; display: block; }
+.form-control {
+  width: 100%; padding: 12px 14px; border-radius: 12px;
+  border: 1.5px solid var(--border); background: #fff;
+  font-size: 14px; color: var(--text); outline: none;
+  font-family: 'DM Sans', sans-serif; transition: border 0.3s;
+}
+.form-control:focus { border-color: var(--rose); }
+textarea.form-control { resize: vertical; min-height: 80px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+/* FOTO UPLOAD */
+.foto-upload {
+  border: 2px dashed var(--border); border-radius: 14px;
+  padding: 24px; text-align: center; cursor: pointer;
+  transition: all 0.3s; background: var(--blush);
+}
+.foto-upload:hover { border-color: var(--rose); }
+.foto-upload input { display: none; }
+.foto-preview { max-height: 200px; border-radius: 10px; object-fit: cover; width: 100%; display: none; }
+
+/* BUTTON */
+.btn-primary {
+  background: linear-gradient(135deg, var(--rose), #b5526a);
+  border: none; border-radius: 12px; padding: 14px 24px;
+  font-size: 14px; font-weight: 500; color: #fff; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; width: 100%; transition: all 0.3s;
+}
+.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(201,116,138,0.4); }
+.btn-secondary {
+  background: #fff; border: 1.5px solid var(--border); border-radius: 12px;
+  padding: 12px 20px; font-size: 14px; font-weight: 500; color: var(--muted);
+  cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.3s;
+}
+.btn-secondary:hover { border-color: var(--rose); color: var(--rose); }
+.btn-sm {
+  padding: 7px 14px; font-size: 12px; border-radius: 8px;
+}
+.btn-danger {
+  background: rgba(224,85,85,0.1); border: 1px solid rgba(224,85,85,0.3);
+  color: var(--danger); border-radius: 8px; padding: 7px 14px;
+  font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif;
+}
+
+/* MODAL */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 500;
+  background: rgba(26,10,46,0.7); backdrop-filter: blur(4px);
+  display: none; align-items: flex-end; justify-content: center;
+}
+.modal-overlay.show { display: flex; }
+.modal {
+  background: var(--cream); border-radius: 24px 24px 0 0;
+  width: 100%; max-width: 600px; max-height: 90vh;
+  overflow-y: auto; padding: 24px;
+  animation: slideUp 0.35s ease;
+}
+@keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+.modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 20px; }
+.modal-title { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 400; margin-bottom: 20px; color: var(--plum); }
+
+/* DETAIL VIEW */
+.detail-foto { width: 100%; height: 220px; object-fit: cover; border-radius: 16px; margin-bottom: 16px; }
+.detail-grid { display: grid; gap: 12px; }
+.detail-row { display: flex; gap: 8px; }
+.detail-key { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; min-width: 110px; padding-top: 1px; }
+.detail-val { font-size: 14px; color: var(--text); font-weight: 400; flex: 1; }
+.detail-actions { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+
+/* SEARCH / FILTER */
+.search-bar {
+  display: flex; gap: 10px; margin-bottom: 16px;
+}
+.search-input {
+  flex: 1; padding: 11px 14px; border-radius: 12px;
+  border: 1.5px solid var(--border); background: #fff;
+  font-size: 14px; outline: none; font-family: 'DM Sans', sans-serif;
+}
+.search-input:focus { border-color: var(--rose); }
+.filter-chips { display: flex; gap: 8px; margin-bottom: 16px; overflow-x: auto; padding-bottom: 4px; }
+.chip {
+  padding: 6px 14px; border-radius: 20px; font-size: 12px; cursor: pointer;
+  white-space: nowrap; border: 1.5px solid var(--border); background: #fff;
+  color: var(--muted); transition: all 0.3s; font-family: 'DM Sans', sans-serif;
+}
+.chip.active { background: var(--rose); color: #fff; border-color: var(--rose); }
+
+/* EMPTY STATE */
+.empty-state { text-align: center; padding: 48px 24px; color: var(--muted); }
+.empty-state .empty-icon { font-size: 48px; margin-bottom: 16px; }
+.empty-state p { font-size: 14px; line-height: 1.6; }
+
+/* LOADING */
+.loading { text-align: center; padding: 40px; color: var(--muted); }
+.spinner { font-size: 28px; animation: spin 1s linear infinite; display: inline-block; margin-bottom: 12px; }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+/* CONSIGNADO */
+.consig-header { display: flex; gap: 12px; }
+.consig-foto {
+  width: 60px; height: 60px; border-radius: 10px; flex-shrink: 0;
+  background: var(--blush); display: flex; align-items: center; justify-content: center; font-size: 24px;
+  border: 1px solid var(--border);
+}
+.consig-info { flex: 1; }
+.consig-nome { font-weight: 500; font-size: 14px; color: var(--plum); margin-bottom: 4px; }
+.consig-ref { font-size: 12px; color: var(--muted); }
+.progress-bar { height: 6px; background: var(--blush); border-radius: 3px; margin: 10px 0 4px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(to right, var(--rose), var(--gold)); transition: width 0.5s; }
+.progress-label { font-size: 11px; color: var(--muted); }
+
+/* PAGAMENTOS */
+.pagto-card { cursor: pointer; }
+.pagto-nome { font-weight: 500; font-size: 15px; color: var(--plum); }
+.pagto-item { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.pagto-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+.pagto-valor { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--plum); }
+.pagto-valor span { font-size: 12px; color: var(--muted); font-family: 'DM Sans', sans-serif; }
+
+/* ADMIN */
+.rev-card { cursor: pointer; }
+.rev-header { display: flex; align-items: center; gap: 14px; }
+.rev-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--rose), var(--plum));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; color: #fff; font-family: 'Cormorant Garamond', serif; font-weight: 300;
+  flex-shrink: 0;
+}
+.rev-nome { font-weight: 500; font-size: 15px; color: var(--plum); }
+.rev-cidade { font-size: 12px; color: var(--muted); }
+.rev-status { margin-left: auto; }
+.pending-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warning); display: inline-block; margin-right: 4px; }
+
+/* SECTION DIVIDER */
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+/* TOAST */
+#toast {
+  position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--plum); color: #fff; padding: 12px 20px; border-radius: 12px;
+  font-size: 13px; z-index: 9999; opacity: 0; transition: all 0.3s;
+  pointer-events: none; white-space: nowrap;
+  border: 1px solid rgba(212,168,75,0.3);
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ALERT BANNER */
+.alert { padding: 12px 16px; border-radius: 12px; font-size: 13px; margin-bottom: 16px; }
+.alert-warning { background: rgba(232,168,56,0.12); color: var(--warning); border: 1px solid rgba(232,168,56,0.3); }
+.alert-info { background: rgba(91,155,213,0.1); color: var(--info); border: 1px solid rgba(91,155,213,0.2); }
+
+/* FAB */
+.fab {
+  position: fixed; bottom: 80px; right: 20px; z-index: 200;
+  width: 52px; height: 52px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--rose), #b5526a);
+  border: none; cursor: pointer; font-size: 24px; color: #fff;
+  box-shadow: 0 4px 20px rgba(201,116,138,0.5); transition: all 0.3s;
+  display: flex; align-items: center; justify-content: center;
+}
+.fab:hover { transform: scale(1.08); }
+
+@media (min-width: 600px) {
+  .content { padding: 28px 24px 100px; }
+  .stats-grid { grid-template-columns: repeat(4, 1fr); }
+}
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- SPLASH / AUTH -->
+<div id="splash">
+  <div class="logo-wrap">
+    <span class="logo-icon">💎</span>
+    <h1>Lizzie</h1>
+    <div class="tagline">Semijoias</div>
+  </div>
+
+  <div class="auth-box">
+    <div class="auth-tabs">
+      <div class="auth-tab active" onclick="switchTab('login')">Entrar</div>
+      <div class="auth-tab" onclick="switchTab('cadastro')">Cadastrar</div>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="tab-login" class="auth-form">
+      <input type="email" id="login-email" placeholder="E-mail" autocomplete="email">
+      <input type="password" id="login-senha" placeholder="Senha" autocomplete="current-password">
+      <button class="btn-gold" onclick="fazerLogin()">Entrar</button>
+      <div id="login-msg" class="auth-msg" style="display:none"></div>
+    </div>
+
+    <!-- CADASTRO -->
+    <div id="tab-cadastro" class="auth-form" style="display:none">
+      <input type="text" id="cad-nome" placeholder="Nome completo">
+      <input type="email" id="cad-email" placeholder="E-mail">
+      <input type="tel" id="cad-tel" placeholder="WhatsApp">
+      <input type="text" id="cad-cidade" placeholder="Cidade / Estado">
+      <input type="password" id="cad-senha" placeholder="Senha (mín. 6 caracteres)" autocomplete="new-password">
+      <button class="btn-gold" onclick="fazerCadastro()">Solicitar acesso</button>
+      <div id="cad-msg" class="auth-msg" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PENDING APPROVAL -->
+<div id="pending-screen">
+  <div class="big-icon">⏳</div>
+  <h2>Aguardando aprovação</h2>
+  <p>Seu cadastro foi enviado para a Lizzie Semijoias. Você receberá acesso assim que for aprovada.</p>
+  <button class="btn-secondary" style="color:#fff;border-color:rgba(255,255,255,0.2)" onclick="supabase.auth.signOut().then(()=>location.reload())">Sair</button>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div class="topbar-logo">💎 Lizzie</div>
+    <div class="topbar-right">
+      <div class="user-badge" id="user-badge">—</div>
+      <button class="btn-icon" onclick="supabase.auth.signOut().then(()=>location.reload())" title="Sair">⏻</button>
+    </div>
+  </div>
+
+  <!-- CONTENT PANELS -->
+  <div class="content">
+
+    <!-- DASHBOARD -->
+    <div id="panel-dashboard">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Dashboard</div>
+          <div class="section-subtitle" id="dash-subtitle">Visão geral</div>
+        </div>
+      </div>
+      <div class="stats-grid" id="dash-stats">
+        <div class="stat-card"><div class="stat-num stat-info" id="s-abertas">—</div><div class="stat-label">Em aberto</div></div>
+        <div class="stat-card"><div class="stat-num stat-gold" id="s-conserto">—</div><div class="stat-label">Em conserto</div></div>
+        <div class="stat-card stat-green"><div class="stat-num" id="s-prontas" style="color:var(--success)">—</div><div class="stat-label">Prontas</div></div>
+        <div class="stat-card"><div class="stat-num" id="s-vencendo" style="color:var(--danger)">—</div><div class="stat-label">Vencendo</div></div>
+      </div>
+      <div id="dash-alertas"></div>
+      <div class="section-header" style="margin-top:4px">
+        <div class="section-title" style="font-size:18px">Recentes</div>
+      </div>
+      <div id="dash-recentes"><div class="loading"><div class="spinner">⟳</div><br>Carregando...</div></div>
+    </div>
+
+    <!-- GARANTIAS -->
+    <div id="panel-garantias" style="display:none">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Garantias</div>
+          <div class="section-subtitle" id="gsubTitle">Todas as garantias</div>
+        </div>
+        <button class="btn-primary btn-sm" onclick="openNovaGarantia()">+ Nova</button>
+      </div>
+      <div class="search-bar">
+        <input class="search-input" id="g-search" placeholder="Buscar..." oninput="filtrarGarantias()">
+      </div>
+      <div class="filter-chips" id="g-chips">
+        <div class="chip active" data-filter="todas" onclick="setGFilter(this,'todas')">Todas</div>
+        <div class="chip" data-filter="aberta" onclick="setGFilter(this,'aberta')">Abertas</div>
+        <div class="chip" data-filter="em_conserto" onclick="setGFilter(this,'em_conserto')">Em conserto</div>
+        <div class="chip" data-filter="pronta" onclick="setGFilter(this,'pronta')">Prontas</div>
+        <div class="chip" data-filter="entregue" onclick="setGFilter(this,'entregue')">Entregues</div>
+      </div>
+      <div id="g-list"></div>
+    </div>
+
+    <!-- CONSIGNADOS -->
+    <div id="panel-consignados" style="display:none">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Consignados</div>
+          <div class="section-subtitle">Estoque enviado</div>
+        </div>
+        <button class="btn-primary btn-sm" id="btn-novo-consig" onclick="openNovoConsignado()" style="display:none">+ Novo</button>
+      </div>
+      <div id="c-list"></div>
+    </div>
+
+    <!-- PAGAMENTOS -->
+    <div id="panel-pagamentos" style="display:none">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Pagamentos</div>
+          <div class="section-subtitle">Controle das clientes</div>
+        </div>
+        <button class="btn-primary btn-sm" onclick="openNovoPagamento()">+ Novo</button>
+      </div>
+      <div class="filter-chips">
+        <div class="chip active" data-pfilter="todos" onclick="setPFilter(this,'todos')">Todos</div>
+        <div class="chip" data-pfilter="pendente" onclick="setPFilter(this,'pendente')">Pendentes</div>
+        <div class="chip" data-pfilter="parcial" onclick="setPFilter(this,'parcial')">Parciais</div>
+        <div class="chip" data-pfilter="quitado" onclick="setPFilter(this,'quitado')">Quitados</div>
+      </div>
+      <div id="p-list"></div>
+    </div>
+
+    <!-- ADMIN REVENDEDORAS -->
+    <div id="panel-admin" style="display:none">
+      <div class="section-header">
+        <div>
+          <div class="section-title">Revendedoras</div>
+          <div class="section-subtitle">Gestão de acesso</div>
+        </div>
+      </div>
+      <div id="pendentes-list"></div>
+      <div id="rev-list"></div>
+    </div>
+
+  </div><!-- /content -->
+
+  <!-- BOTTOM NAV -->
+  <nav class="nav">
+    <button class="nav-item active" id="nav-dashboard" onclick="showPanel('dashboard')">
+      <span class="nav-icon">🏠</span>Início
+    </button>
+    <button class="nav-item" id="nav-garantias" onclick="showPanel('garantias')">
+      <span class="nav-icon">🔧</span>Garantias
+    </button>
+    <button class="nav-item" id="nav-consignados" onclick="showPanel('consignados')">
+      <span class="nav-icon">💍</span>Estoque
+    </button>
+    <button class="nav-item" id="nav-pagamentos" onclick="showPanel('pagamentos')">
+      <span class="nav-icon">💰</span>Pagamentos
+    </button>
+    <button class="nav-item" id="nav-admin" onclick="showPanel('admin')" style="display:none">
+      <span class="nav-icon">👑</span>Admin
+    </button>
+  </nav>
+</div>
+
+<!-- MODAL NOVA GARANTIA -->
+<div class="modal-overlay" id="modal-garantia">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-gTitle">Nova Garantia</div>
+    <input type="hidden" id="g-edit-id">
+
+    <div class="form-group">
+      <label class="form-label">Foto do item</label>
+      <div class="foto-upload" onclick="document.getElementById('g-foto-input').click()">
+        <input type="file" id="g-foto-input" accept="image/*" onchange="previewFoto(this,'g-foto-preview','g-foto-placeholder')">
+        <div id="g-foto-placeholder">📸<br><small>Toque para adicionar foto</small></div>
+        <img id="g-foto-preview" class="foto-preview">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Descrição do item *</label>
+      <input type="text" id="g-desc" class="form-control" placeholder="Ex: Anel solitário prata 925">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nome da cliente *</label>
+      <input type="text" id="g-cliente" class="form-control" placeholder="Nome completo">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Telefone da cliente</label>
+      <input type="tel" id="g-tel" class="form-control" placeholder="(00) 00000-0000">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Problema relatado *</label>
+      <textarea id="g-problema" class="form-control" placeholder="Descreva o defeito relatado pela cliente..."></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Data de entrada</label>
+        <input type="date" id="g-entrada" class="form-control">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Prazo máximo</label>
+        <input type="date" id="g-prazo" class="form-control" readonly>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Encaminhar para *</label>
+      <select id="g-destino" class="form-control">
+        <option value="">Selecione...</option>
+        <option value="rebanho">Rebanho</option>
+        <option value="fornecedor">Fornecedor</option>
+        <option value="conserto_local">Conserto local (solda/pedras/fechos)</option>
+        <option value="outro">Outro</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Detalhes do destino</label>
+      <input type="text" id="g-destino-det" class="form-control" placeholder="Nome da empresa ou endereço">
+    </div>
+    <div class="form-group" id="g-status-group" style="display:none">
+      <label class="form-label">Status</label>
+      <select id="g-status" class="form-control">
+        <option value="aberta">Aberta</option>
+        <option value="em_conserto">Em conserto</option>
+        <option value="pronta">Pronta para entrega</option>
+        <option value="entregue">Entregue</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Observações</label>
+      <textarea id="g-obs" class="form-control" placeholder="Anotações internas..."></textarea>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-garantia')">Cancelar</button>
+      <button class="btn-primary" style="flex:2" onclick="salvarGarantia()">Salvar garantia</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALHE GARANTIA -->
+<div class="modal-overlay" id="modal-detalhe-g">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="detalhe-g-content"></div>
+  </div>
+</div>
+
+<!-- MODAL NOVO CONSIGNADO (admin) -->
+<div class="modal-overlay" id="modal-consignado">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Enviar Consignado</div>
+    <div class="form-group">
+      <label class="form-label">Revendedora *</label>
+      <select id="c-rev" class="form-control"></select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Foto do item</label>
+      <div class="foto-upload" onclick="document.getElementById('c-foto-input').click()">
+        <input type="file" id="c-foto-input" accept="image/*" onchange="previewFoto(this,'c-foto-preview','c-foto-placeholder')">
+        <div id="c-foto-placeholder">📸<br><small>Toque para adicionar foto</small></div>
+        <img id="c-foto-preview" class="foto-preview">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Descrição do item *</label>
+      <input type="text" id="c-desc" class="form-control" placeholder="Ex: Colar folheado dourado">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Referência</label>
+      <input type="text" id="c-ref" class="form-control" placeholder="Código interno">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Qtd enviada *</label>
+        <input type="number" id="c-qtd" class="form-control" value="1" min="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Preço custo (R$)</label>
+        <input type="number" id="c-custo" class="form-control" step="0.01" placeholder="0,00">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Preço de venda sugerido (R$)</label>
+      <input type="number" id="c-venda" class="form-control" step="0.01" placeholder="0,00">
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-consignado')">Cancelar</button>
+      <button class="btn-primary" style="flex:2" onclick="salvarConsignado()">Enviar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALHE CONSIGNADO -->
+<div class="modal-overlay" id="modal-detalhe-c">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="detalhe-c-content"></div>
+  </div>
+</div>
+
+<!-- MODAL NOVO PAGAMENTO -->
+<div class="modal-overlay" id="modal-pagamento">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Novo Pagamento</div>
+    <div class="form-group">
+      <label class="form-label">Nome da cliente *</label>
+      <input type="text" id="p-cliente" class="form-control" placeholder="Nome da cliente">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Item vendido</label>
+      <input type="text" id="p-item" class="form-control" placeholder="Descrição do item">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Valor total (R$) *</label>
+        <input type="number" id="p-total" class="form-control" step="0.01" placeholder="0,00">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Valor pago (R$)</label>
+        <input type="number" id="p-pago" class="form-control" step="0.01" placeholder="0,00" value="0">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Data da venda</label>
+      <input type="date" id="p-data" class="form-control">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Observações</label>
+      <textarea id="p-obs" class="form-control" placeholder="Forma de pagamento, parcelas..."></textarea>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-pagamento')">Cancelar</button>
+      <button class="btn-primary" style="flex:2" onclick="salvarPagamento()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL DETALHE PAGAMENTO -->
+<div class="modal-overlay" id="modal-detalhe-p">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="detalhe-p-content"></div>
+  </div>
+</div>
+
+<!-- MODAL DETALHE REVENDEDORA (admin) -->
+<div class="modal-overlay" id="modal-detalhe-rev">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="detalhe-rev-content"></div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════
+const SUPABASE_URL = 'https://qoouzjntyfzcxnwjksiu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvb3V6am50eWZ6Y3hud2prc2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDgzMjksImV4cCI6MjA5NDA4NDMyOX0.eOXGwJJshAtRrO_g4aldYau6qeU25Usy7PydvEfN1a4';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let currentUser = null;
+let currentProfile = null;
+let allGarantias = [];
+let allConsignados = [];
+let allPagamentos = [];
+let gFilter = 'todas';
+let pFilter = 'todos';
+
+// ═══════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════
+async function init() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) await loadUser(session.user);
+  else showSplash();
+
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'SIGNED_IN' && session) await loadUser(session.user);
+    if (event === 'SIGNED_OUT') { showSplash(); }
+  });
+
+  // Set default dates
+  const today = new Date().toISOString().split('T')[0];
+  const prazo = new Date(); prazo.setDate(prazo.getDate() + 90);
+  const prazoStr = prazo.toISOString().split('T')[0];
+  const pData = document.getElementById('p-data');
+  if (pData) pData.value = today;
+  
+  document.getElementById('g-entrada').addEventListener('change', function() {
+    const d = new Date(this.value); d.setDate(d.getDate() + 90);
+    document.getElementById('g-prazo').value = d.toISOString().split('T')[0];
+  });
+  document.getElementById('g-entrada').value = today;
+  document.getElementById('g-prazo').value = prazoStr;
+}
+
+async function loadUser(user) {
+  currentUser = user;
+  const { data: profile } = await sb.from('profiles').select('*').eq('id', user.id).single();
+
+  if (!profile) { showSplash(); return; }
+  currentProfile = profile;
+
+  if (profile.role === 'revendedora' && !profile.aprovada) {
+    document.getElementById('splash').style.display = 'none';
+    document.getElementById('pending-screen').style.display = 'flex';
+    return;
+  }
+
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('pending-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('app').style.flexDirection = 'column';
+
+  const badge = profile.role === 'admin' ? '👑 Admin' : '💍 ' + profile.nome.split(' ')[0];
+  document.getElementById('user-badge').textContent = badge;
+
+  if (profile.role === 'admin') {
+    document.getElementById('nav-admin').style.display = 'flex';
+    document.getElementById('btn-novo-consig').style.display = 'block';
+  }
+
+  showPanel('dashboard');
+  loadDashboard();
+}
+
+function showSplash() {
+  document.getElementById('splash').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('pending-screen').style.display = 'none';
+}
+
+// ═══════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active', (i===0&&tab==='login')||(i===1&&tab==='cadastro')));
+  document.getElementById('tab-login').style.display = tab === 'login' ? 'flex' : 'none';
+  document.getElementById('tab-cadastro').style.display = tab === 'cadastro' ? 'flex' : 'none';
+}
+
+async function fazerLogin() {
+  const email = document.getElementById('login-email').value.trim();
+  const senha = document.getElementById('login-senha').value;
+  const msg = document.getElementById('login-msg');
+  if (!email || !senha) { showMsg(msg, 'Preencha todos os campos', 'error'); return; }
+  const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+  if (error) { showMsg(msg, 'E-mail ou senha incorretos', 'error'); }
+}
+
+async function fazerCadastro() {
+  const nome = document.getElementById('cad-nome').value.trim();
+  const email = document.getElementById('cad-email').value.trim();
+  const tel = document.getElementById('cad-tel').value.trim();
+  const cidade = document.getElementById('cad-cidade').value.trim();
+  const senha = document.getElementById('cad-senha').value;
+  const msg = document.getElementById('cad-msg');
+
+  if (!nome || !email || !senha) { showMsg(msg, 'Preencha nome, e-mail e senha', 'error'); return; }
+  if (senha.length < 6) { showMsg(msg, 'Senha deve ter ao menos 6 caracteres', 'error'); return; }
+
+  const { data, error } = await sb.auth.signUp({ email, password: senha });
+  if (error) { showMsg(msg, error.message, 'error'); return; }
+
+  await sb.from('profiles').insert({
+    id: data.user.id, role: 'revendedora',
+    nome, telefone: tel, cidade, aprovada: false
+  });
+  showMsg(msg, 'Cadastro enviado! Aguarde aprovação da Lizzie.', 'success');
+}
+
+function showMsg(el, text, type) {
+  el.textContent = text; el.className = 'auth-msg ' + type; el.style.display = 'block';
+}
+
+// ═══════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════
+function showPanel(name) {
+  ['dashboard','garantias','consignados','pagamentos','admin'].forEach(p => {
+    document.getElementById('panel-' + p).style.display = p === name ? 'block' : 'none';
+    const nav = document.getElementById('nav-' + p);
+    if (nav) nav.classList.toggle('active', p === name);
+  });
+
+  if (name === 'garantias') loadGarantias();
+  if (name === 'consignados') loadConsignados();
+  if (name === 'pagamentos') loadPagamentos();
+  if (name === 'admin') loadAdmin();
+}
+
+// ═══════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════
+async function loadDashboard() {
+  const isAdmin = currentProfile.role === 'admin';
+  let q = sb.from('garantias').select('*');
+  if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
+  const { data } = await q.order('created_at', { ascending: false }).limit(50);
+
+  if (!data) return;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+
+  const abertas = data.filter(g => g.status === 'aberta').length;
+  const conserto = data.filter(g => g.status === 'em_conserto').length;
+  const prontas = data.filter(g => g.status === 'pronta').length;
+  const vencendo = data.filter(g => {
+    const prazo = new Date(g.prazo_maximo + 'T00:00:00');
+    const diff = Math.ceil((prazo - hoje) / 86400000);
+    return diff <= 7 && diff >= 0 && g.status !== 'entregue';
+  }).length;
+
+  document.getElementById('s-abertas').textContent = abertas;
+  document.getElementById('s-conserto').textContent = conserto;
+  document.getElementById('s-prontas').textContent = prontas;
+  document.getElementById('s-vencendo').textContent = vencendo;
+
+  const sub = isAdmin ? 'Todas as revendedoras' : currentProfile.nome.split(' ')[0];
+  document.getElementById('dash-subtitle').textContent = sub;
+
+  const alertDiv = document.getElementById('dash-alertas');
+  if (vencendo > 0) {
+    alertDiv.innerHTML = `<div class="alert alert-warning">⚠️ ${vencendo} garantia${vencendo>1?'s':''} vencendo em até 7 dias</div>`;
+  } else alertDiv.innerHTML = '';
+
+  const recentes = data.slice(0, 5);
+  const recentDiv = document.getElementById('dash-recentes');
+  if (!recentes.length) { recentDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Nenhuma garantia ainda</p></div>'; return; }
+  recentDiv.innerHTML = recentes.map(g => renderGarantiaCard(g)).join('');
+}
+
+// ═══════════════════════════════════════════════
+// GARANTIAS
+// ═══════════════════════════════════════════════
+async function loadGarantias() {
+  document.getElementById('g-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
+  const isAdmin = currentProfile.role === 'admin';
+  let q = sb.from('garantias').select('*');
+  if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
+  const { data } = await q.order('created_at', { ascending: false });
+  allGarantias = data || [];
+  filtrarGarantias();
+}
+
+function filtrarGarantias() {
+  const search = document.getElementById('g-search').value.toLowerCase();
+  let list = allGarantias;
+  if (gFilter !== 'todas') list = list.filter(g => g.status === gFilter);
+  if (search) list = list.filter(g =>
+    g.descricao_item.toLowerCase().includes(search) ||
+    g.nome_cliente.toLowerCase().includes(search) ||
+    (g.problema_relatado || '').toLowerCase().includes(search)
+  );
+  const div = document.getElementById('g-list');
+  if (!list.length) { div.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhuma garantia encontrada</p></div>'; return; }
+  div.innerHTML = list.map(g => renderGarantiaCard(g)).join('');
+}
+
+function setGFilter(el, f) {
+  gFilter = f;
+  document.querySelectorAll('#g-chips .chip').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  filtrarGarantias();
+}
+
+function renderGarantiaCard(g) {
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const prazo = new Date(g.prazo_maximo + 'T00:00:00');
+  const diff = Math.ceil((prazo - hoje) / 86400000);
+  let prazoClass = '', prazoTxt = '';
+  if (g.status !== 'entregue') {
+    if (diff < 0) { prazoClass = 'prazo-vencido'; prazoTxt = `Vencido há ${Math.abs(diff)} dias`; }
+    else if (diff <= 7) { prazoClass = 'prazo-vencendo'; prazoTxt = `Vence em ${diff} dia${diff!==1?'s':''}`; }
+    else prazoTxt = `Prazo: ${formatDate(g.prazo_maximo)}`;
+  } else prazoTxt = 'Entregue';
+
+  const foto = g.foto_url
+    ? `<div class="garantia-foto"><img src="${g.foto_url}" alt="foto"></div>`
+    : `<div class="garantia-foto">💍</div>`;
+
+  const statusMap = { aberta:'badge-aberta', em_conserto:'badge-em_conserto', pronta:'badge-pronta', entregue:'badge-entregue' };
+  const statusLabel = { aberta:'Aberta', em_conserto:'Em conserto', pronta:'Pronta', entregue:'Entregue' };
+
+  return `<div class="card garantia-card" onclick="verGarantia('${g.id}')">
+    <div class="garantia-header">
+      ${foto}
+      <div class="garantia-info">
+        <div class="garantia-item">${g.descricao_item}</div>
+        <div class="garantia-cliente">👤 ${g.nome_cliente}</div>
+        <span class="badge ${statusMap[g.status]}">${statusLabel[g.status]}</span>
+      </div>
+    </div>
+    <div class="garantia-footer">
+      <div class="garantia-prazo ${prazoClass}">${prazoTxt}</div>
+      <small style="color:var(--muted)">${formatDate(g.data_entrada)}</small>
+    </div>
+  </div>`;
+}
+
+async function verGarantia(id) {
+  const g = allGarantias.find(x => x.id === id) || (await sb.from('garantias').select('*').eq('id', id).single()).data;
+  if (!g) return;
+
+  const isAdmin = currentProfile.role === 'admin';
+  const destMap = { rebanho:'Rebanho', fornecedor:'Fornecedor', conserto_local:'Conserto local', outro:'Outro' };
+  const statusMap = { aberta:'🔵 Aberta', em_conserto:'🟡 Em conserto', pronta:'🟢 Pronta', entregue:'⚫ Entregue' };
+
+  let fotoHtml = g.foto_url ? `<img src="${g.foto_url}" class="detail-foto">` : '';
+
+  let adminActions = '';
+  if (isAdmin || currentProfile.role === 'revendedora') {
+    adminActions = `
+      <button class="btn-secondary btn-sm" onclick="editarGarantia('${g.id}')">✏️ Editar</button>
+      ${isAdmin ? `<button class="btn-secondary btn-sm" onclick="mudarStatus('${g.id}')">🔄 Status</button>` : ''}
+    `;
+  }
+
+  document.getElementById('detalhe-g-content').innerHTML = `
+    ${fotoHtml}
+    <div class="modal-title">${g.descricao_item}</div>
+    <div class="detail-grid">
+      <div class="detail-row"><div class="detail-key">Cliente</div><div class="detail-val">${g.nome_cliente}${g.telefone_cliente ? ' · ' + g.telefone_cliente : ''}</div></div>
+      <div class="detail-row"><div class="detail-key">Problema</div><div class="detail-val">${g.problema_relatado}</div></div>
+      <div class="detail-row"><div class="detail-key">Status</div><div class="detail-val">${statusMap[g.status]}</div></div>
+      <div class="detail-row"><div class="detail-key">Entrada</div><div class="detail-val">${formatDate(g.data_entrada)}</div></div>
+      <div class="detail-row"><div class="detail-key">Prazo máx.</div><div class="detail-val">${formatDate(g.prazo_maximo)}</div></div>
+      <div class="detail-row"><div class="detail-key">Destino</div><div class="detail-val">${destMap[g.destino] || g.destino}${g.destino_detalhe ? ' — ' + g.destino_detalhe : ''}</div></div>
+      ${g.observacoes ? `<div class="detail-row"><div class="detail-key">Obs.</div><div class="detail-val">${g.observacoes}</div></div>` : ''}
+    </div>
+    <div class="detail-actions">
+      ${adminActions}
+      <button class="btn-secondary btn-sm" onclick="closeModal('modal-detalhe-g')">Fechar</button>
+    </div>
+  `;
+  openModal('modal-detalhe-g');
+}
+
+function openNovaGarantia() {
+  document.getElementById('g-edit-id').value = '';
+  document.getElementById('modal-gTitle').textContent = 'Nova Garantia';
+  document.getElementById('g-status-group').style.display = 'none';
+  ['g-desc','g-cliente','g-tel','g-problema','g-destino-det','g-obs'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('g-destino').value = '';
+  document.getElementById('g-foto-preview').style.display = 'none';
+  document.getElementById('g-foto-placeholder').style.display = 'block';
+  document.getElementById('g-foto-input').value = '';
+  const today = new Date().toISOString().split('T')[0];
+  const prazo = new Date(); prazo.setDate(prazo.getDate() + 90);
+  document.getElementById('g-entrada').value = today;
+  document.getElementById('g-prazo').value = prazo.toISOString().split('T')[0];
+  openModal('modal-garantia');
+}
+
+async function editarGarantia(id) {
+  const g = allGarantias.find(x => x.id === id) || (await sb.from('garantias').select('*').eq('id', id).single()).data;
+  closeModal('modal-detalhe-g');
+  document.getElementById('g-edit-id').value = g.id;
+  document.getElementById('modal-gTitle').textContent = 'Editar Garantia';
+  document.getElementById('g-desc').value = g.descricao_item;
+  document.getElementById('g-cliente').value = g.nome_cliente;
+  document.getElementById('g-tel').value = g.telefone_cliente || '';
+  document.getElementById('g-problema').value = g.problema_relatado;
+  document.getElementById('g-entrada').value = g.data_entrada;
+  document.getElementById('g-prazo').value = g.prazo_maximo;
+  document.getElementById('g-destino').value = g.destino;
+  document.getElementById('g-destino-det').value = g.destino_detalhe || '';
+  document.getElementById('g-obs').value = g.observacoes || '';
+  document.getElementById('g-status-group').style.display = 'block';
+  document.getElementById('g-status').value = g.status;
+  if (g.foto_url) {
+    document.getElementById('g-foto-preview').src = g.foto_url;
+    document.getElementById('g-foto-preview').style.display = 'block';
+    document.getElementById('g-foto-placeholder').style.display = 'none';
+  }
+  openModal('modal-garantia');
+}
+
+async function salvarGarantia() {
+  const desc = document.getElementById('g-desc').value.trim();
+  const cliente = document.getElementById('g-cliente').value.trim();
+  const problema = document.getElementById('g-problema').value.trim();
+  const destino = document.getElementById('g-destino').value;
+  if (!desc || !cliente || !problema || !destino) { toast('Preencha os campos obrigatórios'); return; }
+
+  const editId = document.getElementById('g-edit-id').value;
+  let foto_url = editId ? (allGarantias.find(g => g.id === editId) || {}).foto_url : null;
+
+  const fileInput = document.getElementById('g-foto-input');
+  if (fileInput.files[0]) {
+    const file = fileInput.files[0];
+    const ext = file.name.split('.').pop();
+    const fname = `${currentUser.id}/${Date.now()}.${ext}`;
+    const { data: upData, error: upErr } = await sb.storage.from('lizzie-fotos').upload(fname, file, { upsert: true });
+    if (!upErr) {
+      const { data: { publicUrl } } = sb.storage.from('lizzie-fotos').getPublicUrl(fname);
+      foto_url = publicUrl;
+    }
+  }
+
+  const payload = {
+    revendedora_id: currentUser.id,
+    descricao_item: desc,
+    nome_cliente: cliente,
+    telefone_cliente: document.getElementById('g-tel').value.trim() || null,
+    problema_relatado: problema,
+    data_entrada: document.getElementById('g-entrada').value,
+    prazo_maximo: document.getElementById('g-prazo').value,
+    destino,
+    destino_detalhe: document.getElementById('g-destino-det').value.trim() || null,
+    observacoes: document.getElementById('g-obs').value.trim() || null,
+    foto_url,
+    updated_at: new Date().toISOString()
+  };
+
+  if (editId) {
+    payload.status = document.getElementById('g-status').value;
+    await sb.from('garantias').update(payload).eq('id', editId);
+    toast('Garantia atualizada!');
+  } else {
+    payload.status = 'aberta';
+    await sb.from('garantias').insert(payload);
+    toast('Garantia registrada!');
+  }
+
+  closeModal('modal-garantia');
+  loadGarantias();
+  loadDashboard();
+}
+
+async function mudarStatus(id) {
+  const g = allGarantias.find(x => x.id === id);
+  const steps = ['aberta', 'em_conserto', 'pronta', 'entregue'];
+  const cur = steps.indexOf(g.status);
+  const next = steps[Math.min(cur + 1, steps.length - 1)];
+  await sb.from('garantias').update({ status: next, updated_at: new Date().toISOString() }).eq('id', id);
+  closeModal('modal-detalhe-g');
+  toast('Status atualizado!');
+  loadGarantias();
+  loadDashboard();
+}
+
+// ═══════════════════════════════════════════════
+// CONSIGNADOS
+// ═══════════════════════════════════════════════
+async function loadConsignados() {
+  document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
+  const isAdmin = currentProfile.role === 'admin';
+  let q = sb.from('consignados').select('*');
+  if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
+  const { data } = await q.order('created_at', { ascending: false });
+  allConsignados = data || [];
+
+  const div = document.getElementById('c-list');
+  if (!allConsignados.length) { div.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Nenhum item consignado</p></div>'; return; }
+  div.innerHTML = allConsignados.map(c => renderConsigCard(c)).join('');
+}
+
+function renderConsigCard(c) {
+  const disp = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+  const pct = c.quantidade_enviada > 0 ? Math.round((c.quantidade_vendida / c.quantidade_enviada) * 100) : 0;
+  const foto = c.foto_url ? `<img src="${c.foto_url}" style="width:60px;height:60px;object-fit:cover;border-radius:10px;">` : `<div class="consig-foto">💍</div>`;
+
+  return `<div class="card" onclick="verConsignado('${c.id}')">
+    <div class="consig-header">
+      ${foto}
+      <div class="consig-info" style="margin-left:12px;flex:1">
+        <div class="consig-nome">${c.descricao}</div>
+        <div class="consig-ref">${c.referencia ? 'Ref: ' + c.referencia + ' · ' : ''}${formatDate(c.data_envio)}</div>
+        <div style="margin-top:6px">
+          <span class="badge badge-ativo">${c.status === 'ativo' ? 'Ativo' : 'Encerrado'}</span>
+        </div>
+      </div>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+    <div class="progress-label">${c.quantidade_vendida} vendido${c.quantidade_vendida!==1?'s':''} · ${disp} disponíve${disp!==1?'is':'l'} · ${c.quantidade_devolvida} devolvido${c.quantidade_devolvida!==1?'s':''}</div>
+    ${c.preco_venda ? `<div style="margin-top:8px;font-size:13px;color:var(--muted)">Preço venda: <strong style="color:var(--plum)">R$ ${Number(c.preco_venda).toFixed(2)}</strong></div>` : ''}
+  </div>`;
+}
+
+async function verConsignado(id) {
+  const c = allConsignados.find(x => x.id === id);
+  const isRev = currentProfile.role === 'revendedora';
+  const disp = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+
+  document.getElementById('detalhe-c-content').innerHTML = `
+    ${c.foto_url ? `<img src="${c.foto_url}" class="detail-foto">` : ''}
+    <div class="modal-title">${c.descricao}</div>
+    <div class="detail-grid">
+      <div class="detail-row"><div class="detail-key">Referência</div><div class="detail-val">${c.referencia || '—'}</div></div>
+      <div class="detail-row"><div class="detail-key">Data envio</div><div class="detail-val">${formatDate(c.data_envio)}</div></div>
+      <div class="detail-row"><div class="detail-key">Enviado</div><div class="detail-val">${c.quantidade_enviada} unidade${c.quantidade_enviada!==1?'s':''}</div></div>
+      <div class="detail-row"><div class="detail-key">Vendido</div><div class="detail-val">${c.quantidade_vendida}</div></div>
+      <div class="detail-row"><div class="detail-key">Devolvido</div><div class="detail-val">${c.quantidade_devolvida}</div></div>
+      <div class="detail-row"><div class="detail-key">Disponível</div><div class="detail-val"><strong>${disp}</strong></div></div>
+      ${c.preco_custo ? `<div class="detail-row"><div class="detail-key">Custo unit.</div><div class="detail-val">R$ ${Number(c.preco_custo).toFixed(2)}</div></div>` : ''}
+      ${c.preco_venda ? `<div class="detail-row"><div class="detail-key">Preço venda</div><div class="detail-val">R$ ${Number(c.preco_venda).toFixed(2)}</div></div>` : ''}
+    </div>
+    ${isRev ? `
+    <div class="divider"></div>
+    <div style="display:flex;gap:10px;margin-bottom:16px">
+      <div style="flex:1">
+        <label class="form-label">Registrar venda</label>
+        <input type="number" id="c-v-qtd" class="form-control" value="1" min="1" max="${disp}">
+      </div>
+      <div style="flex:1">
+        <label class="form-label">Registrar devolução</label>
+        <input type="number" id="c-d-qtd" class="form-control" value="0" min="0" max="${disp}">
+      </div>
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn-primary btn-sm" onclick="registrarMovimento('${id}','venda')">Confirmar venda</button>
+      <button class="btn-secondary btn-sm" onclick="registrarMovimento('${id}','devolucao')">Confirmar devolução</button>
+    </div>
+    ` : ''}
+    <div style="margin-top:12px">
+      <button class="btn-secondary btn-sm" onclick="closeModal('modal-detalhe-c')">Fechar</button>
+    </div>
+  `;
+  openModal('modal-detalhe-c');
+}
+
+async function registrarMovimento(id, tipo) {
+  const c = allConsignados.find(x => x.id === id);
+  const qtd = parseInt(tipo === 'venda' ? document.getElementById('c-v-qtd').value : document.getElementById('c-d-qtd').value);
+  if (!qtd || qtd < 1) { toast('Quantidade inválida'); return; }
+  const update = tipo === 'venda'
+    ? { quantidade_vendida: c.quantidade_vendida + qtd }
+    : { quantidade_devolvida: c.quantidade_devolvida + qtd };
+  await sb.from('consignados').update(update).eq('id', id);
+  toast(tipo === 'venda' ? `${qtd} venda(s) registrada(s)!` : `${qtd} devolução(ões) registrada(s)!`);
+  closeModal('modal-detalhe-c');
+  loadConsignados();
+}
+
+async function openNovoConsignado() {
+  // Load revendedoras
+  const { data: revs } = await sb.from('profiles').select('id,nome').eq('role','revendedora').eq('aprovada',true);
+  const sel = document.getElementById('c-rev');
+  sel.innerHTML = revs.map(r => `<option value="${r.id}">${r.nome}</option>`).join('');
+  ['c-desc','c-ref','c-custo','c-venda'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('c-qtd').value = 1;
+  document.getElementById('c-foto-preview').style.display = 'none';
+  document.getElementById('c-foto-placeholder').style.display = 'block';
+  document.getElementById('c-foto-input').value = '';
+  openModal('modal-consignado');
+}
+
+async function salvarConsignado() {
+  const desc = document.getElementById('c-desc').value.trim();
+  const revId = document.getElementById('c-rev').value;
+  const qtd = parseInt(document.getElementById('c-qtd').value);
+  if (!desc || !revId || !qtd) { toast('Preencha os campos obrigatórios'); return; }
+
+  let foto_url = null;
+  const fileInput = document.getElementById('c-foto-input');
+  if (fileInput.files[0]) {
+    const file = fileInput.files[0];
+    const fname = `consig/${Date.now()}.${file.name.split('.').pop()}`;
+    const { error } = await sb.storage.from('lizzie-fotos').upload(fname, file, { upsert: true });
+    if (!error) {
+      const { data: { publicUrl } } = sb.storage.from('lizzie-fotos').getPublicUrl(fname);
+      foto_url = publicUrl;
+    }
+  }
+
+  await sb.from('consignados').insert({
+    revendedora_id: revId,
+    descricao: desc,
+    referencia: document.getElementById('c-ref').value.trim() || null,
+    quantidade_enviada: qtd,
+    preco_custo: parseFloat(document.getElementById('c-custo').value) || null,
+    preco_venda: parseFloat(document.getElementById('c-venda').value) || null,
+    foto_url
+  });
+  toast('Consignado registrado!');
+  closeModal('modal-consignado');
+  loadConsignados();
+}
+
+// ═══════════════════════════════════════════════
+// PAGAMENTOS
+// ═══════════════════════════════════════════════
+async function loadPagamentos() {
+  document.getElementById('p-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
+  const isAdmin = currentProfile.role === 'admin';
+  let q = sb.from('pagamentos_clientes').select('*');
+  if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
+  const { data } = await q.order('created_at', { ascending: false });
+  allPagamentos = data || [];
+  filtrarPagamentos();
+}
+
+function filtrarPagamentos() {
+  let list = pFilter === 'todos' ? allPagamentos : allPagamentos.filter(p => p.status === pFilter);
+  const div = document.getElementById('p-list');
+  if (!list.length) { div.innerHTML = '<div class="empty-state"><div class="empty-icon">💰</div><p>Nenhum pagamento encontrado</p></div>'; return; }
+  div.innerHTML = list.map(p => renderPagtoCard(p)).join('');
+}
+
+function setPFilter(el, f) {
+  pFilter = f;
+  document.querySelectorAll('[data-pfilter]').forEach(c => c.classList.remove('active'));
+  el.classList.add('active');
+  filtrarPagamentos();
+}
+
+function renderPagtoCard(p) {
+  const restante = p.valor_total - p.valor_pago;
+  const pct = p.valor_total > 0 ? Math.round((p.valor_pago / p.valor_total) * 100) : 0;
+  const statusMap = { pendente: 'badge-pendente', parcial: 'badge-parcial', quitado: 'badge-quitado' };
+  const statusLabel = { pendente: 'Pendente', parcial: 'Parcial', quitado: 'Quitado' };
+
+  return `<div class="card pagto-card" onclick="verPagamento('${p.id}')">
+    <div class="pagto-nome">${p.nome_cliente}</div>
+    ${p.descricao_item ? `<div class="pagto-item">${p.descricao_item}</div>` : ''}
+    <div class="progress-bar" style="margin-top:10px"><div class="progress-fill" style="width:${pct}%"></div></div>
+    <div class="pagto-footer">
+      <div>
+        <div class="pagto-valor">R$ ${Number(p.valor_pago).toFixed(2)} <span>/ R$ ${Number(p.valor_total).toFixed(2)}</span></div>
+        ${p.status !== 'quitado' ? `<div style="font-size:12px;color:var(--danger)">Restam R$ ${restante.toFixed(2)}</div>` : ''}
+      </div>
+      <span class="badge ${statusMap[p.status]}">${statusLabel[p.status]}</span>
+    </div>
+  </div>`;
+}
+
+async function verPagamento(id) {
+  const p = allPagamentos.find(x => x.id === id);
+  const restante = p.valor_total - p.valor_pago;
+
+  document.getElementById('detalhe-p-content').innerHTML = `
+    <div class="modal-title">💰 ${p.nome_cliente}</div>
+    <div class="detail-grid">
+      ${p.descricao_item ? `<div class="detail-row"><div class="detail-key">Item</div><div class="detail-val">${p.descricao_item}</div></div>` : ''}
+      <div class="detail-row"><div class="detail-key">Total</div><div class="detail-val">R$ ${Number(p.valor_total).toFixed(2)}</div></div>
+      <div class="detail-row"><div class="detail-key">Pago</div><div class="detail-val" style="color:var(--success)">R$ ${Number(p.valor_pago).toFixed(2)}</div></div>
+      <div class="detail-row"><div class="detail-key">Restante</div><div class="detail-val" style="color:var(--danger)">R$ ${restante.toFixed(2)}</div></div>
+      <div class="detail-row"><div class="detail-key">Data venda</div><div class="detail-val">${formatDate(p.data_venda)}</div></div>
+      ${p.observacoes ? `<div class="detail-row"><div class="detail-key">Obs.</div><div class="detail-val">${p.observacoes}</div></div>` : ''}
+    </div>
+    ${p.status !== 'quitado' ? `
+    <div class="divider"></div>
+    <div class="form-group">
+      <label class="form-label">Registrar pagamento (R$)</label>
+      <input type="number" id="p-reg-val" class="form-control" step="0.01" placeholder="Valor recebido" max="${restante.toFixed(2)}">
+    </div>
+    <button class="btn-primary" onclick="registrarPagamento('${id}')">Confirmar recebimento</button>
+    ` : `<div class="alert" style="background:rgba(76,175,130,0.1);color:var(--success);border:1px solid rgba(76,175,130,0.3);margin-top:16px">✅ Pagamento quitado!</div>`}
+    <button class="btn-secondary" style="margin-top:10px;width:100%" onclick="closeModal('modal-detalhe-p')">Fechar</button>
+  `;
+  openModal('modal-detalhe-p');
+}
+
+async function registrarPagamento(id) {
+  const p = allPagamentos.find(x => x.id === id);
+  const val = parseFloat(document.getElementById('p-reg-val').value);
+  if (!val || val <= 0) { toast('Valor inválido'); return; }
+  const novoPago = p.valor_pago + val;
+  const novoStatus = novoPago >= p.valor_total ? 'quitado' : 'parcial';
+  await sb.from('pagamentos_clientes').update({ valor_pago: novoPago, status: novoStatus }).eq('id', id);
+  toast('Pagamento registrado!');
+  closeModal('modal-detalhe-p');
+  loadPagamentos();
+}
+
+function openNovoPagamento() {
+  ['p-cliente','p-item','p-total','p-obs'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('p-pago').value = '0';
+  document.getElementById('p-data').value = new Date().toISOString().split('T')[0];
+  openModal('modal-pagamento');
+}
+
+async function salvarPagamento() {
+  const cliente = document.getElementById('p-cliente').value.trim();
+  const total = parseFloat(document.getElementById('p-total').value);
+  if (!cliente || !total) { toast('Preencha nome e valor total'); return; }
+  const pago = parseFloat(document.getElementById('p-pago').value) || 0;
+  const status = pago >= total ? 'quitado' : pago > 0 ? 'parcial' : 'pendente';
+  await sb.from('pagamentos_clientes').insert({
+    revendedora_id: currentUser.id,
+    nome_cliente: cliente,
+    descricao_item: document.getElementById('p-item').value.trim() || null,
+    valor_total: total, valor_pago: pago, status,
+    data_venda: document.getElementById('p-data').value,
+    observacoes: document.getElementById('p-obs').value.trim() || null
+  });
+  toast('Pagamento registrado!');
+  closeModal('modal-pagamento');
+  loadPagamentos();
+}
+
+// ═══════════════════════════════════════════════
+// ADMIN
+// ═══════════════════════════════════════════════
+async function loadAdmin() {
+  const { data: pendentes } = await sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',false).order('created_at');
+  const { data: aprovadas } = await sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',true).order('nome');
+
+  const pendDiv = document.getElementById('pendentes-list');
+  if (pendentes && pendentes.length) {
+    pendDiv.innerHTML = `<div class="alert alert-warning">⏳ ${pendentes.length} cadastro${pendentes.length>1?'s':''} aguardando aprovação</div>` +
+      pendentes.map(r => renderRevCard(r, true)).join('');
+  } else pendDiv.innerHTML = '';
+
+  const revDiv = document.getElementById('rev-list');
+  if (!aprovadas || !aprovadas.length) { revDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">👥</div><p>Nenhuma revendedora aprovada</p></div>'; return; }
+  revDiv.innerHTML = `<div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px">${aprovadas.length} revendedora${aprovadas.length!==1?'s':''} ativas</div>` +
+    aprovadas.map(r => renderRevCard(r, false)).join('');
+}
+
+function renderRevCard(r, pendente) {
+  const inicial = r.nome.charAt(0).toUpperCase();
+  return `<div class="card rev-card" onclick="verRevendedora('${r.id}')">
+    <div class="rev-header">
+      <div class="rev-avatar">${inicial}</div>
+      <div>
+        <div class="rev-nome">${r.nome}</div>
+        <div class="rev-cidade">${r.cidade || 'Cidade não informada'} · ${r.telefone || '—'}</div>
+      </div>
+      <div class="rev-status">
+        ${pendente ? '<span class="badge badge-pendente"><span class="pending-dot"></span>Pendente</span>' : '<span class="badge badge-ativo">✅ Ativa</span>'}
+      </div>
+    </div>
+  </div>`;
+}
+
+async function verRevendedora(id) {
+  const { data: r } = await sb.from('profiles').select('*').eq('id', id).single();
+  const { data: gcount } = await sb.from('garantias').select('id', { count: 'exact' }).eq('revendedora_id', id);
+  const { data: ccount } = await sb.from('consignados').select('id', { count: 'exact' }).eq('revendedora_id', id);
+
+  document.getElementById('detalhe-rev-content').innerHTML = `
+    <div style="text-align:center;margin-bottom:20px">
+      <div class="rev-avatar" style="width:64px;height:64px;font-size:28px;margin:0 auto 12px">${r.nome.charAt(0)}</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">${r.nome}</div>
+      <div style="color:var(--muted);font-size:13px">${r.email || ''}</div>
+    </div>
+    <div class="detail-grid">
+      <div class="detail-row"><div class="detail-key">Telefone</div><div class="detail-val">${r.telefone || '—'}</div></div>
+      <div class="detail-row"><div class="detail-key">Cidade</div><div class="detail-val">${r.cidade || '—'}</div></div>
+      <div class="detail-row"><div class="detail-key">Garantias</div><div class="detail-val">${gcount ? gcount.length : 0}</div></div>
+      <div class="detail-row"><div class="detail-key">Consignados</div><div class="detail-val">${ccount ? ccount.length : 0}</div></div>
+      <div class="detail-row"><div class="detail-key">Cadastro</div><div class="detail-val">${formatDate(r.created_at.split('T')[0])}</div></div>
+    </div>
+    <div class="detail-actions" style="margin-top:20px">
+      ${!r.aprovada
+        ? `<button class="btn-primary" onclick="aprovarRev('${r.id}')">✅ Aprovar acesso</button>`
+        : `<button class="btn-danger" onclick="revogarRev('${r.id}')">🚫 Revogar acesso</button>`
+      }
+      <button class="btn-secondary" onclick="closeModal('modal-detalhe-rev')">Fechar</button>
+    </div>
+  `;
+  openModal('modal-detalhe-rev');
+}
+
+async function aprovarRev(id) {
+  await sb.from('profiles').update({ aprovada: true }).eq('id', id);
+  toast('Revendedora aprovada!');
+  closeModal('modal-detalhe-rev');
+  loadAdmin();
+}
+
+async function revogarRev(id) {
+  await sb.from('profiles').update({ aprovada: false }).eq('id', id);
+  toast('Acesso revogado');
+  closeModal('modal-detalhe-rev');
+  loadAdmin();
+}
+
+// ═══════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════
+function openModal(id) { document.getElementById(id).classList.add('show'); }
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+document.querySelectorAll('.modal-overlay').forEach(o => {
+  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('show'); });
+});
+
+function formatDate(d) {
+  if (!d) return '—';
+  const [y, m, day] = d.split('T')[0].split('-');
+  return `${day}/${m}/${y}`;
+}
+
+function previewFoto(input, previewId, placeholderId) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const prev = document.getElementById(previewId);
+    prev.src = e.target.result;
+    prev.style.display = 'block';
+    document.getElementById(placeholderId).style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// START
+init();
+</script>
+</body>
+</html>
