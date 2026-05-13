@@ -333,6 +333,55 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .pagto-valor { font-family: 'Cormorant Garamond', serif; font-size: 20px; color: var(--plum); }
 .pagto-valor span { font-size: 12px; color: var(--muted); font-family: 'DM Sans', sans-serif; }
 
+/* BLING */
+.bling-row { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.bling-row:last-child { border-bottom: none; }
+.bling-num { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--plum); min-width: 52px; }
+.bling-info { flex: 1; }
+.bling-cliente { font-weight: 500; font-size: 14px; color: var(--plum); }
+.bling-data { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.bling-total { font-family: 'Cormorant Garamond', serif; font-size: 18px; color: var(--plum); text-align: right; }
+.bling-total small { display: block; font-size: 11px; color: var(--muted); font-family: 'DM Sans', sans-serif; }
+.btn-import { padding: 5px 12px; font-size: 11px; border-radius: 8px; border: 1.5px solid var(--rose); background: #fff; color: var(--rose); cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 500; white-space: nowrap; transition: all 0.2s; }
+.btn-import:hover { background: var(--rose); color: #fff; }
+.btn-import.imported { background: rgba(76,175,130,0.1); border-color: var(--success); color: var(--success); cursor: default; }
+
+/* CICLO GRID */
+.ciclo-wrap { overflow-x: auto; border-radius: 16px; background: #fff; border: 1px solid var(--border); box-shadow: 0 2px 12px rgba(0,0,0,0.04); margin-bottom: 14px; }
+.ciclo-table { width: 100%; border-collapse: collapse; min-width: 480px; }
+.ciclo-th {
+  font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 0.5px; padding: 12px 10px; text-align: left; cursor: pointer;
+  border-bottom: 2px solid var(--border); white-space: nowrap; user-select: none;
+  transition: color 0.2s;
+}
+.ciclo-th:hover { color: var(--rose); }
+.ciclo-th.sorted { color: var(--plum); font-weight: 600; }
+.ciclo-th-nosort { cursor: default; }
+.ciclo-th-nosort:hover { color: var(--muted); }
+.ciclo-td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 13px; }
+.ciclo-row { transition: background 0.15s; }
+.ciclo-row:hover { background: rgba(201,116,138,0.04); }
+.ciclo-row:last-child .ciclo-td { border-bottom: none; }
+.ciclo-row.esgotado { opacity: 0.3; }
+.ciclo-foto-cell { width: 52px; }
+.ciclo-img { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; }
+.ciclo-emoji { width: 42px; height: 42px; border-radius: 8px; background: var(--blush); display: flex; align-items: center; justify-content: center; font-size: 20px; border: 1px solid var(--border); }
+.ciclo-desc { font-weight: 500; color: var(--plum); margin-bottom: 2px; }
+.ciclo-ref { font-size: 11px; color: var(--muted); }
+.ciclo-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 10px; background: rgba(201,116,138,0.1); color: var(--rose); font-weight: 500; }
+.ciclo-num { font-family: 'Cormorant Garamond', serif; font-size: 16px; color: var(--plum); }
+.ciclo-num-ok { color: var(--success); }
+.ciclo-num-zero { color: var(--muted); }
+.ciclo-preco { font-family: 'Cormorant Garamond', serif; font-size: 15px; color: var(--plum); }
+.btn-vender {
+  padding: 5px 12px; font-size: 11px; border-radius: 8px; border: none;
+  background: linear-gradient(135deg, var(--rose), #b5526a); color: #fff;
+  cursor: pointer; font-family: 'DM Sans', sans-serif; font-weight: 500;
+  white-space: nowrap;
+}
+.btn-vender:hover { opacity: 0.88; }
+
 /* ADMIN */
 .rev-card { cursor: pointer; }
 .rev-header { display: flex; align-items: center; gap: 14px; }
@@ -488,14 +537,17 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <div id="g-list"></div>
     </div>
 
-    <!-- CONSIGNADOS -->
+    <!-- CICLO -->
     <div id="panel-consignados" style="display:none">
       <div class="section-header">
         <div>
-          <div class="section-title">Consignados</div>
-          <div class="section-subtitle">Estoque enviado</div>
+          <div class="section-title">Ciclo Atual</div>
+          <div class="section-subtitle">Peças em consignação</div>
         </div>
-        <button class="btn-primary btn-sm" id="btn-novo-consig" onclick="openNovoConsignado()" style="display:none">+ Novo</button>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn-secondary btn-sm" id="btn-bling-sync" onclick="openBlingSync()" style="display:none">🔄 Bling</button>
+          <button class="btn-primary btn-sm" id="btn-novo-consig" onclick="openNovoConsignado()" style="display:none">+ Novo</button>
+        </div>
       </div>
       <div id="c-list"></div>
     </div>
@@ -541,7 +593,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <span class="nav-icon">🔧</span>Garantias
     </button>
     <button class="nav-item" id="nav-consignados" onclick="showPanel('consignados')">
-      <span class="nav-icon">💍</span>Estoque
+      <span class="nav-icon">💍</span>Ciclo
     </button>
     <button class="nav-item" id="nav-pagamentos" onclick="showPanel('pagamentos')">
       <span class="nav-icon">💰</span>Pagamentos
@@ -661,6 +713,17 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <label class="form-label">Referência</label>
       <input type="text" id="c-ref" class="form-control" placeholder="Código interno">
     </div>
+    <div class="form-group">
+      <label class="form-label">Categoria</label>
+      <select id="c-cat" class="form-control">
+        <option value="">Selecione...</option>
+        <option value="anel">Anel</option>
+        <option value="colar">Colar</option>
+        <option value="brinco">Brinco</option>
+        <option value="pulseira">Pulseira</option>
+        <option value="outro">Outro</option>
+      </select>
+    </div>
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Qtd enviada *</label>
@@ -687,6 +750,43 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   <div class="modal">
     <div class="modal-handle"></div>
     <div id="detalhe-c-content"></div>
+  </div>
+</div>
+
+<!-- MODAL REGISTRAR VENDA -->
+<div class="modal-overlay" id="modal-venda">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="venda-title">Registrar Venda</div>
+    <input type="hidden" id="v-consig-id">
+    <input type="hidden" id="v-disp">
+    <input type="hidden" id="v-preco-unit">
+    <div class="form-group">
+      <label class="form-label">Nome da cliente *</label>
+      <input type="text" id="v-cliente" class="form-control" placeholder="Nome da cliente">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Quantidade *</label>
+        <input type="number" id="v-qtd" class="form-control" value="1" min="1" oninput="atualizarTotalVenda()">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data de pagamento *</label>
+        <input type="date" id="v-data-pag" class="form-control">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Valor total (R$)</label>
+      <input type="number" id="v-total" class="form-control" step="0.01" placeholder="0,00">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Valor recebido agora (R$)</label>
+      <input type="number" id="v-pago" class="form-control" step="0.01" placeholder="0,00" value="0">
+    </div>
+    <div style="display:flex;gap:10px">
+      <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-venda')">Cancelar</button>
+      <button class="btn-primary" style="flex:2" onclick="confirmarVenda()">Confirmar venda</button>
+    </div>
   </div>
 </div>
 
@@ -744,6 +844,29 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   </div>
 </div>
 
+<!-- MODAL BLING SYNC -->
+<div class="modal-overlay" id="modal-bling">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="bling-header">
+      <div class="modal-title">🔄 Importar do Bling</div>
+      <div class="form-row" style="margin-bottom:12px">
+        <div class="form-group">
+          <label class="form-label">Data inicial</label>
+          <input type="date" id="bling-data-ini" class="form-control">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data final</label>
+          <input type="date" id="bling-data-fim" class="form-control">
+        </div>
+      </div>
+      <button class="btn-primary" style="width:100%;margin-bottom:16px" onclick="buscarBling()">Buscar pedidos</button>
+    </div>
+    <div id="bling-resultado"></div>
+    <button class="btn-secondary" style="width:100%;margin-top:12px" onclick="closeModal('modal-bling')">Fechar</button>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════
 // CONFIG
@@ -759,6 +882,7 @@ let allConsignados = [];
 let allPagamentos = [];
 let gFilter = 'todas';
 let pFilter = 'todos';
+let cSort = { col: 'descricao', dir: 'asc' };
 
 // ═══════════════════════════════════════════════
 // INIT
@@ -812,6 +936,7 @@ async function loadUser(user) {
   if (profile.role === 'admin') {
     document.getElementById('nav-admin').style.display = 'flex';
     document.getElementById('btn-novo-consig').style.display = 'block';
+    document.getElementById('btn-bling-sync').style.display = 'block';
   }
 
   showPanel('dashboard');
@@ -931,7 +1056,12 @@ async function loadGarantias() {
   const isAdmin = currentProfile.role === 'admin';
   let q = sb.from('garantias').select('*');
   if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
-  const { data } = await q.order('created_at', { ascending: false });
+  const { data, error } = await q.order('created_at', { ascending: false });
+  if (error) {
+    console.error('Erro ao carregar garantias:', error);
+    document.getElementById('g-list').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao carregar garantias. Tente novamente.</p></div>';
+    return;
+  }
   allGarantias = data || [];
   filtrarGarantias();
 }
@@ -941,8 +1071,8 @@ function filtrarGarantias() {
   let list = allGarantias;
   if (gFilter !== 'todas') list = list.filter(g => g.status === gFilter);
   if (search) list = list.filter(g =>
-    g.descricao_item.toLowerCase().includes(search) ||
-    g.nome_cliente.toLowerCase().includes(search) ||
+    (g.descricao_item || '').toLowerCase().includes(search) ||
+    (g.nome_cliente || '').toLowerCase().includes(search) ||
     (g.problema_relatado || '').toLowerCase().includes(search)
   );
   const div = document.getElementById('g-list');
@@ -975,6 +1105,21 @@ function renderGarantiaCard(g) {
   const statusMap = { aberta:'badge-aberta', em_conserto:'badge-em_conserto', pronta:'badge-pronta', entregue:'badge-entregue' };
   const statusLabel = { aberta:'Aberta', em_conserto:'Em conserto', pronta:'Pronta', entregue:'Entregue' };
 
+  const steps = ['aberta','em_conserto','pronta','entregue'];
+  const stepLabels = { aberta:'Aberta', em_conserto:'Em conserto', pronta:'Pronta', entregue:'Entregue' };
+  const isAdmin = currentProfile && currentProfile.role === 'admin';
+  const nextStep = steps[Math.min(steps.indexOf(g.status) + 1, steps.length - 1)];
+  const hasNext = g.status !== 'entregue';
+
+  const adminControl = isAdmin ? `
+    <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center" onclick="event.stopPropagation()">
+      <select onchange="atualizarStatusCard('${g.id}',this.value,event)" style="flex:1;padding:6px 10px;border-radius:8px;border:1.5px solid var(--border);font-size:12px;color:var(--text);background:#fff;font-family:'DM Sans',sans-serif;outline:none;cursor:pointer">
+        ${steps.map(s => `<option value="${s}" ${g.status===s?'selected':''}>${stepLabels[s]}</option>`).join('')}
+      </select>
+      ${hasNext ? `<button onclick="atualizarStatusCard('${g.id}','${nextStep}',event)" style="white-space:nowrap;padding:6px 12px;border-radius:8px;border:none;background:linear-gradient(135deg,var(--rose),#b5526a);color:#fff;font-size:12px;font-family:'DM Sans',sans-serif;cursor:pointer;font-weight:500">→ Avançar</button>` : ''}
+    </div>
+  ` : '';
+
   return `<div class="card garantia-card" onclick="verGarantia('${g.id}')">
     <div class="garantia-header">
       ${foto}
@@ -988,12 +1133,17 @@ function renderGarantiaCard(g) {
       <div class="garantia-prazo ${prazoClass}">${prazoTxt}</div>
       <small style="color:var(--muted)">${formatDate(g.data_entrada)}</small>
     </div>
+    ${adminControl}
   </div>`;
 }
 
 async function verGarantia(id) {
-  const g = allGarantias.find(x => x.id === id) || (await sb.from('garantias').select('*').eq('id', id).single()).data;
-  if (!g) return;
+  let g = allGarantias.find(x => x.id === id);
+  if (!g) {
+    const { data, error } = await sb.from('garantias').select('*').eq('id', id).single();
+    if (error || !data) { toast('Erro ao carregar garantia'); return; }
+    g = data;
+  }
 
   const isAdmin = currentProfile.role === 'admin';
   const destMap = { rebanho:'Rebanho', fornecedor:'Fornecedor', conserto_local:'Conserto local', outro:'Outro' };
@@ -1133,106 +1283,174 @@ async function mudarStatus(id) {
   loadDashboard();
 }
 
+async function atualizarStatusCard(id, novoStatus, event) {
+  event.stopPropagation();
+  await sb.from('garantias').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('id', id);
+  toast('Status atualizado!');
+  loadGarantias();
+  loadDashboard();
+}
+
 // ═══════════════════════════════════════════════
-// CONSIGNADOS
+// CICLO (CONSIGNADOS)
 // ═══════════════════════════════════════════════
 async function loadConsignados() {
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
   const isAdmin = currentProfile.role === 'admin';
   let q = sb.from('consignados').select('*');
   if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
-  const { data } = await q.order('created_at', { ascending: false });
-  allConsignados = data || [];
-
+  const { data, error } = await q.order('created_at', { ascending: false });
   const div = document.getElementById('c-list');
-  if (!allConsignados.length) { div.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Nenhum item consignado</p></div>'; return; }
-  div.innerHTML = allConsignados.map(c => renderConsigCard(c)).join('');
+  if (error) {
+    console.error('Erro ao carregar ciclo:', error);
+    div.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao carregar. Tente novamente.</p></div>';
+    return;
+  }
+  allConsignados = data || [];
+  renderCicloGrid();
 }
 
-function renderConsigCard(c) {
-  const disp = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
-  const pct = c.quantidade_enviada > 0 ? Math.round((c.quantidade_vendida / c.quantidade_enviada) * 100) : 0;
-  const foto = c.foto_url ? `<img src="${c.foto_url}" style="width:60px;height:60px;object-fit:cover;border-radius:10px;">` : `<div class="consig-foto">💍</div>`;
+function sortConsignados(col) {
+  if (cSort.col === col) cSort.dir = cSort.dir === 'asc' ? 'desc' : 'asc';
+  else { cSort.col = col; cSort.dir = 'asc'; }
+  renderCicloGrid();
+}
 
-  return `<div class="card" onclick="verConsignado('${c.id}')">
-    <div class="consig-header">
-      ${foto}
-      <div class="consig-info" style="margin-left:12px;flex:1">
-        <div class="consig-nome">${c.descricao}</div>
-        <div class="consig-ref">${c.referencia ? 'Ref: ' + c.referencia + ' · ' : ''}${formatDate(c.data_envio)}</div>
-        <div style="margin-top:6px">
-          <span class="badge badge-ativo">${c.status === 'ativo' ? 'Ativo' : 'Encerrado'}</span>
-        </div>
-      </div>
-    </div>
-    <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
-    <div class="progress-label">${c.quantidade_vendida} vendido${c.quantidade_vendida!==1?'s':''} · ${disp} disponíve${disp!==1?'is':'l'} · ${c.quantidade_devolvida} devolvido${c.quantidade_devolvida!==1?'s':''}</div>
-    ${c.preco_venda ? `<div style="margin-top:8px;font-size:13px;color:var(--muted)">Preço venda: <strong style="color:var(--plum)">R$ ${Number(c.preco_venda).toFixed(2)}</strong></div>` : ''}
+function renderCicloGrid() {
+  const div = document.getElementById('c-list');
+  if (!allConsignados.length) {
+    div.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Nenhuma peça neste ciclo</p></div>';
+    return;
+  }
+
+  const sorted = [...allConsignados].sort((a, b) => {
+    let va, vb;
+    if (cSort.col === 'disponivel') {
+      va = (a.quantidade_enviada - a.quantidade_vendida - a.quantidade_devolvida);
+      vb = (b.quantidade_enviada - b.quantidade_vendida - b.quantidade_devolvida);
+    } else {
+      va = a[cSort.col] ?? '';
+      vb = b[cSort.col] ?? '';
+    }
+    if (typeof va === 'string') va = va.toLowerCase();
+    if (typeof vb === 'string') vb = vb.toLowerCase();
+    if (va < vb) return cSort.dir === 'asc' ? -1 : 1;
+    if (va > vb) return cSort.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const arrow = (col) => {
+    if (cSort.col !== col) return '<span style="opacity:0.3">⇅</span>';
+    return cSort.dir === 'asc' ? '▲' : '▼';
+  };
+  const th = (col, label) =>
+    `<th class="ciclo-th${cSort.col === col ? ' sorted' : ''}" onclick="sortConsignados('${col}')">${label} ${arrow(col)}</th>`;
+
+  const rows = sorted.map(c => {
+    const disp = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+    const esgotado = disp <= 0;
+    const fotoHtml = c.foto_url
+      ? `<img src="${c.foto_url}" class="ciclo-img">`
+      : `<div class="ciclo-emoji">💍</div>`;
+    const numClass = esgotado ? 'ciclo-num ciclo-num-zero' : 'ciclo-num ciclo-num-ok';
+    const catLabel = { anel:'Anel', colar:'Colar', brinco:'Brinco', pulseira:'Pulseira', outro:'Outro' };
+
+    return `<tr class="ciclo-row${esgotado ? ' esgotado' : ''}">
+      <td class="ciclo-td ciclo-foto-cell">${fotoHtml}</td>
+      <td class="ciclo-td">
+        <div class="ciclo-desc">${c.descricao}</div>
+        ${c.referencia ? `<div class="ciclo-ref">${c.referencia}</div>` : ''}
+      </td>
+      <td class="ciclo-td">${c.categoria ? `<span class="ciclo-badge">${catLabel[c.categoria] || c.categoria}</span>` : '—'}</td>
+      <td class="ciclo-td"><span class="ciclo-num">${c.quantidade_enviada}</span></td>
+      <td class="ciclo-td"><span class="${numClass}">${disp}</span></td>
+      <td class="ciclo-td">${c.preco_venda ? `<span class="ciclo-preco">R$ ${Number(c.preco_venda).toFixed(2)}</span>` : '—'}</td>
+      <td class="ciclo-td">${!esgotado ? `<button class="btn-vender" onclick="openVenda('${c.id}')">Vender</button>` : '<span style="font-size:11px;color:var(--muted)">Esgotado</span>'}</td>
+    </tr>`;
+  }).join('');
+
+  div.innerHTML = `<div class="ciclo-wrap">
+    <table class="ciclo-table">
+      <thead>
+        <tr>
+          <th class="ciclo-th ciclo-th-nosort" style="width:52px"></th>
+          ${th('descricao','Descrição')}
+          ${th('categoria','Categoria')}
+          ${th('quantidade_enviada','Enviadas')}
+          ${th('disponivel','Disponíveis')}
+          ${th('preco_venda','Preço')}
+          <th class="ciclo-th ciclo-th-nosort">Ações</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
   </div>`;
 }
 
-async function verConsignado(id) {
+function openVenda(id) {
   const c = allConsignados.find(x => x.id === id);
-  const isRev = currentProfile.role === 'revendedora';
   const disp = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
-
-  document.getElementById('detalhe-c-content').innerHTML = `
-    ${c.foto_url ? `<img src="${c.foto_url}" class="detail-foto">` : ''}
-    <div class="modal-title">${c.descricao}</div>
-    <div class="detail-grid">
-      <div class="detail-row"><div class="detail-key">Referência</div><div class="detail-val">${c.referencia || '—'}</div></div>
-      <div class="detail-row"><div class="detail-key">Data envio</div><div class="detail-val">${formatDate(c.data_envio)}</div></div>
-      <div class="detail-row"><div class="detail-key">Enviado</div><div class="detail-val">${c.quantidade_enviada} unidade${c.quantidade_enviada!==1?'s':''}</div></div>
-      <div class="detail-row"><div class="detail-key">Vendido</div><div class="detail-val">${c.quantidade_vendida}</div></div>
-      <div class="detail-row"><div class="detail-key">Devolvido</div><div class="detail-val">${c.quantidade_devolvida}</div></div>
-      <div class="detail-row"><div class="detail-key">Disponível</div><div class="detail-val"><strong>${disp}</strong></div></div>
-      ${c.preco_custo ? `<div class="detail-row"><div class="detail-key">Custo unit.</div><div class="detail-val">R$ ${Number(c.preco_custo).toFixed(2)}</div></div>` : ''}
-      ${c.preco_venda ? `<div class="detail-row"><div class="detail-key">Preço venda</div><div class="detail-val">R$ ${Number(c.preco_venda).toFixed(2)}</div></div>` : ''}
-    </div>
-    ${isRev ? `
-    <div class="divider"></div>
-    <div style="display:flex;gap:10px;margin-bottom:16px">
-      <div style="flex:1">
-        <label class="form-label">Registrar venda</label>
-        <input type="number" id="c-v-qtd" class="form-control" value="1" min="1" max="${disp}">
-      </div>
-      <div style="flex:1">
-        <label class="form-label">Registrar devolução</label>
-        <input type="number" id="c-d-qtd" class="form-control" value="0" min="0" max="${disp}">
-      </div>
-    </div>
-    <div style="display:flex;gap:10px">
-      <button class="btn-primary btn-sm" onclick="registrarMovimento('${id}','venda')">Confirmar venda</button>
-      <button class="btn-secondary btn-sm" onclick="registrarMovimento('${id}','devolucao')">Confirmar devolução</button>
-    </div>
-    ` : ''}
-    <div style="margin-top:12px">
-      <button class="btn-secondary btn-sm" onclick="closeModal('modal-detalhe-c')">Fechar</button>
-    </div>
-  `;
-  openModal('modal-detalhe-c');
+  document.getElementById('venda-title').textContent = `Vender: ${c.descricao}`;
+  document.getElementById('v-consig-id').value = id;
+  document.getElementById('v-disp').value = disp;
+  document.getElementById('v-preco-unit').value = c.preco_venda || 0;
+  document.getElementById('v-cliente').value = '';
+  document.getElementById('v-qtd').value = 1;
+  document.getElementById('v-qtd').max = disp;
+  document.getElementById('v-data-pag').value = '';
+  document.getElementById('v-total').value = c.preco_venda ? Number(c.preco_venda).toFixed(2) : '';
+  document.getElementById('v-pago').value = '0';
+  openModal('modal-venda');
 }
 
-async function registrarMovimento(id, tipo) {
+function atualizarTotalVenda() {
+  const qtd = parseInt(document.getElementById('v-qtd').value) || 1;
+  const preco = parseFloat(document.getElementById('v-preco-unit').value) || 0;
+  if (preco) document.getElementById('v-total').value = (qtd * preco).toFixed(2);
+}
+
+async function confirmarVenda() {
+  const id = document.getElementById('v-consig-id').value;
+  const disp = parseInt(document.getElementById('v-disp').value);
+  const cliente = document.getElementById('v-cliente').value.trim();
+  const qtd = parseInt(document.getElementById('v-qtd').value);
+  const dataPag = document.getElementById('v-data-pag').value;
+  const total = parseFloat(document.getElementById('v-total').value);
+  const pago = parseFloat(document.getElementById('v-pago').value) || 0;
+
+  if (!cliente) { toast('Informe o nome da cliente'); return; }
+  if (!qtd || qtd < 1 || qtd > disp) { toast('Quantidade inválida'); return; }
+  if (!dataPag) { toast('Informe a data de pagamento'); return; }
+  if (!total || total <= 0) { toast('Informe o valor total'); return; }
+
   const c = allConsignados.find(x => x.id === id);
-  const qtd = parseInt(tipo === 'venda' ? document.getElementById('c-v-qtd').value : document.getElementById('c-d-qtd').value);
-  if (!qtd || qtd < 1) { toast('Quantidade inválida'); return; }
-  const update = tipo === 'venda'
-    ? { quantidade_vendida: c.quantidade_vendida + qtd }
-    : { quantidade_devolvida: c.quantidade_devolvida + qtd };
-  await sb.from('consignados').update(update).eq('id', id);
-  toast(tipo === 'venda' ? `${qtd} venda(s) registrada(s)!` : `${qtd} devolução(ões) registrada(s)!`);
-  closeModal('modal-detalhe-c');
+  const status = pago >= total ? 'quitado' : pago > 0 ? 'parcial' : 'pendente';
+
+  await Promise.all([
+    sb.from('consignados').update({ quantidade_vendida: c.quantidade_vendida + qtd }).eq('id', id),
+    sb.from('pagamentos_clientes').insert({
+      revendedora_id: currentUser.id,
+      nome_cliente: cliente,
+      descricao_item: c.descricao,
+      valor_total: total,
+      valor_pago: pago,
+      status,
+      data_venda: dataPag
+    })
+  ]);
+
+  toast('Venda registrada! Pagamento criado automaticamente.');
+  closeModal('modal-venda');
   loadConsignados();
 }
 
 async function openNovoConsignado() {
-  // Load revendedoras
   const { data: revs } = await sb.from('profiles').select('id,nome').eq('role','revendedora').eq('aprovada',true);
   const sel = document.getElementById('c-rev');
   sel.innerHTML = revs.map(r => `<option value="${r.id}">${r.nome}</option>`).join('');
   ['c-desc','c-ref','c-custo','c-venda'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('c-qtd').value = 1;
+  document.getElementById('c-cat').value = '';
   document.getElementById('c-foto-preview').style.display = 'none';
   document.getElementById('c-foto-placeholder').style.display = 'block';
   document.getElementById('c-foto-input').value = '';
@@ -1261,13 +1479,261 @@ async function salvarConsignado() {
     revendedora_id: revId,
     descricao: desc,
     referencia: document.getElementById('c-ref').value.trim() || null,
+    categoria: document.getElementById('c-cat').value || null,
     quantidade_enviada: qtd,
     preco_custo: parseFloat(document.getElementById('c-custo').value) || null,
     preco_venda: parseFloat(document.getElementById('c-venda').value) || null,
     foto_url
   });
-  toast('Consignado registrado!');
+  toast('Peça adicionada ao ciclo!');
   closeModal('modal-consignado');
+  loadConsignados();
+}
+
+// ═══════════════════════════════════════════════
+// BLING
+// ═══════════════════════════════════════════════
+const BLING_FN       = 'https://qoouzjntyfzcxnwjksiu.supabase.co/functions/v1/bling-pedidos';
+const BLING_ITENS_FN = 'https://qoouzjntyfzcxnwjksiu.supabase.co/functions/v1/bling-pedido-itens';
+const BLING_HEADERS  = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` };
+let blingRevs = [];
+let blingItensAtual = [];
+
+function normalizarNome(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();
+}
+
+function openBlingSync() {
+  const isAdmin = currentProfile.role === 'admin';
+  document.getElementById('bling-resultado').innerHTML = '';
+  if (isAdmin) {
+    const hoje = new Date().toISOString().split('T')[0];
+    const mes = new Date(); mes.setDate(1);
+    document.getElementById('bling-data-ini').value = mes.toISOString().split('T')[0];
+    document.getElementById('bling-data-fim').value = hoje;
+    document.getElementById('bling-header').style.display = 'block';
+  } else {
+    document.getElementById('bling-header').style.display = 'none';
+    openModal('modal-bling');
+    buscarUltimoPedidoRev();
+    return;
+  }
+  openModal('modal-bling');
+}
+
+async function fetchTodosBling(ini, fim) {
+  const todos = [];
+  let pagina = 1;
+  while (true) {
+    const resp = await fetch(`${BLING_FN}?pagina=${pagina}&dataInicial=${ini}&dataFinal=${fim}`, { headers: BLING_HEADERS });
+    if (!resp.ok) return null;
+    const json = await resp.json();
+    const pedidos = json.data || [];
+    todos.push(...pedidos);
+    if (pedidos.length < 100 || pagina >= 10) break;
+    pagina++;
+  }
+  return todos;
+}
+
+// ── REVENDEDORA: busca só o último pedido dela ──
+async function buscarUltimoPedidoRev() {
+  const res = document.getElementById('bling-resultado');
+
+  const blingId = currentProfile.bling_contato_id;
+  if (!blingId) {
+    res.innerHTML = `<div class="empty-state"><div class="empty-icon">🔗</div>
+      <p>Seu perfil ainda não está vinculado ao Bling.<br>
+      <span style="color:var(--muted)">Peça para a administradora vincular seu ID do Bling no painel Admin → seu nome.</span></p>
+    </div>`;
+    return;
+  }
+
+  res.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Buscando seu último pedido...</div>';
+
+  const hoje = new Date().toISOString().split('T')[0];
+  const inicio = new Date(); inicio.setMonth(inicio.getMonth() - 6);
+  const todos = await fetchTodosBling(inicio.toISOString().split('T')[0], hoje);
+
+  if (!todos) {
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao conectar com o Bling.</p></div>';
+    return;
+  }
+
+  const meusPedidos = todos.filter(p => String(p.contato?.id) === String(blingId));
+
+  if (!meusPedidos.length) {
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Nenhum pedido encontrado nos últimos 6 meses.</p></div>';
+    return;
+  }
+
+  meusPedidos.sort((a, b) => b.data.localeCompare(a.data));
+  const pedido = meusPedidos[0];
+  res.innerHTML = `<div style="font-size:13px;color:var(--muted);margin-bottom:12px">Último pedido — <strong>${formatDate(pedido.data)}</strong></div>`;
+  await renderItensBling(pedido.id, pedido.numero, currentUser.id, false);
+}
+
+// ── ADMIN: busca com filtro de data, todos os pedidos ──
+async function buscarBling() {
+  const ini = document.getElementById('bling-data-ini').value;
+  const fim = document.getElementById('bling-data-fim').value;
+  if (!ini || !fim) { toast('Informe as duas datas'); return; }
+
+  const res = document.getElementById('bling-resultado');
+  res.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Buscando pedidos...</div>';
+
+  const todos = await fetchTodosBling(ini, fim);
+  if (!todos) {
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao conectar com o Bling.</p></div>';
+    return;
+  }
+  if (!todos.length) {
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Nenhum pedido nesse período.</p></div>';
+    return;
+  }
+
+  const situMap = { 6:{label:'Em aberto',badge:'badge-pendente'}, 9:{label:'Atendido',badge:'badge-quitado'} };
+  res.innerHTML =
+    `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">${todos.length} pedido${todos.length!==1?'s':''} encontrado${todos.length!==1?'s':''}</div>` +
+    todos.map(p => {
+      const sit = situMap[p.situacao?.id] || { label:'Outro', badge:'badge-aberta' };
+      return `<div class="bling-row">
+        <div class="bling-num">#${p.numero}</div>
+        <div class="bling-info">
+          <div class="bling-cliente">${p.contato?.nome || '—'}</div>
+          <div class="bling-data">${formatDate(p.data)} &nbsp;<span class="badge ${sit.badge}" style="font-size:10px">${sit.label}</span> &nbsp;<span style="font-size:10px;color:var(--muted);font-family:monospace">id:${p.contato?.id}</span></div>
+        </div>
+        <div class="bling-total">R$ ${Number(p.total).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
+        <button class="btn-import" onclick="verItensBling('${p.id}',${p.numero},this)">Ver itens</button>
+      </div>`;
+    }).join('');
+}
+
+async function verItensBling(pedidoId, numero, btn) {
+  btn.textContent = '⟳'; btn.disabled = true;
+
+  if (!blingRevs.length) {
+    const { data, error } = await sb.from('profiles').select('id,nome').eq('role','revendedora').eq('aprovada',true).order('nome');
+    if (error) { console.error('Erro ao buscar revendedoras:', error); }
+    blingRevs = data || [];
+  }
+
+  document.getElementById('bling-header').style.display = 'none';
+  const res = document.getElementById('bling-resultado');
+
+  if (!blingRevs.length) {
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Nenhuma revendedora aprovada encontrada. Verifique o painel Admin.</p></div>';
+    return;
+  }
+
+  res.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando itens...</div>';
+  await renderItensBling(pedidoId, numero, null, true);
+}
+
+async function renderItensBling(pedidoId, numero, fixedRevId, mostrarSeletor) {
+  const res = document.getElementById('bling-resultado');
+  const resp = await fetch(`${BLING_ITENS_FN}?id=${pedidoId}`, { headers: BLING_HEADERS });
+  if (!resp.ok) {
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao buscar itens do pedido.</p></div>';
+    return;
+  }
+  const json = await resp.json();
+  const itens = json.data?.itens || json.itens || json.data || [];
+  if (!itens.length) {
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Nenhum item nesse pedido.</p></div>';
+    return;
+  }
+
+  blingItensAtual = itens;
+  if (fixedRevId) {
+    window._blingFixedRevId = fixedRevId;
+  } else {
+    window._blingFixedRevId = null;
+  }
+
+  const revOpts = mostrarSeletor
+    ? `<div class="form-group" style="margin-bottom:16px">
+        <label class="form-label">Atribuir ao ciclo de *</label>
+        <select id="bling-rev-sel" class="form-control">
+          <option value="">Selecione a revendedora...</option>
+          ${blingRevs.map(r => `<option value="${r.id}">${r.nome}</option>`).join('')}
+        </select>
+       </div>`
+    : `<div style="margin-bottom:12px;font-size:13px;color:var(--muted)">Será importado para o seu ciclo</div>`;
+
+  const voltar = mostrarSeletor
+    ? `<button class="btn-secondary btn-sm" onclick="voltarListaBling()">← Voltar</button>`
+    : '';
+
+  res.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+      ${voltar}
+      <span style="font-weight:500;color:var(--plum)">Pedido #${numero} — ${itens.length} ite${itens.length!==1?'ns':'m'}</span>
+    </div>
+    ${revOpts}
+    <div class="ciclo-wrap" style="margin-bottom:16px">
+      <table class="ciclo-table">
+        <thead><tr>
+          <th class="ciclo-th ciclo-th-nosort">SKU</th>
+          <th class="ciclo-th ciclo-th-nosort">Descrição</th>
+          <th class="ciclo-th ciclo-th-nosort" style="text-align:center">Qtd</th>
+          <th class="ciclo-th ciclo-th-nosort">Preço</th>
+        </tr></thead>
+        <tbody>
+          ${itens.map(it => `<tr class="ciclo-row">
+            <td class="ciclo-td"><span class="ciclo-ref">${it.codigo||'—'}</span></td>
+            <td class="ciclo-td"><span class="ciclo-desc">${it.descricao}</span></td>
+            <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${it.quantidade}</span></td>
+            <td class="ciclo-td"><span class="ciclo-preco">R$ ${Number(it.valor).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <button class="btn-primary" style="width:100%" onclick="importarItensBling(${numero},this)">
+      ⬇️ Importar ${itens.length} ite${itens.length!==1?'ns':'m'} para o Ciclo
+    </button>`;
+}
+
+function voltarListaBling() {
+  document.getElementById('bling-header').style.display = 'block';
+  document.getElementById('bling-resultado').innerHTML = '';
+  buscarBling();
+}
+
+async function importarItensBling(numero, btn) {
+  const itens = blingItensAtual;
+  if (!itens.length) { toast('Nenhum item para importar'); return; }
+
+  const revId = window._blingFixedRevId
+    || (document.getElementById('bling-rev-sel') && document.getElementById('bling-rev-sel').value);
+
+  if (!revId) { toast('Selecione a revendedora'); return; }
+
+  btn.textContent = '⟳ Importando...'; btn.disabled = true;
+
+  const { error } = await sb.from('consignados').insert(
+    itens.map(it => ({
+      revendedora_id: revId,
+      descricao: it.descricao,
+      referencia: it.codigo || null,
+      quantidade_enviada: Number(it.quantidade),
+      preco_venda: Number(it.valor),
+      foto_url: null,
+      status: 'ativo'
+    }))
+  );
+
+  if (error) {
+    console.error('Erro ao importar itens:', error);
+    toast('Erro ao importar. Tente novamente.');
+    btn.textContent = `⬇️ Importar ${itens.length} ite${itens.length!==1?'ns':'m'} para o Ciclo`;
+    btn.disabled = false;
+    return;
+  }
+
+  btn.textContent = `✅ ${itens.length} ite${itens.length!==1?'ns':'m'} importado${itens.length!==1?'s':''}!`;
+  toast(`Pedido #${numero} — ${itens.length} itens adicionados ao Ciclo!`);
+  closeModal('modal-bling');
   loadConsignados();
 }
 
@@ -1279,7 +1745,12 @@ async function loadPagamentos() {
   const isAdmin = currentProfile.role === 'admin';
   let q = sb.from('pagamentos_clientes').select('*');
   if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
-  const { data } = await q.order('created_at', { ascending: false });
+  const { data, error } = await q.order('created_at', { ascending: false });
+  if (error) {
+    console.error('Erro ao carregar pagamentos:', error);
+    document.getElementById('p-list').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao carregar. Tente novamente.</p></div>';
+    return;
+  }
   allPagamentos = data || [];
   filtrarPagamentos();
 }
@@ -1387,8 +1858,17 @@ async function salvarPagamento() {
 // ADMIN
 // ═══════════════════════════════════════════════
 async function loadAdmin() {
-  const { data: pendentes } = await sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',false).order('created_at');
-  const { data: aprovadas } = await sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',true).order('nome');
+  document.getElementById('rev-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
+  document.getElementById('pendentes-list').innerHTML = '';
+  const [{ data: pendentes, error: e1 }, { data: aprovadas, error: e2 }] = await Promise.all([
+    sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',false).order('created_at'),
+    sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',true).order('nome')
+  ]);
+  if (e1 || e2) {
+    console.error('Erro ao carregar revendedoras:', e1 || e2);
+    document.getElementById('rev-list').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao carregar revendedoras. Tente novamente.</p></div>';
+    return;
+  }
 
   const pendDiv = document.getElementById('pendentes-list');
   if (pendentes && pendentes.length) {
@@ -1436,7 +1916,16 @@ async function verRevendedora(id) {
       <div class="detail-row"><div class="detail-key">Consignados</div><div class="detail-val">${ccount ? ccount.length : 0}</div></div>
       <div class="detail-row"><div class="detail-key">Cadastro</div><div class="detail-val">${formatDate(r.created_at.split('T')[0])}</div></div>
     </div>
-    <div class="detail-actions" style="margin-top:20px">
+    <div class="divider"></div>
+    <div class="form-group">
+      <label class="form-label">🔗 ID do contato no Bling</label>
+      <div style="display:flex;gap:8px">
+        <input type="text" id="rev-bling-id" class="form-control" placeholder="Ex: 12587268646" value="${r.bling_contato_id || ''}">
+        <button class="btn-secondary btn-sm" style="white-space:nowrap" onclick="salvarBlingId('${r.id}')">Salvar</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:5px">Cole o ID que aparece ao lado do nome dela na lista de pedidos do Bling</div>
+    </div>
+    <div class="detail-actions" style="margin-top:12px">
       ${!r.aprovada
         ? `<button class="btn-primary" onclick="aprovarRev('${r.id}')">✅ Aprovar acesso</button>`
         : `<button class="btn-danger" onclick="revogarRev('${r.id}')">🚫 Revogar acesso</button>`
@@ -1459,6 +1948,14 @@ async function revogarRev(id) {
   toast('Acesso revogado');
   closeModal('modal-detalhe-rev');
   loadAdmin();
+}
+
+async function salvarBlingId(revId) {
+  const val = document.getElementById('rev-bling-id').value.trim();
+  const { error } = await sb.from('profiles').update({ bling_contato_id: val || null }).eq('id', revId);
+  if (error) { toast('Erro ao salvar'); return; }
+  toast(val ? '🔗 ID Bling vinculado!' : 'Vínculo Bling removido');
+  blingRevs = [];
 }
 
 // ═══════════════════════════════════════════════
