@@ -382,6 +382,27 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 .btn-vender:hover { opacity: 0.88; }
 
+/* PRINT OVERLAY */
+#print-overlay {
+  display: none; position: fixed; inset: 0; z-index: 10000;
+  background: #fff; overflow-y: auto; padding: 32px 24px;
+  font-family: 'DM Sans', sans-serif; color: #2d1f35;
+}
+#print-overlay.show { display: block; }
+.print-close {
+  display: flex; justify-content: flex-end; margin-bottom: 20px;
+}
+.print-close button {
+  background: none; border: 1px solid #ccc; border-radius: 8px;
+  padding: 6px 16px; cursor: pointer; font-family: 'DM Sans', sans-serif;
+  font-size: 13px; color: #8a7590;
+}
+@media print {
+  body > *:not(#print-overlay) { display: none !important; }
+  #print-overlay { display: block !important; position: static !important; padding: 0 !important; }
+  .print-close { display: none !important; }
+}
+
 /* ADMIN */
 .rev-card { cursor: pointer; }
 .rev-header { display: flex; align-items: center; gap: 14px; }
@@ -477,7 +498,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   <div class="big-icon">⏳</div>
   <h2>Aguardando aprovação</h2>
   <p>Seu cadastro foi enviado para a Lizzie Semijoias. Você receberá acesso assim que for aprovada.</p>
-  <button class="btn-secondary" style="color:#fff;border-color:rgba(255,255,255,0.2)" onclick="supabase.auth.signOut().then(()=>location.reload())">Sair</button>
+  <button class="btn-secondary" style="color:#fff;border-color:rgba(255,255,255,0.2)" onclick="sb.auth.signOut().then(()=>location.reload())">Sair</button>
 </div>
 
 <!-- MAIN APP -->
@@ -487,7 +508,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     <div class="topbar-logo">💎 Lizzie</div>
     <div class="topbar-right">
       <div class="user-badge" id="user-badge">—</div>
-      <button class="btn-icon" onclick="supabase.auth.signOut().then(()=>location.reload())" title="Sair">⏻</button>
+      <button class="btn-icon" onclick="sb.auth.signOut().then(()=>location.reload())" title="Sair">⏻</button>
     </div>
   </div>
 
@@ -545,7 +566,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
           <div class="section-subtitle">Peças em consignação</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn-secondary btn-sm" id="btn-bling-sync" onclick="openBlingSync()" style="display:none">🔄 Bling</button>
+          <button class="btn-secondary btn-sm" id="btn-bling-sync" onclick="openBlingSync()" style="display:none">📥 Baixar Relação de Peças</button>
           <button class="btn-primary btn-sm" id="btn-novo-consig" onclick="openNovoConsignado()" style="display:none">+ Novo</button>
         </div>
       </div>
@@ -844,6 +865,25 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   </div>
 </div>
 
+<!-- PRINT OVERLAY -->
+<div id="print-overlay">
+  <div class="print-close"><button onclick="fecharPrint()">✕ Fechar</button></div>
+  <div id="print-content"></div>
+</div>
+
+<!-- MODAL FECHAMENTO DO CICLO -->
+<div class="modal-overlay" id="modal-fechamento">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📋 Fechamento do Ciclo</div>
+    <div id="fechamento-content"></div>
+    <div style="display:flex;gap:10px;margin-top:16px">
+      <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-fechamento')">Fechar</button>
+      <button class="btn-primary" style="flex:2" onclick="gerarPdfFechamento()">🖨 Gerar PDF</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL BLING SYNC -->
 <div class="modal-overlay" id="modal-bling">
   <div class="modal">
@@ -874,6 +914,19 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 const SUPABASE_URL = 'https://qoouzjntyfzcxnwjksiu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvb3V6am50eWZ6Y3hud2prc2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDgzMjksImV4cCI6MjA5NDA4NDMyOX0.eOXGwJJshAtRrO_g4aldYau6qeU25Usy7PydvEfN1a4';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Wrapper com timeout para queries Supabase (evita travar indefinidamente)
+function sbQ(query, ms = 12000) {
+  return Promise.race([
+    query,
+    new Promise((_, reject) =>
+      setTimeout(() => reject({ timeout: true }), ms)
+    )
+  ]).catch(e => {
+    if (e && e.timeout) return { data: null, error: { message: 'timeout' } };
+    return { data: null, error: e };
+  });
+}
 
 let currentUser = null;
 let currentProfile = null;
@@ -1015,8 +1068,13 @@ async function loadDashboard() {
   const isAdmin = currentProfile.role === 'admin';
   let q = sb.from('garantias').select('*');
   if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
-  const { data } = await q.order('created_at', { ascending: false }).limit(50);
+  const { data, error } = await sbQ(q.order('created_at', { ascending: false }).limit(50));
 
+  if (error) {
+    const msg = error.message === 'timeout' ? 'Conexão lenta. Aguarde e tente novamente.' : 'Erro ao carregar dados.';
+    document.getElementById('dash-recentes').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`;
+    return;
+  }
   if (!data) return;
   const hoje = new Date(); hoje.setHours(0,0,0,0);
 
@@ -1056,10 +1114,10 @@ async function loadGarantias() {
   const isAdmin = currentProfile.role === 'admin';
   let q = sb.from('garantias').select('*');
   if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
-  const { data, error } = await q.order('created_at', { ascending: false });
+  const { data, error } = await sbQ(q.order('created_at', { ascending: false }));
   if (error) {
-    console.error('Erro ao carregar garantias:', error);
-    document.getElementById('g-list').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao carregar garantias. Tente novamente.</p></div>';
+    const msg = error.message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar garantias.';
+    document.getElementById('g-list').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`;
     return;
   }
   allGarantias = data || [];
@@ -1299,11 +1357,11 @@ async function loadConsignados() {
   const isAdmin = currentProfile.role === 'admin';
   let q = sb.from('consignados').select('*');
   if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
-  const { data, error } = await q.order('created_at', { ascending: false });
+  const { data, error } = await sbQ(q.order('created_at', { ascending: false }));
   const div = document.getElementById('c-list');
   if (error) {
-    console.error('Erro ao carregar ciclo:', error);
-    div.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao carregar. Tente novamente.</p></div>';
+    const msg = error.message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar.';
+    div.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`;
     return;
   }
   allConsignados = data || [];
@@ -1316,6 +1374,17 @@ function sortConsignados(col) {
   renderCicloGrid();
 }
 
+const CAT_LABEL = { anel:'Anel', colar:'Colar', brinco:'Brinco', pulseira:'Pulseira', outro:'Outro' };
+
+function detectarCategoria(descricao) {
+  const d = (descricao || '').toLowerCase();
+  if (d.includes('brinco')) return 'brinco';
+  if (d.includes('colar') || d.includes('corrente') || d.includes('escapulario') || d.includes('escapulário') || d.includes('gargantilha')) return 'colar';
+  if (d.includes('anel')) return 'anel';
+  if (d.includes('pulseira') || d.includes('bracelete')) return 'pulseira';
+  return 'outro';
+}
+
 function renderCicloGrid() {
   const div = document.getElementById('c-list');
   if (!allConsignados.length) {
@@ -1324,14 +1393,7 @@ function renderCicloGrid() {
   }
 
   const sorted = [...allConsignados].sort((a, b) => {
-    let va, vb;
-    if (cSort.col === 'disponivel') {
-      va = (a.quantidade_enviada - a.quantidade_vendida - a.quantidade_devolvida);
-      vb = (b.quantidade_enviada - b.quantidade_vendida - b.quantidade_devolvida);
-    } else {
-      va = a[cSort.col] ?? '';
-      vb = b[cSort.col] ?? '';
-    }
+    let va = a[cSort.col] ?? '', vb = b[cSort.col] ?? '';
     if (typeof va === 'string') va = va.toLowerCase();
     if (typeof vb === 'string') vb = vb.toLowerCase();
     if (va < vb) return cSort.dir === 'asc' ? -1 : 1;
@@ -1339,21 +1401,16 @@ function renderCicloGrid() {
     return 0;
   });
 
-  const arrow = (col) => {
-    if (cSort.col !== col) return '<span style="opacity:0.3">⇅</span>';
-    return cSort.dir === 'asc' ? '▲' : '▼';
-  };
+  const arrow = col => cSort.col !== col ? '<span style="opacity:0.3">⇅</span>' : (cSort.dir === 'asc' ? '▲' : '▼');
   const th = (col, label) =>
     `<th class="ciclo-th${cSort.col === col ? ' sorted' : ''}" onclick="sortConsignados('${col}')">${label} ${arrow(col)}</th>`;
 
+  const isAdmin = currentProfile.role === 'admin';
   const rows = sorted.map(c => {
     const disp = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
     const esgotado = disp <= 0;
-    const fotoHtml = c.foto_url
-      ? `<img src="${c.foto_url}" class="ciclo-img">`
-      : `<div class="ciclo-emoji">💍</div>`;
-    const numClass = esgotado ? 'ciclo-num ciclo-num-zero' : 'ciclo-num ciclo-num-ok';
-    const catLabel = { anel:'Anel', colar:'Colar', brinco:'Brinco', pulseira:'Pulseira', outro:'Outro' };
+    const fotoHtml = c.foto_url ? `<img src="${c.foto_url}" class="ciclo-img">` : `<div class="ciclo-emoji">💍</div>`;
+    const cat = c.categoria || detectarCategoria(c.descricao);
 
     return `<tr class="ciclo-row${esgotado ? ' esgotado' : ''}">
       <td class="ciclo-td ciclo-foto-cell">${fotoHtml}</td>
@@ -1361,13 +1418,17 @@ function renderCicloGrid() {
         <div class="ciclo-desc">${c.descricao}</div>
         ${c.referencia ? `<div class="ciclo-ref">${c.referencia}</div>` : ''}
       </td>
-      <td class="ciclo-td">${c.categoria ? `<span class="ciclo-badge">${catLabel[c.categoria] || c.categoria}</span>` : '—'}</td>
+      <td class="ciclo-td"><span class="ciclo-badge">${CAT_LABEL[cat] || cat}</span></td>
       <td class="ciclo-td"><span class="ciclo-num">${c.quantidade_enviada}</span></td>
-      <td class="ciclo-td"><span class="${numClass}">${disp}</span></td>
       <td class="ciclo-td">${c.preco_venda ? `<span class="ciclo-preco">R$ ${Number(c.preco_venda).toFixed(2)}</span>` : '—'}</td>
-      <td class="ciclo-td">${!esgotado ? `<button class="btn-vender" onclick="openVenda('${c.id}')">Vender</button>` : '<span style="font-size:11px;color:var(--muted)">Esgotado</span>'}</td>
+      <td class="ciclo-td">${!esgotado ? `<button class="btn-vender" onclick="openVenda('${c.id}')">Vender</button>` : '<span style="font-size:11px;color:var(--muted)">Vendido</span>'}</td>
     </tr>`;
   }).join('');
+
+  const temAtivos = sorted.some(c => (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida) > 0);
+  const btnFechamento = (!isAdmin && temAtivos)
+    ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()">📋 Fechamento do Ciclo</button>`
+    : '';
 
   div.innerHTML = `<div class="ciclo-wrap">
     <table class="ciclo-table">
@@ -1377,14 +1438,13 @@ function renderCicloGrid() {
           ${th('descricao','Descrição')}
           ${th('categoria','Categoria')}
           ${th('quantidade_enviada','Enviadas')}
-          ${th('disponivel','Disponíveis')}
           ${th('preco_venda','Preço')}
           <th class="ciclo-th ciclo-th-nosort">Ações</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
-  </div>`;
+  </div>${btnFechamento}`;
 }
 
 function openVenda(id) {
@@ -1545,6 +1605,22 @@ async function buscarUltimoPedidoRev() {
     res.innerHTML = `<div class="empty-state"><div class="empty-icon">🔗</div>
       <p>Seu perfil ainda não está vinculado ao Bling.<br>
       <span style="color:var(--muted)">Peça para a administradora vincular seu ID do Bling no painel Admin → seu nome.</span></p>
+    </div>`;
+    return;
+  }
+
+  // Bloquear se já há ciclo ativo
+  const { data: cicloAtivo } = await sb.from('consignados')
+    .select('id, quantidade_enviada, quantidade_vendida, quantidade_devolvida')
+    .eq('revendedora_id', currentUser.id)
+    .eq('status', 'ativo');
+  const temPecasAtivas = (cicloAtivo || []).some(c =>
+    (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida) > 0
+  );
+  if (temPecasAtivas) {
+    res.innerHTML = `<div class="empty-state"><div class="empty-icon">🔒</div>
+      <p><strong>Você já tem um ciclo ativo.</strong><br>
+      <span style="color:var(--muted)">Finalize o ciclo atual clicando em <strong>Fechamento do Ciclo</strong> na aba Ciclo antes de baixar uma nova relação.</span></p>
     </div>`;
     return;
   }
@@ -1716,6 +1792,7 @@ async function importarItensBling(numero, btn) {
       revendedora_id: revId,
       descricao: it.descricao,
       referencia: it.codigo || null,
+      categoria: detectarCategoria(it.descricao),
       quantidade_enviada: Number(it.quantidade),
       preco_venda: Number(it.valor),
       foto_url: null,
@@ -1745,10 +1822,10 @@ async function loadPagamentos() {
   const isAdmin = currentProfile.role === 'admin';
   let q = sb.from('pagamentos_clientes').select('*');
   if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
-  const { data, error } = await q.order('created_at', { ascending: false });
+  const { data, error } = await sbQ(q.order('created_at', { ascending: false }));
   if (error) {
-    console.error('Erro ao carregar pagamentos:', error);
-    document.getElementById('p-list').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao carregar. Tente novamente.</p></div>';
+    const msg = error.message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar.';
+    document.getElementById('p-list').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`;
     return;
   }
   allPagamentos = data || [];
@@ -1811,9 +1888,21 @@ async function verPagamento(id) {
     </div>
     <button class="btn-primary" onclick="registrarPagamento('${id}')">Confirmar recebimento</button>
     ` : `<div class="alert" style="background:rgba(76,175,130,0.1);color:var(--success);border:1px solid rgba(76,175,130,0.3);margin-top:16px">✅ Pagamento quitado!</div>`}
-    <button class="btn-secondary" style="margin-top:10px;width:100%" onclick="closeModal('modal-detalhe-p')">Fechar</button>
+    <div style="display:flex;gap:10px;margin-top:10px">
+      <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-detalhe-p')">Fechar</button>
+      <button class="btn-danger" onclick="excluirPagamento('${id}')">🗑 Excluir</button>
+    </div>
   `;
   openModal('modal-detalhe-p');
+}
+
+async function excluirPagamento(id) {
+  if (!confirm('Excluir este lançamento? Essa ação não pode ser desfeita.')) return;
+  const { error } = await sb.from('pagamentos_clientes').delete().eq('id', id);
+  if (error) { toast('Erro ao excluir'); return; }
+  toast('Lançamento excluído');
+  closeModal('modal-detalhe-p');
+  loadPagamentos();
 }
 
 async function registrarPagamento(id) {
@@ -1861,12 +1950,12 @@ async function loadAdmin() {
   document.getElementById('rev-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
   document.getElementById('pendentes-list').innerHTML = '';
   const [{ data: pendentes, error: e1 }, { data: aprovadas, error: e2 }] = await Promise.all([
-    sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',false).order('created_at'),
-    sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',true).order('nome')
+    sbQ(sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',false).order('created_at')),
+    sbQ(sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',true).order('nome'))
   ]);
   if (e1 || e2) {
-    console.error('Erro ao carregar revendedoras:', e1 || e2);
-    document.getElementById('rev-list').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao carregar revendedoras. Tente novamente.</p></div>';
+    const msg = (e1||e2).message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar revendedoras.';
+    document.getElementById('rev-list').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`;
     return;
   }
 
@@ -1956,6 +2045,113 @@ async function salvarBlingId(revId) {
   if (error) { toast('Erro ao salvar'); return; }
   toast(val ? '🔗 ID Bling vinculado!' : 'Vínculo Bling removido');
   blingRevs = [];
+}
+
+// ═══════════════════════════════════════════════
+// FECHAMENTO DO CICLO
+// ═══════════════════════════════════════════════
+function openFechamento() {
+  const restantes = allConsignados.filter(c =>
+    (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida) > 0
+  );
+
+  if (!restantes.length) {
+    toast('Nenhuma peça restante — ciclo já está limpo!');
+    return;
+  }
+
+  const total = restantes.reduce((s, c) => s + (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida), 0);
+  const valorTotal = restantes.reduce((s, c) => {
+    const qtd = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+    return s + (qtd * (c.preco_venda || 0));
+  }, 0);
+
+  document.getElementById('fechamento-content').innerHTML = `
+    <p style="font-size:13px;color:var(--muted);margin-bottom:16px">
+      ${restantes.length} ite${restantes.length!==1?'ns':'m'} restante${restantes.length!==1?'s':''} — ${total} unidade${total!==1?'s':''}
+    </p>
+    <div class="ciclo-wrap" style="margin-bottom:8px">
+      <table class="ciclo-table">
+        <thead><tr>
+          <th class="ciclo-th ciclo-th-nosort">SKU</th>
+          <th class="ciclo-th ciclo-th-nosort">Descrição</th>
+          <th class="ciclo-th ciclo-th-nosort" style="text-align:center">Qtd</th>
+          <th class="ciclo-th ciclo-th-nosort">Preço unit.</th>
+        </tr></thead>
+        <tbody>
+          ${restantes.map(c => {
+            const qtd = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+            return `<tr class="ciclo-row">
+              <td class="ciclo-td"><span class="ciclo-ref">${c.referencia||'—'}</span></td>
+              <td class="ciclo-td"><span class="ciclo-desc">${c.descricao}</span></td>
+              <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${qtd}</span></td>
+              <td class="ciclo-td"><span class="ciclo-preco">${c.preco_venda ? 'R$ '+Number(c.preco_venda).toFixed(2) : '—'}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div style="text-align:right;font-size:13px;color:var(--muted)">
+      Total estimado a devolver: <strong style="color:var(--plum)">R$ ${valorTotal.toFixed(2)}</strong>
+    </div>`;
+
+  openModal('modal-fechamento');
+}
+
+function gerarPdfFechamento() {
+  const restantes = allConsignados.filter(c =>
+    (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida) > 0
+  );
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const nomeRev = currentProfile.nome;
+  const total = restantes.reduce((s, c) => s + (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida), 0);
+  const valorTotal = restantes.reduce((s, c) => {
+    const qtd = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+    return s + (qtd * (c.preco_venda || 0));
+  }, 0);
+
+  const linhas = restantes.map((c, i) => {
+    const qtd = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+    return `<tr style="background:${i%2===0?'#faf7f2':'#fff'}">
+      <td style="padding:9px 12px;font-size:12px;color:#8a7590">${c.referencia||'—'}</td>
+      <td style="padding:9px 12px;font-size:13px">${c.descricao}</td>
+      <td style="padding:9px 12px;text-align:center;font-size:13px">${qtd}</td>
+      <td style="padding:9px 12px;text-align:right;font-size:13px">${c.preco_venda?'R$ '+Number(c.preco_venda).toFixed(2):'—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('print-content').innerHTML = `
+    <div style="margin-bottom:24px">
+      <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8a7590;margin-bottom:6px">Lizzie Semijoias</div>
+      <h1 style="font-family:'Georgia',serif;font-size:22px;font-weight:400;margin:0 0 4px">Fechamento do Ciclo</h1>
+      <div style="font-size:13px;color:#8a7590">Revendedora: <strong style="color:#2d1f35">${nomeRev}</strong> &nbsp;·&nbsp; Data: ${hoje} &nbsp;·&nbsp; ${restantes.length} iten${restantes.length!==1?'s':''} · ${total} unidade${total!==1?'s':''}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+      <thead>
+        <tr style="background:#1a0a2e;color:#fff">
+          <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:500">SKU</th>
+          <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:500">Descrição</th>
+          <th style="padding:10px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:500">Qtd</th>
+          <th style="padding:10px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:500">Preço unit.</th>
+        </tr>
+      </thead>
+      <tbody>${linhas}</tbody>
+    </table>
+    <div style="text-align:right;font-size:14px;font-weight:600;margin-bottom:48px">
+      Total estimado a devolver: R$ ${valorTotal.toFixed(2)}
+    </div>
+    <div style="display:flex;gap:60px;margin-top:48px">
+      <div style="flex:1;border-top:1px solid #ccc;padding-top:8px;font-size:12px;color:#8a7590">Assinatura da revendedora</div>
+      <div style="flex:1;border-top:1px solid #ccc;padding-top:8px;font-size:12px;color:#8a7590">Assinatura Lizzie Semijoias</div>
+    </div>`;
+
+  closeModal('modal-fechamento');
+  document.getElementById('print-overlay').classList.add('show');
+  setTimeout(() => window.print(), 300);
+}
+
+function fecharPrint() {
+  document.getElementById('print-overlay').classList.remove('show');
 }
 
 // ═══════════════════════════════════════════════
