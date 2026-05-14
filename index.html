@@ -667,20 +667,8 @@ textarea.form-control { resize: vertical; min-height: 80px; }
         <input type="date" id="g-prazo" class="form-control" readonly>
       </div>
     </div>
-    <div class="form-group">
-      <label class="form-label">Encaminhar para *</label>
-      <select id="g-destino" class="form-control">
-        <option value="">Selecione...</option>
-        <option value="rebanho">Rebanho</option>
-        <option value="fornecedor">Fornecedor</option>
-        <option value="conserto_local">Conserto local (solda/pedras/fechos)</option>
-        <option value="outro">Outro</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Detalhes do destino</label>
-      <input type="text" id="g-destino-det" class="form-control" placeholder="Nome da empresa ou endereço">
-    </div>
+    <input type="hidden" id="g-destino" value="outro">
+    <input type="hidden" id="g-destino-det" value="">
     <div class="form-group" id="g-status-group" style="display:none">
       <label class="form-label">Status</label>
       <select id="g-status" class="form-control">
@@ -1241,8 +1229,7 @@ function openNovaGarantia() {
   document.getElementById('g-edit-id').value = '';
   document.getElementById('modal-gTitle').textContent = 'Nova Garantia';
   document.getElementById('g-status-group').style.display = 'none';
-  ['g-desc','g-cliente','g-tel','g-problema','g-destino-det','g-obs'].forEach(id => document.getElementById(id).value = '');
-  document.getElementById('g-destino').value = '';
+  ['g-desc','g-cliente','g-tel','g-problema','g-obs'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('g-foto-preview').style.display = 'none';
   document.getElementById('g-foto-placeholder').style.display = 'block';
   document.getElementById('g-foto-input').value = '';
@@ -1264,7 +1251,7 @@ async function editarGarantia(id) {
   document.getElementById('g-problema').value = g.problema_relatado;
   document.getElementById('g-entrada').value = g.data_entrada;
   document.getElementById('g-prazo').value = g.prazo_maximo;
-  document.getElementById('g-destino').value = g.destino;
+  document.getElementById('g-destino').value = g.destino || 'outro';
   document.getElementById('g-destino-det').value = g.destino_detalhe || '';
   document.getElementById('g-obs').value = g.observacoes || '';
   document.getElementById('g-status-group').style.display = 'block';
@@ -1278,11 +1265,18 @@ async function editarGarantia(id) {
 }
 
 async function salvarGarantia() {
+  const btn = event.currentTarget;
+  if (btn.disabled) return;
+  btn.disabled = true;
+
   const desc = document.getElementById('g-desc').value.trim();
   const cliente = document.getElementById('g-cliente').value.trim();
   const problema = document.getElementById('g-problema').value.trim();
-  const destino = document.getElementById('g-destino').value;
-  if (!desc || !cliente || !problema || !destino) { toast('Preencha os campos obrigatórios'); return; }
+  if (!desc || !cliente || !problema) {
+    toast('Preencha os campos obrigatórios');
+    btn.disabled = false;
+    return;
+  }
 
   const editId = document.getElementById('g-edit-id').value;
   let foto_url = editId ? (allGarantias.find(g => g.id === editId) || {}).foto_url : null;
@@ -1324,6 +1318,7 @@ async function salvarGarantia() {
     toast('Garantia registrada!');
   }
 
+  btn.disabled = false;
   closeModal('modal-garantia');
   loadGarantias();
   loadDashboard();
