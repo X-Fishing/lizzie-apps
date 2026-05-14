@@ -1486,8 +1486,16 @@ async function confirmarVenda() {
   const c = allConsignados.find(x => x.id === id);
   const status = pago >= total ? 'quitado' : pago > 0 ? 'parcial' : 'pendente';
 
-  await Promise.all([
-    sb.from('consignados').update({ quantidade_vendida: c.quantidade_vendida + qtd }).eq('id', id),
+  const { error: errConsig } = await sbQ(
+    sb.from('consignados').update({ quantidade_vendida: c.quantidade_vendida + qtd }).eq('id', id)
+  );
+  if (errConsig) {
+    toast('Erro ao registrar venda. Tente novamente.');
+    console.error('Erro consignado:', errConsig);
+    return;
+  }
+
+  const { error: errPag } = await sbQ(
     sb.from('pagamentos_clientes').insert({
       revendedora_id: currentUser.id,
       nome_cliente: cliente,
@@ -1497,11 +1505,19 @@ async function confirmarVenda() {
       status,
       data_venda: dataPag
     })
-  ]);
+  );
+  if (errPag) {
+    toast('Venda salva, mas erro ao criar pagamento. Crie manualmente em Pagamentos.');
+    console.error('Erro pagamento:', errPag);
+    closeModal('modal-venda');
+    loadConsignados();
+    return;
+  }
 
-  toast('Venda registrada! Pagamento criado automaticamente.');
+  toast('Venda registrada! Pagamento criado em Pagamentos.');
   closeModal('modal-venda');
   loadConsignados();
+  allPagamentos = [];
 }
 
 async function openNovoConsignado() {
