@@ -970,6 +970,7 @@ let currentProfile = null;
 let allGarantias = [];
 let allConsignados = [];
 let allPagamentos = [];
+let revNameMap = {};
 let gFilter = 'todas';
 let pFilter = 'todos';
 let cSort = { col: 'descricao', dir: 'asc' };
@@ -1401,7 +1402,12 @@ async function loadConsignados() {
   const isAdmin = currentProfile.role === 'admin';
   let q = sb.from('consignados').select('*');
   if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
-  const { data, error } = await sbQ(q.order('created_at', { ascending: false }));
+  const queries = [sbQ(q.order('created_at', { ascending: false }))];
+  if (isAdmin) {
+    queries.push(sbQ(sb.from('profiles').select('id,nome').eq('role','revendedora')));
+  }
+  const results = await Promise.all(queries);
+  const { data, error } = results[0];
   const div = document.getElementById('c-list');
   if (error) {
     const msg = error.message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar.';
@@ -1409,6 +1415,11 @@ async function loadConsignados() {
     return;
   }
   allConsignados = data || [];
+  if (isAdmin) {
+    const revs = results[1].data || [];
+    revNameMap = {};
+    revs.forEach(r => { revNameMap[r.id] = r.nome; });
+  }
   renderCicloGrid();
 }
 
@@ -1435,8 +1446,16 @@ function renderCicloGrid() {
     div.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Nenhuma peça neste ciclo</p></div>';
     return;
   }
+  const isAdmin = currentProfile.role === 'admin';
+  if (isAdmin) {
+    div.innerHTML = renderCicloAdmin();
+  } else {
+    div.innerHTML = renderCicloRevendedora();
+  }
+}
 
-  const sorted = [...allConsignados].sort((a, b) => {
+function cicloSortRows(list) {
+  return [...list].sort((a, b) => {
     let va = a[cSort.col] ?? '', vb = b[cSort.col] ?? '';
     if (typeof va === 'string') va = va.toLowerCase();
     if (typeof vb === 'string') vb = vb.toLowerCase();
@@ -1444,51 +1463,143 @@ function renderCicloGrid() {
     if (va > vb) return cSort.dir === 'asc' ? 1 : -1;
     return 0;
   });
+}
 
-  const arrow = col => cSort.col !== col ? '<span style="opacity:0.3">⇅</span>' : (cSort.dir === 'asc' ? '▲' : '▼');
-  const th = (col, label) =>
-    `<th class="ciclo-th${cSort.col === col ? ' sorted' : ''}" onclick="sortConsignados('${col}')">${label} ${arrow(col)}</th>`;
+function cicloArrow(col) {
+  return cSort.col !== col ? '<span style="opacity:0.3">⇅</span>' : (cSort.dir === 'asc' ? '▲' : '▼');
+}
 
-  const isAdmin = currentProfile.role === 'admin';
-  const rows = sorted.map(c => {
-    const disp = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
-    const esgotado = disp <= 0;
-    const fotoHtml = c.foto_url ? `<img src="${c.foto_url}" class="ciclo-img">` : `<div class="ciclo-emoji">💍</div>`;
-    const cat = c.categoria || detectarCategoria(c.descricao);
+function cicloTh(col, label) {
+  return `<th class="ciclo-th${cSort.col === col ? ' sorted' : ''}" onclick="sortConsignados('${col}')">${label} ${cicloArrow(col)}</th>`;
+}
 
-    return `<tr class="ciclo-row${esgotado ? ' esgotado' : ''}">
-      <td class="ciclo-td ciclo-foto-cell">${fotoHtml}</td>
-      <td class="ciclo-td">
-        <div class="ciclo-desc">${c.descricao}</div>
-        ${c.referencia ? `<div class="ciclo-ref">${c.referencia}</div>` : ''}
-      </td>
-      <td class="ciclo-td"><span class="ciclo-badge">${CAT_LABEL[cat] || cat}</span></td>
-      <td class="ciclo-td"><span class="ciclo-num">${c.quantidade_enviada}</span></td>
-      <td class="ciclo-td">${c.preco_venda ? `<span class="ciclo-preco">R$ ${Number(c.preco_venda).toFixed(2)}</span>` : '—'}</td>
-      <td class="ciclo-td">${!esgotado ? `<button class="btn-vender" onclick="openVenda('${c.id}')">Vender</button>` : '<span style="font-size:11px;color:var(--muted)">Vendido</span>'}</td>
-    </tr>`;
-  }).join('');
+function cicloRowHtml(c, isAdmin) {
+  const disp = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+  const esgotado = disp <= 0;
+  const fotoHtml = c.foto_url ? `<img src="${c.foto_url}" class="ciclo-img">` : `<div class="ciclo-emoji">💍</div>`;
+  const cat = c.categoria || detectarCategoria(c.descricao);
+  const acao = isAdmin
+    ? `<span style="font-size:11px;color:var(--muted)">${c.status === 'encerrado' ? 'Encerrado' : (esgotado ? 'Vendido' : '—')}</span>`
+    : (!esgotado ? `<button class="btn-vender" onclick="openVenda('${c.id}')">Vender</button>` : '<span style="font-size:11px;color:var(--muted)">Vendido</span>');
+  return `<tr class="ciclo-row${esgotado ? ' esgotado' : ''}">
+    <td class="ciclo-td ciclo-foto-cell">${fotoHtml}</td>
+    <td class="ciclo-td">
+      <div class="ciclo-desc">${c.descricao}</div>
+      ${c.referencia ? `<div class="ciclo-ref">${c.referencia}</div>` : ''}
+    </td>
+    <td class="ciclo-td"><span class="ciclo-badge">${CAT_LABEL[cat] || cat}</span></td>
+    <td class="ciclo-td"><span class="ciclo-num">${c.quantidade_enviada}</span></td>
+    <td class="ciclo-td">${c.preco_venda ? `<span class="ciclo-preco">R$ ${Number(c.preco_venda).toFixed(2)}</span>` : '—'}</td>
+    <td class="ciclo-td">${acao}</td>
+  </tr>`;
+}
 
-  const temAtivos = sorted.some(c => (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida) > 0);
-  const btnFechamento = (!isAdmin && temAtivos)
-    ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()">📋 Fechamento do Ciclo</button>`
-    : '';
-
-  div.innerHTML = `<div class="ciclo-wrap">
+function cicloTableHtml(list, isAdmin) {
+  const rows = cicloSortRows(list).map(c => cicloRowHtml(c, isAdmin)).join('');
+  return `<div class="ciclo-wrap">
     <table class="ciclo-table">
       <thead>
         <tr>
           <th class="ciclo-th ciclo-th-nosort" style="width:52px"></th>
-          ${th('descricao','Descrição')}
-          ${th('categoria','Categoria')}
-          ${th('quantidade_enviada','Enviadas')}
-          ${th('preco_venda','Preço')}
-          <th class="ciclo-th ciclo-th-nosort">Ações</th>
+          ${cicloTh('descricao','Descrição')}
+          ${cicloTh('categoria','Categoria')}
+          ${cicloTh('quantidade_enviada','Enviadas')}
+          ${cicloTh('preco_venda','Preço')}
+          <th class="ciclo-th ciclo-th-nosort">${isAdmin ? 'Status' : 'Ações'}</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
-  </div>${btnFechamento}`;
+  </div>`;
+}
+
+function renderCicloRevendedora() {
+  const temAtivos = allConsignados.some(c =>
+    (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida) > 0
+  );
+  const btnFechamento = temAtivos
+    ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()">📋 Fechamento do Ciclo</button>`
+    : '';
+  return cicloTableHtml(allConsignados, false) + btnFechamento;
+}
+
+function renderCicloAdmin() {
+  // Group by revendedora_id
+  const groups = {};
+  allConsignados.forEach(c => {
+    const id = c.revendedora_id || '__sem__';
+    if (!groups[id]) groups[id] = [];
+    groups[id].push(c);
+  });
+
+  const ordered = Object.entries(groups).sort((a, b) => {
+    const na = (revNameMap[a[0]] || 'zzz').toLowerCase();
+    const nb = (revNameMap[b[0]] || 'zzz').toLowerCase();
+    return na < nb ? -1 : na > nb ? 1 : 0;
+  });
+
+  return ordered.map(([revId, list]) => {
+    const nome = revNameMap[revId] || 'Revendedora desconhecida';
+    const ativos = list.filter(c => c.status === 'ativo');
+    const temAtivos = ativos.length > 0;
+    const totalEnv = list.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
+    const totalVend = list.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+
+    const acoes = temAtivos
+      ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="finalizarCicloRev('${revId}')">✓ Finalizar ciclo</button>
+          <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')">🗑️ Deletar ciclo</button>
+        </div>`
+      : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem ciclo ativo</div>`;
+
+    return `<div class="card" style="margin-bottom:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+        <div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--plum)">${nome}</div>
+          <div style="font-size:12px;color:var(--muted)">${list.length} peça${list.length!==1?'s':''} · ${totalEnv} enviada${totalEnv!==1?'s':''} · ${totalVend} vendida${totalVend!==1?'s':''} ${temAtivos ? `· <span style="color:var(--success)">${ativos.length} ativa${ativos.length!==1?'s':''}</span>` : ''}</div>
+        </div>
+      </div>
+      ${cicloTableHtml(list, true)}
+      ${acoes}
+    </div>`;
+  }).join('');
+}
+
+async function finalizarCicloRev(revId) {
+  if (currentProfile.role !== 'admin') { toast('Sem permissão'); return; }
+  const nome = revNameMap[revId] || 'esta revendedora';
+  const ativos = allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
+  if (!ativos.length) { toast('Nenhum ciclo ativo para finalizar'); return; }
+  if (!confirm(`Finalizar ciclo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} passarão para "encerrado". Essa ação não pode ser desfeita.`)) return;
+
+  const { error } = await sb.from('consignados')
+    .update({ status: 'encerrado' })
+    .eq('revendedora_id', revId)
+    .eq('status', 'ativo');
+  if (error) { toast('Erro ao finalizar ciclo'); return; }
+  toast(`Ciclo de ${nome} encerrado`);
+  loadConsignados();
+}
+
+async function deletarCicloRev(revId) {
+  if (currentProfile.role !== 'admin') { toast('Sem permissão'); return; }
+  const nome = revNameMap[revId] || 'esta revendedora';
+  const ativos = allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
+  if (!ativos.length) { toast('Nenhum ciclo ativo para deletar'); return; }
+  if (!confirm(`⚠️ DELETAR ciclo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} ativa${ativos.length>1?'s':''} serão apagadas PERMANENTEMENTE. Ciclos já encerrados NÃO serão tocados.\n\nEssa ação não pode ser desfeita. Continuar?`)) return;
+  // Confirmação dupla por ser destrutivo
+  if (!confirm(`Tem certeza absoluta? Digite OK no próximo prompt para confirmar.`)) return;
+  const verif = prompt(`Para confirmar, digite OK:`);
+  if ((verif || '').trim().toUpperCase() !== 'OK') { toast('Cancelado'); return; }
+
+  // SEGURANÇA: o .eq('status','ativo') garante que ciclos encerrados são preservados
+  const { error } = await sb.from('consignados')
+    .delete()
+    .eq('revendedora_id', revId)
+    .eq('status', 'ativo');
+  if (error) { toast('Erro ao deletar ciclo'); return; }
+  toast(`Ciclo ativo de ${nome} deletado`);
+  loadConsignados();
 }
 
 function openVenda(id) {
