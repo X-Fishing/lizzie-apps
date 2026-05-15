@@ -932,6 +932,18 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   </div>
 </div>
 
+<!-- PWA install UI -->
+<button id="install-btn" type="button" aria-label="Instalar app">
+  <span style="font-size:16px">📲</span><span>Instalar app</span>
+</button>
+<div id="ios-install-banner" role="dialog" aria-label="Como instalar no iPhone">
+  <span style="font-size:20px">📲</span>
+  <div class="ios-text">
+    Para instalar: toque em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.
+  </div>
+  <button type="button" class="ios-close" aria-label="Fechar">×</button>
+</div>
+
 <script>
 // ═══════════════════════════════════════════════
 // CONFIG
@@ -2289,15 +2301,5 @@ init();
   }
 })();
 </script>
-<button id="install-btn" type="button" aria-label="Instalar app">
-  <span style="font-size:16px">📲</span><span>Instalar app</span>
-</button>
-<div id="ios-install-banner" role="dialog" aria-label="Como instalar no iPhone">
-  <span style="font-size:20px">📲</span>
-  <div class="ios-text">
-    Para instalar: toque em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.
-  </div>
-  <button type="button" class="ios-close" aria-label="Fechar">×</button>
-</div>
 </body>
 </html>
