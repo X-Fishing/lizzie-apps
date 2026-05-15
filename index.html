@@ -419,6 +419,44 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 .btn-vender:hover { opacity: 0.88; }
 
+/* CICLO ADMIN — CARDS REVENDEDORAS */
+.rev-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.rev-card {
+  background: linear-gradient(180deg, #fff 0%, #fbf7f4 100%);
+  border: 1px solid var(--border); border-radius: 16px; padding: 18px 16px;
+  cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+}
+.rev-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(124,58,93,0.12); border-color: var(--rose); }
+.rev-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: linear-gradient(90deg, var(--rose), var(--gold));
+}
+.rev-card.inativo { opacity: 0.6; }
+.rev-card.inativo::before { background: var(--border); }
+.rev-card-nome { font-family: 'Cormorant Garamond', serif; font-size: 19px; color: var(--plum); margin-bottom: 4px; line-height: 1.2; }
+.rev-card-status { font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--success); margin-bottom: 14px; }
+.rev-card-status.inativo { color: var(--muted); }
+.rev-card-valor-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+.rev-card-valor { font-family: 'Cormorant Garamond', serif; font-size: 26px; color: var(--rose); font-weight: 500; line-height: 1; }
+.rev-card-stats { display: flex; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 11px; color: var(--muted); }
+.rev-card-stats b { color: var(--plum); font-weight: 600; }
+.rev-total-geral {
+  background: linear-gradient(135deg, var(--plum), #5a2a44); color: #fff;
+  border-radius: 16px; padding: 18px 20px; margin-top: 4px;
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;
+  box-shadow: 0 4px 16px rgba(90,42,68,0.25);
+}
+.rev-total-geral-label { font-size: 12px; text-transform: uppercase; letter-spacing: 1px; opacity: 0.85; }
+.rev-total-geral-valor { font-family: 'Cormorant Garamond', serif; font-size: 32px; font-weight: 500; }
+.rev-total-geral-sub { font-size: 12px; opacity: 0.75; margin-top: 2px; }
+.btn-voltar-ciclo {
+  background: none; border: none; color: var(--rose); font-family: 'DM Sans', sans-serif;
+  font-size: 13px; cursor: pointer; padding: 6px 0; margin-bottom: 10px;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-voltar-ciclo:hover { color: var(--plum); }
+
 /* PRINT OVERLAY */
 #print-overlay {
   display: none; position: fixed; inset: 0; z-index: 10000;
@@ -511,19 +549,19 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
     <!-- LOGIN -->
     <div id="tab-login" class="auth-form">
-      <input type="email" id="login-email" placeholder="E-mail" autocomplete="email">
-      <input type="password" id="login-senha" placeholder="Senha" autocomplete="current-password">
+      <input type="email" id="login-email" placeholder="E-mail" autocomplete="email" onkeydown="if(event.key==='Enter')fazerLogin()">
+      <input type="password" id="login-senha" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')fazerLogin()">
       <button class="btn-gold" onclick="fazerLogin()">Entrar</button>
       <div id="login-msg" class="auth-msg" style="display:none"></div>
     </div>
 
     <!-- CADASTRO -->
     <div id="tab-cadastro" class="auth-form" style="display:none">
-      <input type="text" id="cad-nome" placeholder="Nome completo">
-      <input type="email" id="cad-email" placeholder="E-mail">
-      <input type="tel" id="cad-tel" placeholder="WhatsApp">
-      <input type="text" id="cad-cidade" placeholder="Cidade / Estado">
-      <input type="password" id="cad-senha" placeholder="Senha (mín. 6 caracteres)" autocomplete="new-password">
+      <input type="text" id="cad-nome" placeholder="Nome completo" onkeydown="if(event.key==='Enter')fazerCadastro()">
+      <input type="email" id="cad-email" placeholder="E-mail" onkeydown="if(event.key==='Enter')fazerCadastro()">
+      <input type="tel" id="cad-tel" placeholder="WhatsApp" onkeydown="if(event.key==='Enter')fazerCadastro()">
+      <input type="text" id="cad-cidade" placeholder="Cidade / Estado" onkeydown="if(event.key==='Enter')fazerCadastro()">
+      <input type="password" id="cad-senha" placeholder="Senha (mín. 6 caracteres)" autocomplete="new-password" onkeydown="if(event.key==='Enter')fazerCadastro()">
       <button class="btn-gold" onclick="fazerCadastro()">Solicitar acesso</button>
       <div id="cad-msg" class="auth-msg" style="display:none"></div>
     </div>
@@ -998,6 +1036,7 @@ let revNameMap = {};
 let gFilter = 'todas';
 let pFilter = 'todos';
 let cSort = { col: 'descricao', dir: 'asc' };
+let cicloRevSelecionada = null;
 
 // ═══════════════════════════════════════════════
 // INIT
@@ -1048,10 +1087,11 @@ async function loadUser(user) {
   const badge = profile.role === 'admin' ? '👑 Admin' : '💍 ' + profile.nome.split(' ')[0];
   document.getElementById('user-badge').textContent = badge;
 
+  document.getElementById('btn-bling-sync').style.display = 'block';
   if (profile.role === 'admin') {
     document.getElementById('nav-admin').style.display = 'flex';
     document.getElementById('btn-novo-consig').style.display = 'block';
-    document.getElementById('btn-bling-sync').style.display = 'block';
+    document.getElementById('nav-pagamentos').style.display = 'none';
   }
 
   showPanel('dashboard');
@@ -1564,14 +1604,34 @@ function renderCicloRevendedora() {
   return cicloTableHtml(allConsignados, false) + btnFechamento;
 }
 
-function renderCicloAdmin() {
-  // Group by revendedora_id
+function agruparPorRevendedora() {
   const groups = {};
   allConsignados.forEach(c => {
     const id = c.revendedora_id || '__sem__';
     if (!groups[id]) groups[id] = [];
     groups[id].push(c);
   });
+  return groups;
+}
+
+function statsRevendedora(list) {
+  const ativos = list.filter(c => c.status === 'ativo');
+  const totalEnv = list.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
+  const totalVend = list.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+  const totalRecv = list.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
+  return { ativos, temAtivos: ativos.length > 0, totalEnv, totalVend, totalRecv };
+}
+
+function fmtBRL(n) {
+  return 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function renderCicloAdmin() {
+  const groups = agruparPorRevendedora();
+
+  if (cicloRevSelecionada && groups[cicloRevSelecionada]) {
+    return renderCicloAdminDetalhe(cicloRevSelecionada, groups[cicloRevSelecionada]);
+  }
 
   const ordered = Object.entries(groups).sort((a, b) => {
     const na = (revNameMap[a[0]] || 'zzz').toLowerCase();
@@ -1579,31 +1639,72 @@ function renderCicloAdmin() {
     return na < nb ? -1 : na > nb ? 1 : 0;
   });
 
-  return ordered.map(([revId, list]) => {
+  const cards = ordered.map(([revId, list]) => {
     const nome = revNameMap[revId] || 'Revendedora desconhecida';
-    const ativos = list.filter(c => c.status === 'ativo');
-    const temAtivos = ativos.length > 0;
-    const totalEnv = list.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
-    const totalVend = list.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+    const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
+    return `<div class="rev-card${temAtivos ? '' : ' inativo'}" onclick="abrirCicloRev('${revId}')">
+      <div class="rev-card-nome">${nome}</div>
+      <div class="rev-card-status${temAtivos ? '' : ' inativo'}">${temAtivos ? `● ${ativos.length} ativa${ativos.length!==1?'s':''}` : '○ Sem ciclo ativo'}</div>
+      <div class="rev-card-valor-label">Vendido até agora</div>
+      <div class="rev-card-valor">${fmtBRL(totalRecv)}</div>
+      <div class="rev-card-stats">
+        <div><b>${list.length}</b> peça${list.length!==1?'s':''}</div>
+        <div>·</div>
+        <div><b>${totalVend}</b>/${totalEnv} vendida${totalVend!==1?'s':''}</div>
+      </div>
+    </div>`;
+  }).join('');
 
-    const acoes = temAtivos
-      ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-          <button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="finalizarCicloRev('${revId}')">✓ Finalizar ciclo</button>
-          <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')">🗑️ Deletar ciclo</button>
-        </div>`
-      : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem ciclo ativo</div>`;
+  const grandTotal = allConsignados.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
+  const totalPecasVend = allConsignados.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+  const totalRevsAtivas = Object.values(groups).filter(l => l.some(c => c.status === 'ativo')).length;
 
-    return `<div class="card" style="margin-bottom:16px">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+  return `<div class="rev-grid">${cards}</div>
+    <div class="rev-total-geral">
+      <div>
+        <div class="rev-total-geral-label">Total geral vendido</div>
+        <div class="rev-total-geral-sub">${totalRevsAtivas} revendedora${totalRevsAtivas!==1?'s':''} ativa${totalRevsAtivas!==1?'s':''} · ${totalPecasVend} peça${totalPecasVend!==1?'s':''} vendida${totalPecasVend!==1?'s':''}</div>
+      </div>
+      <div class="rev-total-geral-valor">${fmtBRL(grandTotal)}</div>
+    </div>`;
+}
+
+function renderCicloAdminDetalhe(revId, list) {
+  const nome = revNameMap[revId] || 'Revendedora desconhecida';
+  const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
+
+  const acoes = temAtivos
+    ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+        <button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="finalizarCicloRev('${revId}')">✓ Finalizar ciclo</button>
+        <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')">🗑️ Deletar ciclo</button>
+      </div>`
+    : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem ciclo ativo</div>`;
+
+  return `<button class="btn-voltar-ciclo" onclick="voltarCardsCiclo()">← Voltar para revendedoras</button>
+    <div class="card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
         <div>
-          <div style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--plum)">${nome}</div>
-          <div style="font-size:12px;color:var(--muted)">${list.length} peça${list.length!==1?'s':''} · ${totalEnv} enviada${totalEnv!==1?'s':''} · ${totalVend} vendida${totalVend!==1?'s':''} ${temAtivos ? `· <span style="color:var(--success)">${ativos.length} ativa${ativos.length!==1?'s':''}</span>` : ''}</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">${nome}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${list.length} peça${list.length!==1?'s':''} · ${totalVend}/${totalEnv} vendidas ${temAtivos ? `· <span style="color:var(--success)">${ativos.length} ativa${ativos.length!==1?'s':''}</span>` : ''}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Vendido</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--rose)">${fmtBRL(totalRecv)}</div>
         </div>
       </div>
       ${cicloTableHtml(list, true)}
       ${acoes}
     </div>`;
-  }).join('');
+}
+
+function abrirCicloRev(revId) {
+  cicloRevSelecionada = revId;
+  renderCicloGrid();
+}
+
+function voltarCardsCiclo() {
+  cicloRevSelecionada = null;
+  renderCicloGrid();
 }
 
 async function finalizarCicloRev(revId) {
@@ -1757,7 +1858,6 @@ async function salvarConsignado() {
     revendedora_id: revId,
     descricao: desc,
     referencia: document.getElementById('c-ref').value.trim() || null,
-    categoria: document.getElementById('c-cat').value || null,
     quantidade_enviada: qtd,
     preco_custo: parseFloat(document.getElementById('c-custo').value) || null,
     preco_venda: parseFloat(document.getElementById('c-venda').value) || null,
@@ -2010,7 +2110,6 @@ async function importarItensBling(numero, btn) {
       revendedora_id: revId,
       descricao: it.descricao,
       referencia: it.codigo || null,
-      categoria: detectarCategoria(it.descricao),
       quantidade_enviada: Number(it.quantidade),
       preco_venda: Number(it.valor),
       foto_url: null,
@@ -2019,8 +2118,8 @@ async function importarItensBling(numero, btn) {
   );
 
   if (error) {
-    console.error('Erro ao importar itens:', error);
-    toast('Erro ao importar. Tente novamente.');
+    console.error('Erro ao importar itens:', error.message, error.details, error.hint, error);
+    toast('Erro: ' + (error.message || 'tente novamente'));
     btn.textContent = `⬇️ Importar ${itens.length} ite${itens.length!==1?'ns':'m'} para o Ciclo`;
     btn.disabled = false;
     return;
