@@ -884,12 +884,12 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       </div>
       <div class="form-group">
         <label class="form-label">Preço custo (R$)</label>
-        <input type="number" id="c-custo" class="form-control" step="0.01" placeholder="0,00">
+        <input type="text" id="c-custo" class="form-control" inputmode="numeric" placeholder="0,00" oninput="maskMoneyBR(this)">
       </div>
     </div>
     <div class="form-group">
       <label class="form-label">Preço de venda sugerido (R$)</label>
-      <input type="number" id="c-venda" class="form-control" step="0.01" placeholder="0,00">
+      <input type="text" id="c-venda" class="form-control" inputmode="numeric" placeholder="0,00" oninput="maskMoneyBR(this)">
     </div>
     <div style="display:flex;gap:10px">
       <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-consignado')">Cancelar</button>
@@ -963,7 +963,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     </div>
     <div class="form-group">
       <label class="form-label">Valor recebido agora (R$)</label>
-      <input type="number" id="f-pago" class="form-control" step="0.01" placeholder="0,00">
+      <input type="text" id="f-pago" class="form-control" inputmode="numeric" placeholder="0,00" oninput="maskMoneyBR(this)">
       <div style="font-size:11px;color:var(--muted);margin-top:4px">Deixe igual ao total para marcar como quitada</div>
     </div>
     <div class="form-group">
@@ -1923,14 +1923,14 @@ function ajustarValorPago() {
   const total = carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
   const forma = document.getElementById('f-forma').value;
   const aVista = ['Dinheiro', 'Pix', 'Cartão débito', 'Cartão crédito'].includes(forma);
-  document.getElementById('f-pago').value = aVista ? total.toFixed(2) : '0.00';
+  document.getElementById('f-pago').value = aVista ? moneyToInput(total) : '';
 }
 
 async function confirmarVendaCarrinho(btn) {
   const cliente = document.getElementById('f-cliente').value.trim();
   const data = brToISO(document.getElementById('f-data').value);
   const forma = document.getElementById('f-forma').value;
-  const pago = parseFloat(document.getElementById('f-pago').value) || 0;
+  const pago = parseMoneyBR(document.getElementById('f-pago').value);
   const obs = document.getElementById('f-obs').value.trim();
 
   if (!cliente) { toast('Informe o nome da cliente'); return; }
@@ -1976,6 +1976,12 @@ async function confirmarVendaCarrinho(btn) {
   if (errItens) {
     console.error('Erro ao inserir itens:', errItens);
     toast('Venda criada mas erro nos itens. Confira em Pagamentos.');
+  }
+
+  if (pago > 0) {
+    await sbQ(sb.from('recebimentos').insert({
+      venda_id: vendaRow.id, valor: pago, data_recebimento: data
+    }));
   }
 
   for (const it of carrinhoVenda) {
@@ -2029,8 +2035,8 @@ async function salvarConsignado() {
     descricao: desc,
     referencia: document.getElementById('c-ref').value.trim() || null,
     quantidade_enviada: qtd,
-    preco_custo: parseFloat(document.getElementById('c-custo').value) || null,
-    preco_venda: parseFloat(document.getElementById('c-venda').value) || null,
+    preco_custo: parseMoneyBR(document.getElementById('c-custo').value) || null,
+    preco_venda: parseMoneyBR(document.getElementById('c-venda').value) || null,
     foto_url
   });
   toast('Peça adicionada ao catálogo!');
@@ -2390,13 +2396,16 @@ async function verVenda(id) {
   const v = allVendas.find(x => x.id === id);
   if (!v) return;
 
-  let itens = vendaItensCache[id];
-  if (!itens) {
-    const { data, error } = await sbQ(sb.from('venda_itens').select('*').eq('venda_id', id).order('created_at'));
-    if (error) { toast('Erro ao carregar itens'); return; }
-    itens = data || [];
-    vendaItensCache[id] = itens;
-  }
+  const [itensRes, recebsRes] = await Promise.all([
+    vendaItensCache[id]
+      ? Promise.resolve({ data: vendaItensCache[id] })
+      : sbQ(sb.from('venda_itens').select('*').eq('venda_id', id).order('created_at')),
+    sbQ(sb.from('recebimentos').select('*').eq('venda_id', id).order('data_recebimento'))
+  ]);
+  if (itensRes.error) { toast('Erro ao carregar itens'); return; }
+  const itens = itensRes.data || [];
+  vendaItensCache[id] = itens;
+  const recebimentos = (recebsRes.data) || [];
 
   const restante = Number(v.valor_total) - Number(v.valor_pago);
   const itensHtml = itens.map(it => `
@@ -2405,10 +2414,18 @@ async function verVenda(id) {
       <span>R$ ${(it.quantidade * Number(it.preco_unit)).toFixed(2)}</span>
     </div>`).join('');
 
+  const recebsHtml = recebimentos.length
+    ? recebimentos.map(r => `
+        <div class="hist-item-row">
+          <span style="color:var(--success)">✓ ${formatDate(r.data_recebimento)}</span>
+          <span>R$ ${Number(r.valor).toFixed(2)}</span>
+        </div>`).join('')
+    : '<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0">Nenhum recebimento registrado ainda</div>';
+
   document.getElementById('detalhe-venda-content').innerHTML = `
     <div class="modal-title">💰 ${v.nome_cliente}</div>
     <div class="detail-grid">
-      <div class="detail-row"><div class="detail-key">Data</div><div class="detail-val">${formatDate(v.data_venda)}</div></div>
+      <div class="detail-row"><div class="detail-key">Data venda</div><div class="detail-val">${formatDate(v.data_venda)}</div></div>
       <div class="detail-row"><div class="detail-key">Forma</div><div class="detail-val">${v.forma_pagamento}</div></div>
       <div class="detail-row"><div class="detail-key">Total</div><div class="detail-val">R$ ${Number(v.valor_total).toFixed(2)}</div></div>
       <div class="detail-row"><div class="detail-key">Pago</div><div class="detail-val" style="color:var(--success)">R$ ${Number(v.valor_pago).toFixed(2)}</div></div>
@@ -2418,10 +2435,18 @@ async function verVenda(id) {
     <div class="divider"></div>
     <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Itens da compra</div>
     <div style="background:#faf7f2;padding:10px 12px;border-radius:10px;margin-bottom:14px">${itensHtml}</div>
+    <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Recebimentos</div>
+    <div style="background:#faf7f2;padding:10px 12px;border-radius:10px;margin-bottom:14px">${recebsHtml}</div>
     ${v.status !== 'quitado' ? `
-    <div class="form-group">
-      <label class="form-label">Registrar pagamento (R$)</label>
-      <input type="number" id="p-reg-val" class="form-control" step="0.01" placeholder="Valor recebido" max="${restante.toFixed(2)}">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Valor recebido (R$) *</label>
+        <input type="text" id="p-reg-val" class="form-control" inputmode="numeric" placeholder="0,00" oninput="maskMoneyBR(this)">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Data do recebimento *</label>
+        <input type="text" id="p-reg-data" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)" value="${hojeBR()}">
+      </div>
     </div>
     <button class="btn-primary" style="width:100%" onclick="registrarPagamento('${id}')">Confirmar recebimento</button>
     ` : `<div class="alert" style="background:rgba(76,175,130,0.1);color:var(--success);border:1px solid rgba(76,175,130,0.3);margin-top:8px;padding:10px 14px;border-radius:10px">✅ Pagamento quitado</div>`}
@@ -2460,12 +2485,21 @@ async function excluirVenda(id) {
 
 async function registrarPagamento(id) {
   const v = allVendas.find(x => x.id === id);
-  const val = parseFloat(document.getElementById('p-reg-val').value);
+  const val = parseMoneyBR(document.getElementById('p-reg-val').value);
+  const dataBR = document.getElementById('p-reg-data').value;
+  const data = brToISO(dataBR);
   if (!val || val <= 0) { toast('Valor inválido'); return; }
+  if (!data) { toast('Data inválida (use dd/mm/aaaa)'); return; }
+
+  const { error: errRec } = await sbQ(
+    sb.from('recebimentos').insert({ venda_id: id, valor: val, data_recebimento: data })
+  );
+  if (errRec) { console.error(errRec); toast('Erro: ' + (errRec.message || 'tente novamente')); return; }
+
   const novoPago = Number(v.valor_pago) + val;
   const novoStatus = novoPago >= Number(v.valor_total) ? 'quitado' : 'parcial';
   const { error } = await sb.from('vendas').update({ valor_pago: novoPago, status: novoStatus }).eq('id', id);
-  if (error) { toast('Erro ao registrar'); return; }
+  if (error) { toast('Erro ao atualizar venda'); return; }
   toast('Pagamento registrado!');
   closeModal('modal-detalhe-venda');
   loadVendas();
@@ -2881,6 +2915,24 @@ function isoToBR(iso) {
 function hojeBR() {
   const d = new Date();
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+
+// Máscara monetária: dígitos vão andando, sempre 2 casas decimais
+function maskMoneyBR(input) {
+  let v = (input.value || '').replace(/\D/g, '');
+  if (!v) { input.value = ''; return; }
+  v = v.replace(/^0+/, '') || '0';
+  while (v.length < 3) v = '0' + v;
+  const inteiro = v.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  input.value = inteiro + ',' + v.slice(-2);
+}
+function parseMoneyBR(s) {
+  if (!s) return 0;
+  const t = String(s).replace(/\./g, '').replace(',', '.');
+  return parseFloat(t) || 0;
+}
+function moneyToInput(n) {
+  return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
 function previewFoto(input, previewId, placeholderId) {
