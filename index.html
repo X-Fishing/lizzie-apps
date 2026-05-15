@@ -1942,61 +1942,73 @@ async function confirmarVendaCarrinho(btn) {
 
   btn.disabled = true;
   btn.textContent = '⟳ Salvando...';
+  const resetBtn = () => { btn.disabled = false; btn.textContent = '✓ Confirmar venda'; };
 
-  const { data: vendaRow, error: errVenda } = await sbQ(
-    sb.from('vendas').insert({
-      revendedora_id: currentUser.id,
-      nome_cliente: cliente,
-      data_venda: data,
-      forma_pagamento: forma,
-      valor_total: total,
-      valor_pago: pago,
-      status,
-      observacao: obs || null
-    }).select().single()
-  );
+  try {
+    const { data: vendaRow, error: errVenda } = await sbQ(
+      sb.from('vendas').insert({
+        revendedora_id: currentUser.id,
+        nome_cliente: cliente,
+        data_venda: data,
+        forma_pagamento: forma,
+        valor_total: total,
+        valor_pago: pago,
+        status,
+        observacao: obs || null
+      }).select().single()
+    );
 
-  if (errVenda || !vendaRow) {
-    console.error('Erro ao criar venda:', errVenda);
-    toast('Erro: ' + ((errVenda && errVenda.message) || 'tente novamente'));
-    btn.disabled = false; btn.textContent = '✓ Confirmar venda';
-    return;
-  }
-
-  const itensInsert = carrinhoVenda.map(it => ({
-    venda_id: vendaRow.id,
-    consignado_id: it.consignado_id,
-    descricao: it.descricao,
-    referencia: it.referencia || null,
-    quantidade: it.quantidade,
-    preco_unit: it.preco_unit
-  }));
-
-  const { error: errItens } = await sbQ(sb.from('venda_itens').insert(itensInsert));
-  if (errItens) {
-    console.error('Erro ao inserir itens:', errItens);
-    toast('Venda criada mas erro nos itens. Confira em Pagamentos.');
-  }
-
-  if (pago > 0) {
-    await sbQ(sb.from('recebimentos').insert({
-      venda_id: vendaRow.id, valor: pago, data_recebimento: data
-    }));
-  }
-
-  for (const it of carrinhoVenda) {
-    const c = allConsignados.find(x => x.id === it.consignado_id);
-    if (c) {
-      await sbQ(sb.from('consignados').update({ quantidade_vendida: (c.quantidade_vendida || 0) + it.quantidade }).eq('id', it.consignado_id));
+    if (errVenda || !vendaRow) {
+      console.error('Erro ao criar venda:', errVenda);
+      toast('Erro: ' + ((errVenda && errVenda.message) || 'tente novamente'));
+      resetBtn();
+      return;
     }
-  }
 
-  carrinhoVenda = [];
-  toast('✅ Venda registrada!');
-  closeModal('modal-finalizar');
-  renderCartBar();
-  loadConsignados();
-  allVendas = [];
+    const itensInsert = carrinhoVenda.map(it => ({
+      venda_id: vendaRow.id,
+      consignado_id: it.consignado_id,
+      descricao: it.descricao,
+      referencia: it.referencia || null,
+      quantidade: it.quantidade,
+      preco_unit: it.preco_unit
+    }));
+
+    const { error: errItens } = await sbQ(sb.from('venda_itens').insert(itensInsert));
+    if (errItens) {
+      console.error('Erro ao inserir itens:', errItens);
+      toast('Venda criada mas erro nos itens. Confira em Pagamentos.');
+    }
+
+    if (pago > 0) {
+      const { error: errReceb } = await sbQ(sb.from('recebimentos').insert({
+        venda_id: vendaRow.id, valor: pago, data_recebimento: data
+      }));
+      if (errReceb) {
+        console.warn('Recebimento não registrado (tabela existe?):', errReceb);
+      }
+    }
+
+    const updates = carrinhoVenda
+      .map(it => {
+        const c = allConsignados.find(x => x.id === it.consignado_id);
+        if (!c) return null;
+        return sbQ(sb.from('consignados').update({ quantidade_vendida: (c.quantidade_vendida || 0) + it.quantidade }).eq('id', it.consignado_id));
+      })
+      .filter(Boolean);
+    await Promise.all(updates);
+
+    carrinhoVenda = [];
+    toast('✅ Venda registrada!');
+    closeModal('modal-finalizar');
+    renderCartBar();
+    allVendas = [];
+    await loadConsignados();
+  } catch (e) {
+    console.error('Falha inesperada na venda:', e);
+    toast('Erro inesperado — confira em Pagamentos antes de tentar de novo');
+    resetBtn();
+  }
 }
 
 async function openNovoConsignado() {
