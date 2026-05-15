@@ -965,6 +965,30 @@ function sbQ(query, ms = 12000) {
   });
 }
 
+function isAuthError(error) {
+  if (!error) return false;
+  const msg = (error.message || '').toLowerCase();
+  return msg.includes('jwt') ||
+         msg.includes('refresh token') ||
+         msg.includes('not authenticated') ||
+         msg.includes('invalid') && msg.includes('token') ||
+         error.status === 401 ||
+         error.code === 'PGRST301';
+}
+
+// Returns true if an error was handled (caller should bail out).
+async function handleSupabaseError(error, fallbackMsg = 'Erro inesperado') {
+  if (!error) return false;
+  if (isAuthError(error)) {
+    toast('Sessão expirada. Faça login novamente.');
+    await sb.auth.signOut().catch(() => {});
+    setTimeout(() => location.reload(), 1500);
+    return true;
+  }
+  toast(fallbackMsg);
+  return true;
+}
+
 let currentUser = null;
 let currentProfile = null;
 let allGarantias = [];
@@ -1572,11 +1596,14 @@ async function finalizarCicloRev(revId) {
   if (!ativos.length) { toast('Nenhum ciclo ativo para finalizar'); return; }
   if (!confirm(`Finalizar ciclo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} passarão para "encerrado". Essa ação não pode ser desfeita.`)) return;
 
-  const { error } = await sb.from('consignados')
-    .update({ status: 'encerrado' })
-    .eq('revendedora_id', revId)
-    .eq('status', 'ativo');
-  if (error) { toast('Erro ao finalizar ciclo'); return; }
+  let error;
+  try {
+    ({ error } = await sb.from('consignados')
+      .update({ status: 'encerrado' })
+      .eq('revendedora_id', revId)
+      .eq('status', 'ativo'));
+  } catch (e) { error = e; }
+  if (await handleSupabaseError(error, 'Erro ao finalizar ciclo')) return;
   toast(`Ciclo de ${nome} encerrado`);
   loadConsignados();
 }
@@ -1593,11 +1620,14 @@ async function deletarCicloRev(revId) {
   if ((verif || '').trim().toUpperCase() !== 'OK') { toast('Cancelado'); return; }
 
   // SEGURANÇA: o .eq('status','ativo') garante que ciclos encerrados são preservados
-  const { error } = await sb.from('consignados')
-    .delete()
-    .eq('revendedora_id', revId)
-    .eq('status', 'ativo');
-  if (error) { toast('Erro ao deletar ciclo'); return; }
+  let error;
+  try {
+    ({ error } = await sb.from('consignados')
+      .delete()
+      .eq('revendedora_id', revId)
+      .eq('status', 'ativo'));
+  } catch (e) { error = e; }
+  if (await handleSupabaseError(error, 'Erro ao deletar ciclo')) return;
   toast(`Ciclo ativo de ${nome} deletado`);
   loadConsignados();
 }
@@ -2197,14 +2227,22 @@ async function verRevendedora(id) {
 }
 
 async function aprovarRev(id) {
-  await sb.from('profiles').update({ aprovada: true }).eq('id', id);
+  let error;
+  try {
+    ({ error } = await sb.from('profiles').update({ aprovada: true }).eq('id', id));
+  } catch (e) { error = e; }
+  if (await handleSupabaseError(error, 'Erro ao aprovar revendedora')) return;
   toast('Revendedora aprovada!');
   closeModal('modal-detalhe-rev');
   loadAdmin();
 }
 
 async function revogarRev(id) {
-  await sb.from('profiles').update({ aprovada: false }).eq('id', id);
+  let error;
+  try {
+    ({ error } = await sb.from('profiles').update({ aprovada: false }).eq('id', id));
+  } catch (e) { error = e; }
+  if (await handleSupabaseError(error, 'Erro ao revogar acesso')) return;
   toast('Acesso revogado');
   closeModal('modal-detalhe-rev');
   loadAdmin();
@@ -2212,8 +2250,11 @@ async function revogarRev(id) {
 
 async function salvarBlingId(revId) {
   const val = document.getElementById('rev-bling-id').value.trim();
-  const { error } = await sb.from('profiles').update({ bling_contato_id: val || null }).eq('id', revId);
-  if (error) { toast('Erro ao salvar'); return; }
+  let error;
+  try {
+    ({ error } = await sb.from('profiles').update({ bling_contato_id: val || null }).eq('id', revId));
+  } catch (e) { error = e; }
+  if (await handleSupabaseError(error, 'Erro ao salvar ID do Bling')) return;
   toast(val ? '🔗 ID Bling vinculado!' : 'Vínculo Bling removido');
   blingRevs = [];
 }
