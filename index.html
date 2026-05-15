@@ -1954,7 +1954,23 @@ async function buscarUltimoPedidoRev() {
     return;
   }
 
-  const meusPedidos = todos.filter(p => String(p.contato?.id) === String(blingId));
+  console.log('[Bling] Total pedidos retornados:', todos.length);
+  console.log('[Bling] Procurando contato.id =', blingId);
+  console.log('[Bling] Estrutura do 1º pedido:', todos[0]);
+  console.log('[Bling] IDs de contato disponíveis:', [...new Set(todos.map(p => `${p.contato?.id} (${p.contato?.nome})`))]);
+
+  let meusPedidos = todos.filter(p => String(p.contato?.id) === String(blingId));
+
+  if (!meusPedidos.length) {
+    const alvo = normalizarNome(currentProfile.nome);
+    meusPedidos = todos.filter(p => {
+      const nome = normalizarNome(p.contato?.nome);
+      return nome && (nome === alvo || nome.includes(alvo) || alvo.includes(nome));
+    });
+    if (meusPedidos.length) {
+      console.warn('[Bling] ID não bateu, mas achou', meusPedidos.length, 'pedido(s) pelo nome. Avise o admin para corrigir o ID Bling no painel.');
+    }
+  }
 
   if (!meusPedidos.length) {
     res.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Nenhum pedido encontrado nos últimos 6 meses.</p></div>';
@@ -2329,7 +2345,10 @@ async function verRevendedora(id) {
         <input type="text" id="rev-bling-id" class="form-control" placeholder="Ex: 12587268646" value="${r.bling_contato_id || ''}">
         <button class="btn-secondary btn-sm" style="white-space:nowrap" onclick="salvarBlingId('${r.id}')">Salvar</button>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:5px">Cole o ID que aparece ao lado do nome dela na lista de pedidos do Bling</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;gap:8px">
+        <div style="font-size:11px;color:var(--muted)">Cole o ID que aparece ao lado do nome dela na lista de pedidos do Bling</div>
+        <button class="btn-secondary btn-sm" style="white-space:nowrap;font-size:11px" onclick="detectarBlingId('${r.id}','${(r.nome || '').replace(/'/g,"\\'")}')">🔍 Detectar pelo Bling</button>
+      </div>
     </div>
     <div class="detail-actions" style="margin-top:12px">
       ${!r.aprovada
@@ -2370,9 +2389,55 @@ async function salvarBlingId(revId) {
   try {
     ({ error } = await sb.from('profiles').update({ bling_contato_id: val || null }).eq('id', revId));
   } catch (e) { error = e; }
-  if (await handleSupabaseError(error, 'Erro ao salvar ID do Bling')) return;
+  if (error) {
+    console.error('Erro ao salvar ID do Bling:', error.message, error.details, error);
+    if (isAuthError(error)) return handleSupabaseError(error);
+    toast('Erro: ' + (error.message || 'tente novamente'));
+    return;
+  }
   toast(val ? '🔗 ID Bling vinculado!' : 'Vínculo Bling removido');
   blingRevs = [];
+  closeModal('modal-detalhe-rev');
+  loadAdmin();
+}
+
+async function detectarBlingId(revId, nomeRev) {
+  const input = document.getElementById('rev-bling-id');
+  const alvo = normalizarNome(nomeRev);
+  if (!alvo) { toast('Nome da revendedora vazio'); return; }
+
+  toast('🔍 Buscando no Bling...');
+  const hoje = new Date().toISOString().split('T')[0];
+  const inicio = new Date(); inicio.setMonth(inicio.getMonth() - 6);
+  const todos = await fetchTodosBling(inicio.toISOString().split('T')[0], hoje);
+  if (!todos) { toast('Erro ao conectar com o Bling'); return; }
+
+  const matches = todos.filter(p => {
+    const nome = normalizarNome(p.contato?.nome);
+    return nome && (nome === alvo || nome.includes(alvo) || alvo.includes(nome));
+  });
+
+  if (!matches.length) {
+    toast('Nenhum pedido encontrado com esse nome nos últimos 6 meses');
+    return;
+  }
+
+  const idsUnicos = [...new Set(matches.map(p => String(p.contato?.id)).filter(Boolean))];
+  if (idsUnicos.length === 1) {
+    input.value = idsUnicos[0];
+    toast(`✅ ID encontrado: ${idsUnicos[0]} — clique em Salvar`);
+    return;
+  }
+
+  const opcoes = idsUnicos.map(id => {
+    const pedido = matches.find(p => String(p.contato?.id) === id);
+    return `${id} (${pedido.contato.nome})`;
+  }).join('\n');
+  const escolha = prompt(`Foram encontrados ${idsUnicos.length} contatos no Bling com esse nome.\nCopie o ID correto e cole no campo:\n\n${opcoes}`, idsUnicos[0]);
+  if (escolha) {
+    input.value = escolha.trim().split(' ')[0];
+    toast(`ID preenchido — clique em Salvar`);
+  }
 }
 
 // ═══════════════════════════════════════════════
