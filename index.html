@@ -102,6 +102,39 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 #pending-screen h2 { font-family: 'Cormorant Garamond', serif; font-size: 28px; color: var(--gold); }
 #pending-screen p { color: rgba(255,255,255,0.6); font-size: 14px; line-height: 1.6; max-width: 280px; }
 
+/* PWA INSTALL */
+#install-btn {
+  display: none;
+  position: fixed; bottom: 24px; right: 24px; z-index: 300;
+  align-items: center; gap: 8px;
+  background: linear-gradient(135deg, var(--rose) 0%, var(--gold) 100%);
+  color: #fff; border: none; cursor: pointer;
+  padding: 14px 22px; border-radius: 28px;
+  font-family: 'DM Sans', sans-serif; font-size: 14px; font-weight: 500;
+  letter-spacing: 0.5px;
+  box-shadow: 0 8px 24px rgba(201,116,138,0.45);
+  transition: transform 0.15s ease;
+}
+#install-btn.show { display: inline-flex; }
+#install-btn:active { transform: scale(0.96); }
+#ios-install-banner {
+  display: none;
+  position: fixed; bottom: 16px; left: 16px; right: 16px; z-index: 300;
+  background: var(--plum); color: #fff;
+  padding: 14px 16px; border-radius: 14px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.45);
+  font-size: 13px; line-height: 1.45;
+  align-items: center; gap: 12px;
+  border: 1px solid rgba(201,116,138,0.3);
+}
+#ios-install-banner.show { display: flex; }
+#ios-install-banner .ios-text { flex: 1; }
+#ios-install-banner strong { color: var(--rose); font-weight: 500; }
+#ios-install-banner .ios-close {
+  background: none; border: none; color: rgba(255,255,255,0.5);
+  font-size: 22px; cursor: pointer; padding: 0 4px; line-height: 1;
+}
+
 /* MAIN APP */
 #app { display: none; min-height: 100vh; flex-direction: column; }
 
@@ -2206,6 +2239,65 @@ function toast(msg) {
 
 // START
 init();
+
+// PWA — install prompt + iOS banner + service worker
+(function () {
+  const installBtn = document.getElementById('install-btn');
+  const iosBanner = document.getElementById('ios-install-banner');
+  const isStandalone =
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.navigator.standalone === true;
+
+  if (!isStandalone) {
+    let deferredPrompt = null;
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      installBtn.classList.add('show');
+    });
+
+    installBtn.addEventListener('click', async () => {
+      if (!deferredPrompt) return;
+      installBtn.classList.remove('show');
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      deferredPrompt = null;
+    });
+
+    window.addEventListener('appinstalled', () => {
+      installBtn.classList.remove('show');
+      iosBanner.classList.remove('show');
+    });
+
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    if (isIOS && !localStorage.getItem('lizzie-ios-banner-dismissed')) {
+      setTimeout(() => iosBanner.classList.add('show'), 2500);
+      iosBanner.querySelector('.ios-close').addEventListener('click', () => {
+        iosBanner.classList.remove('show');
+        localStorage.setItem('lizzie-ios-banner-dismissed', '1');
+      });
+    }
+  }
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch((err) => {
+        console.warn('SW registration failed:', err);
+      });
+    });
+  }
+})();
 </script>
+<button id="install-btn" type="button" aria-label="Instalar app">
+  <span style="font-size:16px">📲</span><span>Instalar app</span>
+</button>
+<div id="ios-install-banner" role="dialog" aria-label="Como instalar no iPhone">
+  <span style="font-size:20px">📲</span>
+  <div class="ios-text">
+    Para instalar: toque em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.
+  </div>
+  <button type="button" class="ios-close" aria-label="Fechar">×</button>
+</div>
 </body>
 </html>
