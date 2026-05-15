@@ -689,8 +689,8 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     <div id="panel-consignados" style="display:none">
       <div class="section-header">
         <div>
-          <div class="section-title">Ciclo Atual</div>
-          <div class="section-subtitle">Peças em consignação</div>
+          <div class="section-title">Catálogo</div>
+          <div class="section-subtitle">Peças disponíveis para venda</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
           <button class="btn-secondary btn-sm" id="btn-bling-sync" onclick="openBlingSync()" style="display:none">📥 Baixar Relação de Peças</button>
@@ -755,7 +755,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <span class="nav-icon">🔧</span>Garantias
     </button>
     <button class="nav-item" id="nav-consignados" onclick="showPanel('consignados')">
-      <span class="nav-icon">💍</span>Ciclo
+      <span class="nav-icon">💍</span>Catálogo
     </button>
     <button class="nav-item" id="nav-pagamentos" onclick="showPanel('pagamentos')">
       <span class="nav-icon">💰</span>Pagamentos
@@ -1003,7 +1003,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 <div class="modal-overlay" id="modal-fechamento">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">📋 Fechamento do Ciclo</div>
+    <div class="modal-title">📋 Fechamento do Catálogo</div>
     <div id="fechamento-content"></div>
     <div style="display:flex;gap:10px;margin-top:16px">
       <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-fechamento')">Fechar</button>
@@ -1589,7 +1589,7 @@ function detectarCategoria(descricao) {
 function renderCicloGrid() {
   const div = document.getElementById('c-list');
   if (!allConsignados.length) {
-    div.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Nenhuma peça neste ciclo</p></div>';
+    div.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Nenhuma peça no catálogo</p></div>';
     return;
   }
   const isAdmin = currentProfile.role === 'admin';
@@ -1664,7 +1664,7 @@ function renderCicloRevendedora() {
     (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida) > 0
   );
   const btnFechamento = temAtivos
-    ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()">📋 Fechamento do Ciclo</button>`
+    ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()">📋 Fechamento do Catálogo</button>`
     : '';
   return cicloTableHtml(allConsignados, false) + btnFechamento;
 }
@@ -1709,7 +1709,7 @@ function renderCicloAdmin() {
     const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
     return `<div class="rev-card${temAtivos ? '' : ' inativo'}" onclick="abrirCicloRev('${revId}')">
       <div class="rev-card-nome">${nome}</div>
-      <div class="rev-card-status${temAtivos ? '' : ' inativo'}">${temAtivos ? `● ${ativos.length} ativa${ativos.length!==1?'s':''}` : '○ Sem ciclo ativo'}</div>
+      <div class="rev-card-status${temAtivos ? '' : ' inativo'}">${temAtivos ? `● ${ativos.length} ativa${ativos.length!==1?'s':''}` : '○ Sem catálogo ativo'}</div>
       <div class="rev-card-valor-label">Vendido até agora</div>
       <div class="rev-card-valor">${fmtBRL(totalRecv)}</div>
       <div class="rev-card-stats">
@@ -1740,10 +1740,10 @@ function renderCicloAdminDetalhe(revId, list) {
 
   const acoes = temAtivos
     ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        <button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="finalizarCicloRev('${revId}')">✓ Finalizar ciclo</button>
-        <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')">🗑️ Deletar ciclo</button>
+        <button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="finalizarCicloRev('${revId}')">✓ Finalizar catálogo</button>
+        <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')">🗑️ Deletar catálogo</button>
       </div>`
-    : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem ciclo ativo</div>`;
+    : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem catálogo ativo</div>`;
 
   return `<button class="btn-voltar-ciclo" onclick="voltarCardsCiclo()">← Voltar para revendedoras</button>
     <div class="card">
@@ -1776,8 +1776,8 @@ async function finalizarCicloRev(revId) {
   if (currentProfile.role !== 'admin') { toast('Sem permissão'); return; }
   const nome = revNameMap[revId] || 'esta revendedora';
   const ativos = allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
-  if (!ativos.length) { toast('Nenhum ciclo ativo para finalizar'); return; }
-  if (!confirm(`Finalizar ciclo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} passarão para "encerrado". Essa ação não pode ser desfeita.`)) return;
+  if (!ativos.length) { toast('Nenhum catálogo ativo para finalizar'); return; }
+  if (!confirm(`Finalizar catálogo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} passarão para "encerrado". Essa ação não pode ser desfeita.`)) return;
 
   let error;
   try {
@@ -1786,8 +1786,8 @@ async function finalizarCicloRev(revId) {
       .eq('revendedora_id', revId)
       .eq('status', 'ativo'));
   } catch (e) { error = e; }
-  if (await handleSupabaseError(error, 'Erro ao finalizar ciclo')) return;
-  toast(`Ciclo de ${nome} encerrado`);
+  if (await handleSupabaseError(error, 'Erro ao finalizar catálogo')) return;
+  toast(`Catálogo de ${nome} encerrado`);
   loadConsignados();
 }
 
@@ -1795,8 +1795,8 @@ async function deletarCicloRev(revId) {
   if (currentProfile.role !== 'admin') { toast('Sem permissão'); return; }
   const nome = revNameMap[revId] || 'esta revendedora';
   const ativos = allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
-  if (!ativos.length) { toast('Nenhum ciclo ativo para deletar'); return; }
-  if (!confirm(`⚠️ DELETAR ciclo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} ativa${ativos.length>1?'s':''} serão apagadas PERMANENTEMENTE. Ciclos já encerrados NÃO serão tocados.\n\nEssa ação não pode ser desfeita. Continuar?`)) return;
+  if (!ativos.length) { toast('Nenhum catálogo ativo para deletar'); return; }
+  if (!confirm(`⚠️ DELETAR catálogo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} ativa${ativos.length>1?'s':''} serão apagadas PERMANENTEMENTE. Catálogos já encerrados NÃO serão tocados.\n\nEssa ação não pode ser desfeita. Continuar?`)) return;
   // Confirmação dupla por ser destrutivo
   if (!confirm(`Tem certeza absoluta? Digite OK no próximo prompt para confirmar.`)) return;
   const verif = prompt(`Para confirmar, digite OK:`);
@@ -1810,8 +1810,8 @@ async function deletarCicloRev(revId) {
       .eq('revendedora_id', revId)
       .eq('status', 'ativo'));
   } catch (e) { error = e; }
-  if (await handleSupabaseError(error, 'Erro ao deletar ciclo')) return;
-  toast(`Ciclo ativo de ${nome} deletado`);
+  if (await handleSupabaseError(error, 'Erro ao deletar catálogo')) return;
+  toast(`Catálogo ativo de ${nome} deletado`);
   loadConsignados();
 }
 
@@ -2033,7 +2033,7 @@ async function salvarConsignado() {
     preco_venda: parseFloat(document.getElementById('c-venda').value) || null,
     foto_url
   });
-  toast('Peça adicionada ao ciclo!');
+  toast('Peça adicionada ao catálogo!');
   closeModal('modal-consignado');
   loadConsignados();
 }
@@ -2106,8 +2106,8 @@ async function buscarUltimoPedidoRev() {
   );
   if (temPecasAtivas) {
     res.innerHTML = `<div class="empty-state"><div class="empty-icon">🔒</div>
-      <p><strong>Você já tem um ciclo ativo.</strong><br>
-      <span style="color:var(--muted)">Finalize o ciclo atual clicando em <strong>Fechamento do Ciclo</strong> na aba Ciclo antes de baixar uma nova relação.</span></p>
+      <p><strong>Você já tem um catálogo ativo.</strong><br>
+      <span style="color:var(--muted)">Finalize o catálogo atual clicando em <strong>Fechamento do Catálogo</strong> na aba Catálogo antes de baixar uma nova relação.</span></p>
     </div>`;
     return;
   }
@@ -2232,13 +2232,13 @@ async function renderItensBling(pedidoId, numero, fixedRevId, mostrarSeletor) {
 
   const revOpts = mostrarSeletor
     ? `<div class="form-group" style="margin-bottom:16px">
-        <label class="form-label">Atribuir ao ciclo de *</label>
+        <label class="form-label">Atribuir ao catálogo de *</label>
         <select id="bling-rev-sel" class="form-control">
           <option value="">Selecione a revendedora...</option>
           ${blingRevs.map(r => `<option value="${r.id}">${r.nome}</option>`).join('')}
         </select>
        </div>`
-    : `<div style="margin-bottom:12px;font-size:13px;color:var(--muted)">Será importado para o seu ciclo</div>`;
+    : `<div style="margin-bottom:12px;font-size:13px;color:var(--muted)">Será importado para o seu catálogo</div>`;
 
   const voltar = mostrarSeletor
     ? `<button class="btn-secondary btn-sm" onclick="voltarListaBling()">← Voltar</button>`
@@ -2269,7 +2269,7 @@ async function renderItensBling(pedidoId, numero, fixedRevId, mostrarSeletor) {
       </table>
     </div>
     <button class="btn-primary" style="width:100%" onclick="importarItensBling(${numero},this)">
-      ⬇️ Importar ${itens.length} ite${itens.length!==1?'ns':'m'} para o Ciclo
+      ⬇️ Importar ${itens.length} ite${itens.length!==1?'ns':'m'} para o Catálogo
     </button>`;
 }
 
@@ -2305,13 +2305,13 @@ async function importarItensBling(numero, btn) {
   if (error) {
     console.error('Erro ao importar itens:', error.message, error.details, error.hint, error);
     toast('Erro: ' + (error.message || 'tente novamente'));
-    btn.textContent = `⬇️ Importar ${itens.length} ite${itens.length!==1?'ns':'m'} para o Ciclo`;
+    btn.textContent = `⬇️ Importar ${itens.length} ite${itens.length!==1?'ns':'m'} para o Catálogo`;
     btn.disabled = false;
     return;
   }
 
   btn.textContent = `✅ ${itens.length} ite${itens.length!==1?'ns':'m'} importado${itens.length!==1?'s':''}!`;
-  toast(`Pedido #${numero} — ${itens.length} itens adicionados ao Ciclo!`);
+  toast(`Pedido #${numero} — ${itens.length} itens adicionados ao Catálogo!`);
   closeModal('modal-bling');
   loadConsignados();
 }
@@ -2433,7 +2433,7 @@ async function verVenda(id) {
 }
 
 async function excluirVenda(id) {
-  if (!confirm('Excluir esta venda? As peças vão voltar para o seu Ciclo Atual. Essa ação não pode ser desfeita.')) return;
+  if (!confirm('Excluir esta venda? As peças vão voltar para o seu Catálogo. Essa ação não pode ser desfeita.')) return;
 
   let itens = vendaItensCache[id];
   if (!itens) {
@@ -2453,7 +2453,7 @@ async function excluirVenda(id) {
 
   const { error } = await sb.from('vendas').delete().eq('id', id);
   if (error) { toast('Erro ao excluir'); return; }
-  toast('Venda excluída — peças devolvidas ao Ciclo');
+  toast('Venda excluída — peças devolvidas ao Catálogo');
   closeModal('modal-detalhe-venda');
   loadVendas();
 }
@@ -2745,7 +2745,7 @@ function openFechamento() {
   );
 
   if (!restantes.length) {
-    toast('Nenhuma peça restante — ciclo já está limpo!');
+    toast('Nenhuma peça restante — catálogo já está limpo!');
     return;
   }
 
@@ -2812,7 +2812,7 @@ function gerarPdfFechamento() {
   document.getElementById('print-content').innerHTML = `
     <div style="margin-bottom:24px">
       <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8a7590;margin-bottom:6px">Lizzie Semijoias</div>
-      <h1 style="font-family:'Georgia',serif;font-size:22px;font-weight:400;margin:0 0 4px">Fechamento do Ciclo</h1>
+      <h1 style="font-family:'Georgia',serif;font-size:22px;font-weight:400;margin:0 0 4px">Fechamento do Catálogo</h1>
       <div style="font-size:13px;color:#8a7590">Revendedora: <strong style="color:#2d1f35">${nomeRev}</strong> &nbsp;·&nbsp; Data: ${hoje} &nbsp;·&nbsp; ${restantes.length} iten${restantes.length!==1?'s':''} · ${total} unidade${total!==1?'s':''}</div>
     </div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
