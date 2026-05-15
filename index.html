@@ -804,11 +804,11 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Data de entrada</label>
-        <input type="date" id="g-entrada" class="form-control">
+        <input type="text" id="g-entrada" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this);calcPrazoGarantia()">
       </div>
       <div class="form-group">
         <label class="form-label">Prazo máximo</label>
-        <input type="date" id="g-prazo" class="form-control" readonly>
+        <input type="text" id="g-prazo" class="form-control" placeholder="dd/mm/aaaa" readonly>
       </div>
     </div>
     <input type="hidden" id="g-destino" value="outro">
@@ -943,20 +943,20 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     <div class="form-row">
       <div class="form-group">
         <label class="form-label">Data da venda *</label>
-        <input type="date" id="f-data" class="form-control">
+        <input type="text" id="f-data" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)">
       </div>
       <div class="form-group">
         <label class="form-label">Forma de pagamento *</label>
-        <select id="f-forma" class="form-control">
+        <select id="f-forma" class="form-control" onchange="ajustarValorPago()">
           <option value="Dinheiro">Dinheiro</option>
           <option value="Pix" selected>Pix</option>
           <option value="Cartão débito">Cartão débito</option>
-          <option value="Cartão crédito 1x">Cartão crédito 1x</option>
-          <option value="Cartão crédito 2x">Cartão crédito 2x</option>
-          <option value="Cartão crédito 3x">Cartão crédito 3x</option>
-          <option value="Cartão crédito 4x">Cartão crédito 4x</option>
-          <option value="Cartão crédito 5x">Cartão crédito 5x</option>
-          <option value="Cartão crédito 6x">Cartão crédito 6x</option>
+          <option value="Cartão crédito">Cartão crédito (à vista)</option>
+          <option value="Parcelado 2x">Parcelado 2x</option>
+          <option value="Parcelado 3x">Parcelado 3x</option>
+          <option value="Parcelado 4x">Parcelado 4x</option>
+          <option value="Parcelado 5x">Parcelado 5x</option>
+          <option value="Parcelado 6x">Parcelado 6x</option>
           <option value="Fiado">Fiado</option>
         </select>
       </div>
@@ -1021,11 +1021,11 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <div class="form-row" style="margin-bottom:12px">
         <div class="form-group">
           <label class="form-label">Data inicial</label>
-          <input type="date" id="bling-data-ini" class="form-control">
+          <input type="text" id="bling-data-ini" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)">
         </div>
         <div class="form-group">
           <label class="form-label">Data final</label>
-          <input type="date" id="bling-data-fim" class="form-control">
+          <input type="text" id="bling-data-fim" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)">
         </div>
       </div>
       <button class="btn-primary" style="width:100%;margin-bottom:16px" onclick="buscarBling()">Buscar pedidos</button>
@@ -1117,17 +1117,17 @@ async function init() {
     if (event === 'SIGNED_OUT') { showSplash(); }
   });
 
-  // Set default dates
-  const today = new Date().toISOString().split('T')[0];
-  const prazo = new Date(); prazo.setDate(prazo.getDate() + 90);
-  const prazoStr = prazo.toISOString().split('T')[0];
+  document.getElementById('g-entrada').value = hojeBR();
+  calcPrazoGarantia();
+}
 
-  document.getElementById('g-entrada').addEventListener('change', function() {
-    const d = new Date(this.value); d.setDate(d.getDate() + 90);
-    document.getElementById('g-prazo').value = d.toISOString().split('T')[0];
-  });
-  document.getElementById('g-entrada').value = today;
-  document.getElementById('g-prazo').value = prazoStr;
+function calcPrazoGarantia() {
+  const iso = brToISO(document.getElementById('g-entrada').value);
+  const prazoEl = document.getElementById('g-prazo');
+  if (!iso) { prazoEl.value = ''; return; }
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + 90);
+  prazoEl.value = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
 
 async function loadUser(user) {
@@ -1414,10 +1414,8 @@ function openNovaGarantia() {
   document.getElementById('g-foto-preview').style.display = 'none';
   document.getElementById('g-foto-placeholder').style.display = 'block';
   document.getElementById('g-foto-input').value = '';
-  const today = new Date().toISOString().split('T')[0];
-  const prazo = new Date(); prazo.setDate(prazo.getDate() + 90);
-  document.getElementById('g-entrada').value = today;
-  document.getElementById('g-prazo').value = prazo.toISOString().split('T')[0];
+  document.getElementById('g-entrada').value = hojeBR();
+  calcPrazoGarantia();
   openModal('modal-garantia');
 }
 
@@ -1430,8 +1428,8 @@ async function editarGarantia(id) {
   document.getElementById('g-cliente').value = g.nome_cliente;
   document.getElementById('g-tel').value = g.telefone_cliente || '';
   document.getElementById('g-problema').value = g.problema_relatado;
-  document.getElementById('g-entrada').value = g.data_entrada;
-  document.getElementById('g-prazo').value = g.prazo_maximo;
+  document.getElementById('g-entrada').value = isoToBR(g.data_entrada);
+  document.getElementById('g-prazo').value = isoToBR(g.prazo_maximo);
   document.getElementById('g-destino').value = g.destino || 'outro';
   document.getElementById('g-destino-det').value = g.destino_detalhe || '';
   document.getElementById('g-obs').value = g.observacoes || '';
@@ -1480,8 +1478,8 @@ async function salvarGarantia() {
     nome_cliente: cliente,
     telefone_cliente: document.getElementById('g-tel').value.trim() || null,
     problema_relatado: problema,
-    data_entrada: document.getElementById('g-entrada').value,
-    prazo_maximo: document.getElementById('g-prazo').value,
+    data_entrada: brToISO(document.getElementById('g-entrada').value),
+    prazo_maximo: brToISO(document.getElementById('g-prazo').value),
     destino,
     destino_detalhe: document.getElementById('g-destino-det').value.trim() || null,
     observacoes: document.getElementById('g-obs').value.trim() || null,
@@ -1914,22 +1912,29 @@ function abrirFinalizarVenda() {
     `<div class="cart-total-row"><span>Total</span><span>R$ ${total.toFixed(2)}</span></div>`;
 
   document.getElementById('f-cliente').value = '';
-  document.getElementById('f-data').value = new Date().toISOString().split('T')[0];
+  document.getElementById('f-data').value = hojeBR();
   document.getElementById('f-forma').value = 'Pix';
-  document.getElementById('f-pago').value = total.toFixed(2);
   document.getElementById('f-obs').value = '';
+  ajustarValorPago();
   openModal('modal-finalizar');
+}
+
+function ajustarValorPago() {
+  const total = carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
+  const forma = document.getElementById('f-forma').value;
+  const aVista = ['Dinheiro', 'Pix', 'Cartão débito', 'Cartão crédito'].includes(forma);
+  document.getElementById('f-pago').value = aVista ? total.toFixed(2) : '0.00';
 }
 
 async function confirmarVendaCarrinho(btn) {
   const cliente = document.getElementById('f-cliente').value.trim();
-  const data = document.getElementById('f-data').value;
+  const data = brToISO(document.getElementById('f-data').value);
   const forma = document.getElementById('f-forma').value;
   const pago = parseFloat(document.getElementById('f-pago').value) || 0;
   const obs = document.getElementById('f-obs').value.trim();
 
   if (!cliente) { toast('Informe o nome da cliente'); return; }
-  if (!data) { toast('Informe a data da venda'); return; }
+  if (!data) { toast('Data inválida (use dd/mm/aaaa)'); return; }
   if (!carrinhoVenda.length) { toast('Carrinho vazio'); return; }
 
   const total = carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
@@ -2050,10 +2055,9 @@ function openBlingSync() {
   const isAdmin = currentProfile.role === 'admin';
   document.getElementById('bling-resultado').innerHTML = '';
   if (isAdmin) {
-    const hoje = new Date().toISOString().split('T')[0];
     const mes = new Date(); mes.setDate(1);
-    document.getElementById('bling-data-ini').value = mes.toISOString().split('T')[0];
-    document.getElementById('bling-data-fim').value = hoje;
+    document.getElementById('bling-data-ini').value = `${String(mes.getDate()).padStart(2,'0')}/${String(mes.getMonth()+1).padStart(2,'0')}/${mes.getFullYear()}`;
+    document.getElementById('bling-data-fim').value = hojeBR();
     document.getElementById('bling-header').style.display = 'block';
   } else {
     document.getElementById('bling-header').style.display = 'none';
@@ -2150,9 +2154,9 @@ async function buscarUltimoPedidoRev() {
 
 // ── ADMIN: busca com filtro de data, todos os pedidos ──
 async function buscarBling() {
-  const ini = document.getElementById('bling-data-ini').value;
-  const fim = document.getElementById('bling-data-fim').value;
-  if (!ini || !fim) { toast('Informe as duas datas'); return; }
+  const ini = brToISO(document.getElementById('bling-data-ini').value);
+  const fim = brToISO(document.getElementById('bling-data-fim').value);
+  if (!ini || !fim) { toast('Datas inválidas (use dd/mm/aaaa)'); return; }
 
   const res = document.getElementById('bling-resultado');
   res.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Buscando pedidos...</div>';
@@ -2429,10 +2433,27 @@ async function verVenda(id) {
 }
 
 async function excluirVenda(id) {
-  if (!confirm('Excluir esta venda? Os itens vão sumir junto. Essa ação não pode ser desfeita.')) return;
+  if (!confirm('Excluir esta venda? As peças vão voltar para o seu Ciclo Atual. Essa ação não pode ser desfeita.')) return;
+
+  let itens = vendaItensCache[id];
+  if (!itens) {
+    const { data, error } = await sbQ(sb.from('venda_itens').select('*').eq('venda_id', id));
+    if (error) { toast('Erro ao buscar itens'); return; }
+    itens = data || [];
+  }
+
+  for (const it of itens) {
+    if (!it.consignado_id) continue;
+    const { data: c } = await sbQ(sb.from('consignados').select('quantidade_vendida').eq('id', it.consignado_id).single());
+    if (c) {
+      const nova = Math.max(0, (c.quantidade_vendida || 0) - it.quantidade);
+      await sbQ(sb.from('consignados').update({ quantidade_vendida: nova }).eq('id', it.consignado_id));
+    }
+  }
+
   const { error } = await sb.from('vendas').delete().eq('id', id);
   if (error) { toast('Erro ao excluir'); return; }
-  toast('Venda excluída');
+  toast('Venda excluída — peças devolvidas ao Ciclo');
   closeModal('modal-detalhe-venda');
   loadVendas();
 }
@@ -2836,6 +2857,30 @@ function formatDate(d) {
   if (!d) return '—';
   const [y, m, day] = d.split('T')[0].split('-');
   return `${day}/${m}/${y}`;
+}
+
+// Date BR helpers: input mask dd/mm/aaaa <-> ISO yyyy-mm-dd
+function maskDateBR(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 8);
+  if (v.length >= 5) v = v.slice(0,2) + '/' + v.slice(2,4) + '/' + v.slice(4);
+  else if (v.length >= 3) v = v.slice(0,2) + '/' + v.slice(2);
+  input.value = v;
+}
+function brToISO(s) {
+  if (!s) return null;
+  const m = s.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  const dd = m[1].padStart(2,'0'), mm = m[2].padStart(2,'0'), yy = m[3];
+  return `${yy}-${mm}-${dd}`;
+}
+function isoToBR(iso) {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('T')[0].split('-');
+  return `${d}/${m}/${y}`;
+}
+function hojeBR() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
 
 function previewFoto(input, previewId, placeholderId) {
