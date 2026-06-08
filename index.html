@@ -105,7 +105,7 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 /* PWA INSTALL */
 #install-btn {
   display: none;
-  position: fixed; bottom: 24px; right: 24px; z-index: 300;
+  position: fixed; bottom: 76px; right: 16px; z-index: 300;
   align-items: center; gap: 8px;
   background: linear-gradient(135deg, var(--rose) 0%, var(--gold) 100%);
   color: #fff; border: none; cursor: pointer;
@@ -1106,6 +1106,14 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     Para instalar: toque em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.
   </div>
   <button type="button" class="ios-close" aria-label="Fechar">×</button>
+</div>
+<div class="modal-overlay" id="modal-install">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">📲 Instalar o app</div>
+    <div id="install-instrucoes" style="font-size:14px;line-height:1.65;color:var(--plum)"></div>
+    <button class="btn-secondary" style="width:100%;margin-top:16px" onclick="closeModal('modal-install')">Entendi</button>
+  </div>
 </div>
 
 <script>
@@ -3545,27 +3553,58 @@ init();
 
   if (!isStandalone) {
     let deferredPrompt = null;
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isAndroid = /Android/.test(navigator.userAgent);
+
+    // Botão sempre disponível enquanto não estiver instalado.
+    installBtn.classList.add('show');
 
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
       deferredPrompt = e;
-      installBtn.classList.add('show');
     });
 
+    function abrirInstrucoesInstalar() {
+      const el = document.getElementById('install-instrucoes');
+      if (isIOS) {
+        el.innerHTML = `No iPhone/iPad, use o <b>Safari</b>:<br><br>
+          1️⃣ Toque no botão <b>Compartilhar</b> (quadradinho com a seta ↑, na barra de baixo)<br>
+          2️⃣ Role e toque em <b>Adicionar à Tela de Início</b><br>
+          3️⃣ Toque em <b>Adicionar</b><br><br>
+          <span style="color:var(--muted);font-size:12px">Pelo Chrome do iPhone não dá — tem que ser o Safari.</span>`;
+      } else if (isAndroid) {
+        el.innerHTML = `No Android, use o <b>Chrome</b>:<br><br>
+          1️⃣ Toque no menu <b>⋮</b> (três pontinhos, canto superior direito)<br>
+          2️⃣ Toque em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b><br>
+          3️⃣ Confirme em <b>Instalar</b><br><br>
+          <span style="color:var(--muted);font-size:12px">Se você abriu pelo Instagram/WhatsApp, toque em ⋮ → "Abrir no Chrome" antes.</span>`;
+      } else {
+        el.innerHTML = `No computador, use o <b>Chrome</b> ou <b>Edge</b>:<br><br>
+          1️⃣ Clique no ícone de <b>instalar</b> (⊕ / monitor) no fim da barra de endereço<br>
+          2️⃣ Confirme em <b>Instalar</b>`;
+      }
+      openModal('modal-install');
+    }
+
     installBtn.addEventListener('click', async () => {
-      if (!deferredPrompt) return;
-      installBtn.classList.remove('show');
-      deferredPrompt.prompt();
-      await deferredPrompt.userChoice;
-      deferredPrompt = null;
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        deferredPrompt = null;
+        if (outcome === 'accepted') installBtn.classList.remove('show');
+        return;
+      }
+      // Sem prompt nativo (iOS, navegador embutido, etc.) → instruções por aparelho.
+      abrirInstrucoesInstalar();
     });
 
     window.addEventListener('appinstalled', () => {
       installBtn.classList.remove('show');
       iosBanner.classList.remove('show');
+      closeModal('modal-install');
     });
 
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    // Tarja automática no iOS, só na primeira vez.
     if (isIOS && !localStorage.getItem('lizzie-ios-banner-dismissed')) {
       setTimeout(() => iosBanner.classList.add('show'), 2500);
       iosBanner.querySelector('.ios-close').addEventListener('click', () => {
