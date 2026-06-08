@@ -1,4 +1,4 @@
-const CACHE = 'lizzie-shell-v1';
+const CACHE = 'lizzie-shell-v2';
 const SHELL = [
   './',
   './index.html',
@@ -9,7 +9,11 @@ const SHELL = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE).then((cache) => cache.addAll(SHELL))
+    // Cacheia individualmente: um arquivo faltando não derruba a instalação inteira
+    // (cache.addAll falha de forma atômica se qualquer recurso der 404).
+    caches.open(CACHE).then((cache) =>
+      Promise.all(SHELL.map((url) => cache.add(url).catch(() => null)))
+    )
   );
   self.skipWaiting();
 });
