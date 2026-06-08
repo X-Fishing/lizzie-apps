@@ -723,6 +723,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
           <button class="btn-primary btn-sm" id="btn-novo-consig" onclick="openNovoConsignado()" style="display:none">+ Novo</button>
         </div>
       </div>
+      <div class="search-bar" id="c-search-bar" style="display:none">
+        <input class="search-input" id="c-search" placeholder="🔍 Buscar por nome ou código..." oninput="renderCicloGrid()">
+      </div>
       <div id="c-list"></div>
       <div id="cart-bar" style="display:none"></div>
     </div>
@@ -968,6 +971,22 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     <div style="display:flex;gap:10px">
       <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-venda')">Cancelar</button>
       <button class="btn-primary" style="flex:2" onclick="adicionarAoCarrinho()">🛒 Adicionar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL BUSCAR PEÇA (admin) -->
+<div class="modal-overlay" id="modal-busca-peca">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔍 Buscar peça</div>
+    <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Digite o nome ou o código para ver com qual revendedora a peça está.</div>
+    <div class="search-bar" style="margin-bottom:12px">
+      <input class="search-input" id="bp-search" placeholder="🔍 Nome ou código da peça..." oninput="renderBuscaPeca()">
+    </div>
+    <div id="bp-results" style="max-height:55vh;overflow-y:auto"></div>
+    <div style="margin-top:12px">
+      <button class="btn-secondary" style="width:100%" onclick="closeModal('modal-busca-peca')">Fechar</button>
     </div>
   </div>
 </div>
@@ -1634,11 +1653,15 @@ function detectarCategoria(descricao) {
 
 function renderCicloGrid() {
   const div = document.getElementById('c-list');
+  const isAdmin = currentProfile.role === 'admin';
+  const searchBar = document.getElementById('c-search-bar');
+  // Revendedora: sempre. Admin: só dentro do detalhe de uma revendedora (na tela de cards usa o pop-up "Buscar peça").
+  const mostrarBusca = allConsignados.length && (!isAdmin || cicloRevSelecionada);
+  if (searchBar) searchBar.style.display = mostrarBusca ? '' : 'none';
   if (!allConsignados.length) {
     div.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Nenhuma peça no catálogo</p></div>';
     return;
   }
-  const isAdmin = currentProfile.role === 'admin';
   if (isAdmin) {
     div.innerHTML = renderCicloAdmin();
   } else {
@@ -1712,6 +1735,19 @@ function renderCicloRevendedora() {
   const btnFechamento = temAtivos
     ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()">📋 Fechamento do Catálogo</button>`
     : '';
+
+  const termo = (document.getElementById('c-search')?.value || '').toLowerCase().trim();
+  if (termo) {
+    const lista = allConsignados.filter(c =>
+      (c.descricao || '').toLowerCase().includes(termo) ||
+      (c.referencia || '').toLowerCase().includes(termo)
+    );
+    if (!lista.length) {
+      return `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhuma peça encontrada com "${termo}"</p></div>`;
+    }
+    return cicloTableHtml(lista, false) + btnFechamento;
+  }
+
   return cicloTableHtml(allConsignados, false) + btnFechamento;
 }
 
@@ -1770,7 +1806,8 @@ function renderCicloAdmin() {
   const totalPecasVend = allConsignados.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
   const totalRevsAtivas = Object.values(groups).filter(l => l.some(c => c.status === 'ativo')).length;
 
-  return `<div class="rev-grid">${cards}</div>
+  return `<button class="btn-secondary" style="width:100%;margin-bottom:14px;border-color:var(--rose);color:var(--rose)" onclick="openBuscaPeca()">🔍 Buscar peça — com quem está</button>
+    <div class="rev-grid">${cards}</div>
     <div class="rev-total-geral">
       <div>
         <div class="rev-total-geral-label">Total geral vendido</div>
@@ -1791,6 +1828,18 @@ function renderCicloAdminDetalhe(revId, list) {
       </div>`
     : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem catálogo ativo</div>`;
 
+  const termo = (document.getElementById('c-search')?.value || '').toLowerCase().trim();
+  let listaTabela = list;
+  if (termo) {
+    listaTabela = list.filter(c =>
+      (c.descricao || '').toLowerCase().includes(termo) ||
+      (c.referencia || '').toLowerCase().includes(termo)
+    );
+  }
+  const tabelaHtml = (termo && !listaTabela.length)
+    ? `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhuma peça encontrada com "${termo}"</p></div>`
+    : cicloTableHtml(listaTabela, true);
+
   return `<button class="btn-voltar-ciclo" onclick="voltarCardsCiclo()">← Voltar para revendedoras</button>
     <div class="card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
@@ -1803,19 +1852,66 @@ function renderCicloAdminDetalhe(revId, list) {
           <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--rose)">${fmtBRL(totalRecv)}</div>
         </div>
       </div>
-      ${cicloTableHtml(list, true)}
+      ${tabelaHtml}
       ${acoes}
     </div>`;
 }
 
 function abrirCicloRev(revId) {
   cicloRevSelecionada = revId;
+  const cs = document.getElementById('c-search');
+  if (cs) cs.value = '';
   renderCicloGrid();
 }
 
 function voltarCardsCiclo() {
   cicloRevSelecionada = null;
+  const cs = document.getElementById('c-search');
+  if (cs) cs.value = '';
   renderCicloGrid();
+}
+
+function openBuscaPeca() {
+  const input = document.getElementById('bp-search');
+  input.value = '';
+  renderBuscaPeca();
+  openModal('modal-busca-peca');
+  setTimeout(() => input.focus(), 100);
+}
+
+function renderBuscaPeca() {
+  const div = document.getElementById('bp-results');
+  const termo = (document.getElementById('bp-search').value || '').toLowerCase().trim();
+  if (!termo) {
+    div.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Digite o nome ou código da peça acima.</p></div>';
+    return;
+  }
+  const matches = allConsignados.filter(c =>
+    (c.descricao || '').toLowerCase().includes(termo) ||
+    (c.referencia || '').toLowerCase().includes(termo)
+  ).sort((a, b) => (a.descricao || '').localeCompare(b.descricao || ''));
+
+  if (!matches.length) {
+    div.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhuma peça encontrada com "${termo}"</p></div>`;
+    return;
+  }
+
+  div.innerHTML = matches.map(c => {
+    const vendida = c.quantidade_vendida || 0;
+    const disp = c.quantidade_enviada - vendida - (c.quantidade_devolvida || 0);
+    const nomeRev = revNameMap[c.revendedora_id] || 'Revendedora desconhecida';
+    const segs = [];
+    if (disp > 0) segs.push(`<span style="color:var(--success);font-weight:600">● ${disp} disponíve${disp !== 1 ? 'is' : 'l'}</span>`);
+    if (vendida > 0) segs.push(`<span style="color:var(--rose);font-weight:600">✓ ${vendida} vendida${vendida !== 1 ? 's' : ''}</span>`);
+    if (!segs.length) segs.push('<span style="color:var(--muted)">Sem unidades</span>');
+    const encerrado = c.status === 'encerrado' ? '<span style="color:var(--muted)">Catálogo encerrado · </span>' : '';
+    const ref = c.referencia ? `<span style="color:var(--muted)">REF ${c.referencia} · </span>` : '';
+    return `<div style="padding:12px 14px;border:1px solid var(--line,#eee);border-radius:12px;margin-bottom:8px">
+      <div style="font-weight:600;color:var(--plum)">${c.descricao}</div>
+      <div style="font-size:12px;margin-top:3px">${ref}🧍 <b>${nomeRev}</b></div>
+      <div style="font-size:12px;margin-top:4px">${encerrado}${segs.join(' · ')}${c.preco_venda ? ` <span style="color:var(--muted)">· R$ ${Number(c.preco_venda).toFixed(2)}</span>` : ''}</div>
+    </div>`;
+  }).join('');
 }
 
 async function finalizarCicloRev(revId) {
