@@ -2129,58 +2129,37 @@ async function confirmarVendaCarrinho(btn) {
   const resetBtn = () => { btn.disabled = false; btn.textContent = '✓ Confirmar venda'; };
 
   try {
-    const { data: vendaRow, error: errVenda } = await sbQ(
-      sb.from('vendas').insert({
-        revendedora_id: currentUser.id,
-        nome_cliente: cliente,
-        data_venda: data,
-        forma_pagamento: forma,
-        valor_total: total,
-        valor_pago: pago,
-        status,
-        observacao: obs || null
-      }).select().single()
+    // Venda atômica via RPC: cria venda + itens + recebimento e incrementa
+    // quantidade_vendida numa única transação (ver db-functions.sql).
+    // Evita venda órfã sem itens e a race condition do read-modify-write.
+    const { error: errRpc } = await sbQ(
+      sb.rpc('registrar_venda', {
+        p_cliente: cliente,
+        p_data: data,
+        p_forma: forma,
+        p_total: total,
+        p_pago: pago,
+        p_status: status,
+        p_obs: obs || null,
+        p_itens: carrinhoVenda.map(it => ({
+          consignado_id: it.consignado_id,
+          descricao: it.descricao,
+          referencia: it.referencia || null,
+          quantidade: it.quantidade,
+          preco_unit: it.preco_unit
+        }))
+      })
     );
 
-    if (errVenda || !vendaRow) {
-      console.error('Erro ao criar venda:', errVenda);
-      toast('Erro: ' + ((errVenda && errVenda.message) || 'tente novamente'));
+    if (errRpc) {
+      console.error('Erro ao registrar venda (RPC):', errRpc);
+      const msg = /registrar_venda|function|does not exist|schema cache/i.test(errRpc.message || '')
+        ? 'Função do banco não encontrada — rode db-functions.sql no Supabase.'
+        : ('Erro: ' + (errRpc.message || 'tente novamente'));
+      toast(msg);
       resetBtn();
       return;
     }
-
-    const itensInsert = carrinhoVenda.map(it => ({
-      venda_id: vendaRow.id,
-      consignado_id: it.consignado_id,
-      descricao: it.descricao,
-      referencia: it.referencia || null,
-      quantidade: it.quantidade,
-      preco_unit: it.preco_unit
-    }));
-
-    const { error: errItens } = await sbQ(sb.from('venda_itens').insert(itensInsert));
-    if (errItens) {
-      console.error('Erro ao inserir itens:', errItens);
-      toast('Venda criada mas erro nos itens. Confira em Pagamentos.');
-    }
-
-    if (pago > 0) {
-      const { error: errReceb } = await sbQ(sb.from('recebimentos').insert({
-        venda_id: vendaRow.id, valor: pago, data_recebimento: data
-      }));
-      if (errReceb) {
-        console.warn('Recebimento não registrado (tabela existe?):', errReceb);
-      }
-    }
-
-    const updates = carrinhoVenda
-      .map(it => {
-        const c = allConsignados.find(x => x.id === it.consignado_id);
-        if (!c) return null;
-        return sbQ(sb.from('consignados').update({ quantidade_vendida: (c.quantidade_vendida || 0) + it.quantidade }).eq('id', it.consignado_id));
-      })
-      .filter(Boolean);
-    await Promise.all(updates);
 
     carrinhoVenda = [];
     resetBtn();
