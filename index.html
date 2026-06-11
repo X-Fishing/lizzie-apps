@@ -1120,6 +1120,20 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 // ═══════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════
+// ⚠️ AUDITORIA RLS — 11/06/2026 (teste anonimo com a anon key publica)
+// Toda a autorizacao do app e client-side; a seguranca REAL depende de
+// Row Level Security no Postgres. Resultado do teste de leitura anonima:
+//   profiles      -> 200, 7 linhas   ❌ EXPOSTO (nomes, telefones, cidades = PII/LGPD)
+//   consignados   -> 200, 100 linhas ❌ EXPOSTO (catalogo completo)
+//   garantias     -> 200, 0 linhas   ✅ leitura anonima negada
+//   vendas        -> 200, 0 linhas   ✅ leitura anonima negada
+//   venda_itens   -> 200, 0 linhas   ✅ leitura anonima negada
+//   recebimentos  -> 200, 0 linhas   ✅ leitura anonima negada
+// ACAO PENDENTE (rodar no SQL Editor do Supabase): habilitar RLS e criar
+// policies em `profiles` e `consignados` (revendedora le/escreve so as
+// proprias linhas; admin le todas; so admin aprova/revoga profiles e
+// deleta garantias/consignados de terceiros). Ver RLS-policies.sql.
+// Conferir tambem que NENHUMA tabela tem policy permissiva `using (true)`.
 const SUPABASE_URL = 'https://qoouzjntyfzcxnwjksiu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvb3V6am50eWZ6Y3hud2prc2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDgzMjksImV4cCI6MjA5NDA4NDMyOX0.eOXGwJJshAtRrO_g4aldYau6qeU25Usy7PydvEfN1a4';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
