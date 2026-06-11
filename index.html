@@ -630,6 +630,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <input type="email" id="login-email" placeholder="E-mail" autocomplete="email" onkeydown="if(event.key==='Enter')fazerLogin()">
       <input type="password" id="login-senha" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')fazerLogin()">
       <button class="btn-gold" onclick="fazerLogin()">Entrar</button>
+      <button type="button" onclick="esqueciSenha()" style="background:none;border:none;color:var(--rose);font-size:13px;cursor:pointer;padding:4px;font-family:inherit;text-decoration:underline">Esqueci minha senha</button>
       <div id="login-msg" class="auth-msg" style="display:none"></div>
     </div>
 
@@ -873,7 +874,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     </div>
     <div style="display:flex;gap:10px">
       <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-garantia')">Cancelar</button>
-      <button class="btn-primary" style="flex:2" onclick="salvarGarantia()">Salvar garantia</button>
+      <button class="btn-primary" style="flex:2" onclick="salvarGarantia(this)">Salvar garantia</button>
     </div>
   </div>
 </div>
@@ -1145,6 +1146,11 @@ function esc(s) {
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
+// Quantidade disponivel de uma peca (trata campos null para nao gerar NaN).
+function qtdDisp(c) {
+  return (c.quantidade_enviada || 0) - (c.quantidade_vendida || 0) - (c.quantidade_devolvida || 0);
+}
+
 // Wrapper com timeout para queries Supabase (evita travar indefinidamente)
 function sbQ(query, ms = 12000) {
   return Promise.race([
@@ -1203,6 +1209,7 @@ async function init() {
   else showSplash();
 
   sb.auth.onAuthStateChange(async (event, session) => {
+    if (event === 'PASSWORD_RECOVERY') { await fluxoRecuperarSenha(); return; }
     if (event === 'SIGNED_IN' && session) await loadUser(session.user);
     if (event === 'SIGNED_OUT') { showSplash(); }
   });
@@ -1276,6 +1283,27 @@ async function fazerLogin() {
   if (!email || !senha) { showMsg(msg, 'Preencha todos os campos', 'error'); return; }
   const { error } = await sb.auth.signInWithPassword({ email, password: senha });
   if (error) { showMsg(msg, 'E-mail ou senha incorretos', 'error'); }
+}
+
+async function esqueciSenha() {
+  const email = document.getElementById('login-email').value.trim();
+  const msg = document.getElementById('login-msg');
+  if (!email) { showMsg(msg, 'Digite seu e-mail no campo acima para recuperar a senha', 'error'); return; }
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+  if (error) { showMsg(msg, 'Erro ao enviar e-mail de recuperação. Tente de novo.', 'error'); return; }
+  showMsg(msg, 'Enviamos um link de recuperação para o seu e-mail. 📧', 'success');
+}
+
+// Disparado quando a usuaria volta pelo link de recuperacao (evento PASSWORD_RECOVERY).
+async function fluxoRecuperarSenha() {
+  const nova = prompt('Defina sua nova senha (mínimo 6 caracteres):');
+  if (nova == null) return;
+  if (nova.length < 6) { toast('Senha deve ter ao menos 6 caracteres'); return; }
+  const { error } = await sb.auth.updateUser({ password: nova });
+  if (error) { toast('Erro ao redefinir senha: ' + (error.message || 'tente novamente')); return; }
+  toast('Senha redefinida com sucesso!');
+  const { data: { session } } = await sb.auth.getSession();
+  if (session) await loadUser(session.user);
 }
 
 async function fazerCadastro() {
@@ -1556,8 +1584,7 @@ async function editarGarantia(id) {
   openModal('modal-garantia');
 }
 
-async function salvarGarantia() {
-  const btn = event.currentTarget;
+async function salvarGarantia(btn) {
   if (btn.disabled) return;
   btn.disabled = true;
 
@@ -1599,18 +1626,20 @@ async function salvarGarantia() {
     updated_at: new Date().toISOString()
   };
 
+  let error;
   if (editId) {
     payload.status = document.getElementById('g-status').value;
-    await sb.from('garantias').update(payload).eq('id', editId);
-    toast('Garantia atualizada!');
+    ({ error } = await sb.from('garantias').update(payload).eq('id', editId));
   } else {
     payload.status = 'aberta';
     payload.revendedora_id = currentUser.id;
-    await sb.from('garantias').insert(payload);
-    toast('Garantia registrada!');
+    ({ error } = await sb.from('garantias').insert(payload));
   }
 
   btn.disabled = false;
+  if (await handleSupabaseError(error, 'Erro ao salvar garantia')) return;
+
+  toast(editId ? 'Garantia atualizada!' : 'Garantia registrada!');
   closeModal('modal-garantia');
   loadGarantias();
   loadDashboard();
@@ -1621,7 +1650,8 @@ async function mudarStatus(id) {
   const steps = ['aberta', 'em_conserto', 'pronta', 'entregue'];
   const cur = steps.indexOf(g.status);
   const next = steps[Math.min(cur + 1, steps.length - 1)];
-  await sb.from('garantias').update({ status: next, updated_at: new Date().toISOString() }).eq('id', id);
+  const { error } = await sb.from('garantias').update({ status: next, updated_at: new Date().toISOString() }).eq('id', id);
+  if (await handleSupabaseError(error, 'Erro ao atualizar status')) return;
   closeModal('modal-detalhe-g');
   toast('Status atualizado!');
   loadGarantias();
@@ -1630,7 +1660,8 @@ async function mudarStatus(id) {
 
 async function atualizarStatusCard(id, novoStatus, event) {
   event.stopPropagation();
-  await sb.from('garantias').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('id', id);
+  const { error } = await sb.from('garantias').update({ status: novoStatus, updated_at: new Date().toISOString() }).eq('id', id);
+  if (await handleSupabaseError(error, 'Erro ao atualizar status')) return;
   toast('Status atualizado!');
   loadGarantias();
   loadDashboard();
@@ -1737,7 +1768,7 @@ function cicloTh(col, label) {
 }
 
 function cicloRowHtml(c, isAdmin) {
-  const disp = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+  const disp = qtdDisp(c);
   const esgotado = disp <= 0;
   const fotoHtml = c.foto_url ? `<img src="${c.foto_url}" class="ciclo-img">` : `<div class="ciclo-emoji">💍</div>`;
   const cat = c.categoria || detectarCategoria(c.descricao);
@@ -1778,7 +1809,7 @@ function cicloTableHtml(list, isAdmin) {
 
 function renderCicloRevendedora() {
   const temAtivos = allConsignados.some(c =>
-    (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida) > 0
+    qtdDisp(c) > 0
   );
   const btnFechamento = temAtivos
     ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()">📋 Fechamento do Catálogo</button>`
@@ -1959,7 +1990,7 @@ function renderBuscaPeca() {
 
   div.innerHTML = matches.map(c => {
     const vendida = c.quantidade_vendida || 0;
-    const disp = c.quantidade_enviada - vendida - (c.quantidade_devolvida || 0);
+    const disp = qtdDisp(c);
     const nomeRev = revNameMap[c.revendedora_id] || 'Revendedora desconhecida';
     const segs = [];
     if (disp > 0) segs.push(`<span style="color:var(--success);font-weight:600">● ${disp} disponíve${disp !== 1 ? 'is' : 'l'}</span>`);
@@ -2025,7 +2056,7 @@ let carrinhoVenda = [];
 
 function openVenda(id) {
   const c = allConsignados.find(x => x.id === id);
-  const dispOrig = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+  const dispOrig = qtdDisp(c);
   const noCarrinho = carrinhoVenda.filter(i => i.consignado_id === id).reduce((s, i) => s + i.quantidade, 0);
   const disp = dispOrig - noCarrinho;
   if (disp <= 0) { toast('Todas as unidades dessa peça já estão no carrinho'); return; }
@@ -2225,7 +2256,7 @@ async function salvarConsignado() {
     }
   }
 
-  await sb.from('consignados').insert({
+  const { error } = await sb.from('consignados').insert({
     revendedora_id: revId,
     descricao: desc,
     referencia: document.getElementById('c-ref').value.trim() || null,
@@ -2234,6 +2265,7 @@ async function salvarConsignado() {
     preco_venda: parseMoneyBR(document.getElementById('c-venda').value) || null,
     foto_url
   });
+  if (await handleSupabaseError(error, 'Erro ao adicionar peça')) return;
   toast('Peça adicionada ao catálogo!');
   closeModal('modal-consignado');
   loadConsignados();
@@ -2463,7 +2495,7 @@ async function buscarUltimoPedidoRev() {
     .eq('revendedora_id', currentUser.id)
     .eq('status', 'ativo');
   const temPecasAtivas = (cicloAtivo || []).some(c =>
-    (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida) > 0
+    qtdDisp(c) > 0
   );
   if (temPecasAtivas) {
     res.innerHTML = `<div class="empty-state"><div class="empty-icon">🔒</div>
@@ -2873,6 +2905,11 @@ async function excluirVenda(id) {
       await sbQ(sb.from('consignados').update({ quantidade_vendida: nova }).eq('id', it.consignado_id));
     }
   }
+
+  // Remove itens e recebimentos antes da venda — nao depende de ON DELETE
+  // CASCADE nas FKs (se o cascade existir, esses deletes sao inofensivos).
+  await sbQ(sb.from('venda_itens').delete().eq('venda_id', id));
+  await sbQ(sb.from('recebimentos').delete().eq('venda_id', id));
 
   const { error } = await sb.from('vendas').delete().eq('id', id);
   if (error) { toast('Erro ao excluir'); return; }
@@ -3439,7 +3476,7 @@ function escolherBlingCandidato(id) {
 // ═══════════════════════════════════════════════
 function openFechamento() {
   const restantes = allConsignados.filter(c =>
-    (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida) > 0
+    qtdDisp(c) > 0
   );
 
   if (!restantes.length) {
@@ -3447,9 +3484,9 @@ function openFechamento() {
     return;
   }
 
-  const total = restantes.reduce((s, c) => s + (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida), 0);
+  const total = restantes.reduce((s, c) => s + qtdDisp(c), 0);
   const valorTotal = restantes.reduce((s, c) => {
-    const qtd = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+    const qtd = qtdDisp(c);
     return s + (qtd * (c.preco_venda || 0));
   }, 0);
 
@@ -3467,7 +3504,7 @@ function openFechamento() {
         </tr></thead>
         <tbody>
           ${restantes.map(c => {
-            const qtd = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+            const qtd = qtdDisp(c);
             return `<tr class="ciclo-row">
               <td class="ciclo-td"><span class="ciclo-ref">${esc(c.referencia||'—')}</span></td>
               <td class="ciclo-td"><span class="ciclo-desc">${esc(c.descricao)}</span></td>
@@ -3487,18 +3524,18 @@ function openFechamento() {
 
 function gerarPdfFechamento() {
   const restantes = allConsignados.filter(c =>
-    (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida) > 0
+    qtdDisp(c) > 0
   );
   const hoje = new Date().toLocaleDateString('pt-BR');
   const nomeRev = currentProfile.nome;
-  const total = restantes.reduce((s, c) => s + (c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida), 0);
+  const total = restantes.reduce((s, c) => s + qtdDisp(c), 0);
   const valorTotal = restantes.reduce((s, c) => {
-    const qtd = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+    const qtd = qtdDisp(c);
     return s + (qtd * (c.preco_venda || 0));
   }, 0);
 
   const linhas = restantes.map((c, i) => {
-    const qtd = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
+    const qtd = qtdDisp(c);
     return `<tr style="background:${i%2===0?'#faf7f2':'#fff'}">
       <td style="padding:9px 12px;font-size:12px;color:#8a7590">${esc(c.referencia||'—')}</td>
       <td style="padding:9px 12px;font-size:13px">${esc(c.descricao)}</td>
