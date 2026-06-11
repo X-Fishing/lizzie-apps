@@ -1138,6 +1138,13 @@ const SUPABASE_URL = 'https://qoouzjntyfzcxnwjksiu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvb3V6am50eWZ6Y3hud2prc2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDgzMjksImV4cCI6MjA5NDA4NDMyOX0.eOXGwJJshAtRrO_g4aldYau6qeU25Usy7PydvEfN1a4';
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// Escapa dados do banco/Bling antes de interpolar em innerHTML (anti-XSS).
+// Use SEMPRE que jogar texto vindo de usuario/Bling dentro de template string.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
 // Wrapper com timeout para queries Supabase (evita travar indefinidamente)
 function sbQ(query, ms = 12000) {
   return Promise.race([
@@ -1437,8 +1444,8 @@ function renderGarantiaCard(g) {
     <div class="garantia-header">
       ${foto}
       <div class="garantia-info">
-        <div class="garantia-item">${g.descricao_item}</div>
-        <div class="garantia-cliente">👤 ${g.nome_cliente}</div>
+        <div class="garantia-item">${esc(g.descricao_item)}</div>
+        <div class="garantia-cliente">👤 ${esc(g.nome_cliente)}</div>
         <span class="badge ${statusMap[g.status]}">${statusLabel[g.status]}</span>
       </div>
     </div>
@@ -1475,15 +1482,15 @@ async function verGarantia(id) {
 
   document.getElementById('detalhe-g-content').innerHTML = `
     ${fotoHtml}
-    <div class="modal-title">${g.descricao_item}</div>
+    <div class="modal-title">${esc(g.descricao_item)}</div>
     <div class="detail-grid">
-      <div class="detail-row"><div class="detail-key">Cliente</div><div class="detail-val">${g.nome_cliente}${g.telefone_cliente ? ' · ' + g.telefone_cliente : ''}</div></div>
-      <div class="detail-row"><div class="detail-key">Problema</div><div class="detail-val">${g.problema_relatado}</div></div>
+      <div class="detail-row"><div class="detail-key">Cliente</div><div class="detail-val">${esc(g.nome_cliente)}${g.telefone_cliente ? ' · ' + esc(g.telefone_cliente) : ''}</div></div>
+      <div class="detail-row"><div class="detail-key">Problema</div><div class="detail-val">${esc(g.problema_relatado)}</div></div>
       <div class="detail-row"><div class="detail-key">Status</div><div class="detail-val">${statusMap[g.status]}</div></div>
       <div class="detail-row"><div class="detail-key">Entrada</div><div class="detail-val">${formatDate(g.data_entrada)}</div></div>
       <div class="detail-row"><div class="detail-key">Prazo máx.</div><div class="detail-val">${formatDate(g.prazo_maximo)}</div></div>
-      <div class="detail-row"><div class="detail-key">Destino</div><div class="detail-val">${destMap[g.destino] || g.destino}${g.destino_detalhe ? ' — ' + g.destino_detalhe : ''}</div></div>
-      ${g.observacoes ? `<div class="detail-row"><div class="detail-key">Obs.</div><div class="detail-val">${g.observacoes}</div></div>` : ''}
+      <div class="detail-row"><div class="detail-key">Destino</div><div class="detail-val">${destMap[g.destino] || esc(g.destino)}${g.destino_detalhe ? ' — ' + esc(g.destino_detalhe) : ''}</div></div>
+      ${g.observacoes ? `<div class="detail-row"><div class="detail-key">Obs.</div><div class="detail-val">${esc(g.observacoes)}</div></div>` : ''}
     </div>
     <div class="detail-actions">
       ${adminActions}
@@ -1721,8 +1728,8 @@ function cicloRowHtml(c, isAdmin) {
   return `<tr class="ciclo-row${esgotado ? ' esgotado' : ''}">
     <td class="ciclo-td ciclo-foto-cell">${fotoHtml}</td>
     <td class="ciclo-td">
-      <div class="ciclo-desc">${c.descricao}</div>
-      ${c.referencia ? `<div class="ciclo-ref">${c.referencia}</div>` : ''}
+      <div class="ciclo-desc">${esc(c.descricao)}</div>
+      ${c.referencia ? `<div class="ciclo-ref">${esc(c.referencia)}</div>` : ''}
     </td>
     <td class="ciclo-td"><span class="ciclo-badge">${CAT_LABEL[cat] || cat}</span></td>
     <td class="ciclo-td"><span class="ciclo-num">${c.quantidade_enviada}</span></td>
@@ -1823,7 +1830,7 @@ function renderCicloAdmin() {
     const nome = revNameMap[revId] || 'Revendedora desconhecida';
     const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
     return `<div class="rev-card${temAtivos ? '' : ' inativo'}" onclick="abrirCicloRev('${revId}')">
-      <div class="rev-card-nome">${nome}</div>
+      <div class="rev-card-nome">${esc(nome)}</div>
       ${pedidoLabelHtml(list, 11)}
       <div class="rev-card-status${temAtivos ? '' : ' inativo'}">${temAtivos ? `● ${ativos.length} ativa${ativos.length!==1?'s':''}` : '○ Sem catálogo ativo'}</div>
       <div class="rev-card-valor-label">Vendido até agora</div>
@@ -1878,7 +1885,7 @@ function renderCicloAdminDetalhe(revId, list) {
     <div class="card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
         <div>
-          <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">${nome}</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">${esc(nome)}</div>
           ${pedidoLabelHtml(list, 12)}
           <div style="font-size:12px;color:var(--muted);margin-top:2px">${list.length} peça${list.length!==1?'s':''} · ${totalVend}/${totalEnv} vendidas ${temAtivos ? `· <span style="color:var(--success)">${ativos.length} ativa${ativos.length!==1?'s':''}</span>` : ''}</div>
         </div>
@@ -1940,10 +1947,10 @@ function renderBuscaPeca() {
     if (vendida > 0) segs.push(`<span style="color:var(--rose);font-weight:600">✓ ${vendida} vendida${vendida !== 1 ? 's' : ''}</span>`);
     if (!segs.length) segs.push('<span style="color:var(--muted)">Sem unidades</span>');
     const encerrado = c.status === 'encerrado' ? '<span style="color:var(--muted)">Catálogo encerrado · </span>' : '';
-    const ref = c.referencia ? `<span style="color:var(--muted)">REF ${c.referencia} · </span>` : '';
+    const ref = c.referencia ? `<span style="color:var(--muted)">REF ${esc(c.referencia)} · </span>` : '';
     return `<div style="padding:12px 14px;border:1px solid var(--line,#eee);border-radius:12px;margin-bottom:8px">
-      <div style="font-weight:600;color:var(--plum)">${c.descricao}</div>
-      <div style="font-size:12px;margin-top:3px">${ref}🧍 <b>${nomeRev}</b></div>
+      <div style="font-weight:600;color:var(--plum)">${esc(c.descricao)}</div>
+      <div style="font-size:12px;margin-top:3px">${ref}🧍 <b>${esc(nomeRev)}</b></div>
       <div style="font-size:12px;margin-top:4px">${encerrado}${segs.join(' · ')}${c.preco_venda ? ` <span style="color:var(--muted)">· R$ ${Number(c.preco_venda).toFixed(2)}</span>` : ''}</div>
     </div>`;
   }).join('');
@@ -2006,8 +2013,8 @@ function openVenda(id) {
 
   document.getElementById('venda-title').textContent = 'Adicionar ao carrinho';
   document.getElementById('v-info').innerHTML =
-    `<div style="font-weight:500;color:var(--plum);margin-bottom:2px">${c.descricao}</div>
-     <div style="font-size:11px;color:var(--muted)">${c.referencia ? c.referencia + ' · ' : ''}${disp} disponíve${disp!==1?'is':'l'} · R$ ${Number(c.preco_venda || 0).toFixed(2)} cada</div>`;
+    `<div style="font-weight:500;color:var(--plum);margin-bottom:2px">${esc(c.descricao)}</div>
+     <div style="font-size:11px;color:var(--muted)">${c.referencia ? esc(c.referencia) + ' · ' : ''}${disp} disponíve${disp!==1?'is':'l'} · R$ ${Number(c.preco_venda || 0).toFixed(2)} cada</div>`;
   document.getElementById('v-consig-id').value = id;
   document.getElementById('v-disp').value = disp;
   document.getElementById('v-preco-unit').value = c.preco_venda || 0;
@@ -2080,7 +2087,7 @@ function abrirFinalizarVenda() {
   lista.innerHTML = carrinhoVenda.map((it, idx) => `
     <div class="cart-item-row">
       <div style="flex:1">
-        <div class="cart-item-desc">${it.descricao}</div>
+        <div class="cart-item-desc">${esc(it.descricao)}</div>
         <div class="cart-item-meta">${it.quantidade}× R$ ${Number(it.preco_unit).toFixed(2)}</div>
       </div>
       <div class="cart-item-total">R$ ${(it.quantidade * it.preco_unit).toFixed(2)}</div>
@@ -2192,7 +2199,7 @@ async function confirmarVendaCarrinho(btn) {
 async function openNovoConsignado() {
   const { data: revs } = await sb.from('profiles').select('id,nome').eq('role','revendedora').eq('aprovada',true);
   const sel = document.getElementById('c-rev');
-  sel.innerHTML = revs.map(r => `<option value="${r.id}">${r.nome}</option>`).join('');
+  sel.innerHTML = revs.map(r => `<option value="${r.id}">${esc(r.nome)}</option>`).join('');
   ['c-desc','c-ref','c-custo','c-venda'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('c-qtd').value = 1;
   document.getElementById('c-cat').value = '';
@@ -2540,7 +2547,7 @@ function renderBlingRow(p) {
   return `<div class="bling-row">
     <div class="bling-num">#${p.numero}</div>
     <div class="bling-info">
-      <div class="bling-cliente">${p.contato?.nome || '—'}</div>
+      <div class="bling-cliente">${esc(p.contato?.nome || '—')}</div>
       <div class="bling-data">${formatDate(p.data)} &nbsp;<span class="badge ${sit.badge}" style="font-size:10px">${sit.label}</span> &nbsp;<span style="font-size:10px;color:var(--muted);font-family:monospace">id:${p.contato?.id}</span></div>
     </div>
     <div class="bling-total">R$ ${Number(p.total).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
@@ -2629,7 +2636,7 @@ async function renderItensBling(pedidoId, numero, fixedRevId, mostrarSeletor) {
         <label class="form-label">Atribuir ao catálogo de *</label>
         <select id="bling-rev-sel" class="form-control">
           <option value="">Selecione a revendedora...</option>
-          ${blingRevs.map(r => `<option value="${r.id}">${r.nome}</option>`).join('')}
+          ${blingRevs.map(r => `<option value="${r.id}">${esc(r.nome)}</option>`).join('')}
         </select>
        </div>`
     : `<div style="margin-bottom:12px;font-size:13px;color:var(--muted)">Será importado para o seu catálogo</div>`;
@@ -2655,7 +2662,7 @@ async function renderItensBling(pedidoId, numero, fixedRevId, mostrarSeletor) {
         <tbody>
           ${itens.map(it => `<tr class="ciclo-row">
             <td class="ciclo-td"><span class="ciclo-ref">${it.codigo||'—'}</span></td>
-            <td class="ciclo-td"><span class="ciclo-desc">${it.descricao}</span></td>
+            <td class="ciclo-td"><span class="ciclo-desc">${esc(it.descricao)}</span></td>
             <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${it.quantidade}</span></td>
             <td class="ciclo-td"><span class="ciclo-preco">R$ ${Number(it.valor).toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></td>
           </tr>`).join('')}
@@ -2756,7 +2763,7 @@ function filtrarPagamentos() {
   const rows = list.map(v => {
     const pendente = Number(v.valor_total) - Number(v.valor_pago);
     return `<tr class="pag-row" onclick="verVenda('${v.id}')">
-      <td class="pag-td"><div class="pag-cliente">${v.nome_cliente}</div><div class="pag-forma">${formatDate(v.data_venda)}</div></td>
+      <td class="pag-td"><div class="pag-cliente">${esc(v.nome_cliente)}</div><div class="pag-forma">${formatDate(v.data_venda)}</div></td>
       <td class="pag-td"><span class="pag-valor">R$ ${Number(v.valor_total).toFixed(2)}</span></td>
       <td class="pag-td"><span class="pag-forma">${v.forma_pagamento}</span></td>
       <td class="pag-td"><span class="pag-valor pag-valor-pago">R$ ${Number(v.valor_pago).toFixed(2)}</span></td>
@@ -2803,7 +2810,7 @@ async function verVenda(id) {
   const restante = Number(v.valor_total) - Number(v.valor_pago);
   const itensHtml = itens.map(it => `
     <div class="hist-item-row">
-      <span>${it.quantidade}× ${it.descricao}${it.referencia ? ` <span style="color:var(--muted);font-size:11px">(${it.referencia})</span>` : ''}</span>
+      <span>${it.quantidade}× ${esc(it.descricao)}${it.referencia ? ` <span style="color:var(--muted);font-size:11px">(${esc(it.referencia)})</span>` : ''}</span>
       <span>R$ ${(it.quantidade * Number(it.preco_unit)).toFixed(2)}</span>
     </div>`).join('');
 
@@ -2816,7 +2823,7 @@ async function verVenda(id) {
     : '<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0">Nenhum recebimento registrado ainda</div>';
 
   document.getElementById('detalhe-venda-content').innerHTML = `
-    <div class="modal-title">💰 ${v.nome_cliente}</div>
+    <div class="modal-title">💰 ${esc(v.nome_cliente)}</div>
     <div class="detail-grid">
       <div class="detail-row"><div class="detail-key">Data venda</div><div class="detail-val">${formatDate(v.data_venda)}</div></div>
       <div class="detail-row"><div class="detail-key">Forma</div><div class="detail-val">${v.forma_pagamento}</div></div>
@@ -2944,8 +2951,8 @@ function filtrarHistorico() {
     const pago = c.vendas.reduce((s, v) => s + Number(v.valor_pago), 0);
     const pendente = total - pago;
     const aberto = historicoExpandido === c.nome.toLowerCase();
-    return `<div class="hist-card${aberto?' open':''}" onclick="toggleHistorico('${c.nome.toLowerCase().replace(/'/g,"\\'")}')">
-      <div class="hist-nome">${c.nome}</div>
+    return `<div class="hist-card${aberto?' open':''}" data-hist-key="${esc(c.nome.toLowerCase())}" onclick="toggleHistorico(this.dataset.histKey)">
+      <div class="hist-nome">${esc(c.nome)}</div>
       <div class="hist-stats">
         <b>${c.vendas.length}</b> compra${c.vendas.length!==1?'s':''} ·
         Total <b>R$ ${total.toFixed(2)}</b> ·
@@ -2971,7 +2978,7 @@ function renderHistoricoDetalhes(vendas) {
   return vendas.map(v => {
     const itens = vendaItensCache[v.id];
     const itensHtml = itens
-      ? itens.map(it => `<div class="hist-item-row"><span>${it.quantidade}× ${it.descricao}</span><span>R$ ${(it.quantidade*Number(it.preco_unit)).toFixed(2)}</span></div>`).join('')
+      ? itens.map(it => `<div class="hist-item-row"><span>${it.quantidade}× ${esc(it.descricao)}</span><span>R$ ${(it.quantidade*Number(it.preco_unit)).toFixed(2)}</span></div>`).join('')
       : `<div class="hist-item-row" id="v-load-${v.id}" style="color:var(--muted);font-style:italic">Carregando itens…</div>`;
     const pend = Number(v.valor_total) - Number(v.valor_pago);
     return `<div class="hist-venda-bloco">
@@ -3208,7 +3215,7 @@ function renderTrocaRow(r) {
     : '';
 
   const telLink = telLimpo
-    ? `<a href="${whatsappLink(tel, mensagemTroca(r.nome, info.dataPrevista))}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" onclick="event.stopPropagation()">📞 ${tel}</a>`
+    ? `<a href="${whatsappLink(tel, mensagemTroca(r.nome, info.dataPrevista))}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" onclick="event.stopPropagation()">📞 ${esc(tel)}</a>`
     : '<span>📞 sem telefone</span>';
 
   const waMsg = mensagemTroca(r.nome, info.dataPrevista);
@@ -3221,7 +3228,7 @@ function renderTrocaRow(r) {
     <div class="troca-info">
       <div class="rev-avatar">${inicial}</div>
       <div class="troca-meta">
-        <div class="troca-meta-nome">${r.nome}</div>
+        <div class="troca-meta-nome">${esc(r.nome)}</div>
         <div class="troca-meta-sub">${telLink}<span>·</span><span>${ultima}</span></div>
         ${aviso}
       </div>
@@ -3241,8 +3248,8 @@ function renderRevCard(r, pendente) {
     <div class="rev-header">
       <div class="rev-avatar">${inicial}</div>
       <div>
-        <div class="rev-nome">${r.nome}</div>
-        <div class="rev-cidade">${r.cidade || 'Cidade não informada'} · ${r.telefone || '—'}</div>
+        <div class="rev-nome">${esc(r.nome)}</div>
+        <div class="rev-cidade">${esc(r.cidade || 'Cidade não informada')} · ${esc(r.telefone || '—')}</div>
       </div>
       <div class="rev-status">
         ${pendente ? '<span class="badge badge-pendente"><span class="pending-dot"></span>Pendente</span>' : '<span class="badge badge-ativo">✅ Ativa</span>'}
@@ -3260,12 +3267,12 @@ async function verRevendedora(id) {
   document.getElementById('detalhe-rev-content').innerHTML = `
     <div style="text-align:center;margin-bottom:20px">
       <div class="rev-avatar" style="width:64px;height:64px;font-size:28px;margin:0 auto 12px">${r.nome.charAt(0)}</div>
-      <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">${r.nome}</div>
-      <div style="color:var(--muted);font-size:13px">${r.email || ''}</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">${esc(r.nome)}</div>
+      <div style="color:var(--muted);font-size:13px">${esc(r.email || '')}</div>
     </div>
     <div class="detail-grid">
-      <div class="detail-row"><div class="detail-key">Telefone</div><div class="detail-val">${r.telefone || '—'}</div></div>
-      <div class="detail-row"><div class="detail-key">Cidade</div><div class="detail-val">${r.cidade || '—'}</div></div>
+      <div class="detail-row"><div class="detail-key">Telefone</div><div class="detail-val">${esc(r.telefone || '—')}</div></div>
+      <div class="detail-row"><div class="detail-key">Cidade</div><div class="detail-val">${esc(r.cidade || '—')}</div></div>
       <div class="detail-row"><div class="detail-key">Garantias</div><div class="detail-val">${gcount ? gcount.length : 0}</div></div>
       <div class="detail-row"><div class="detail-key">Consignados</div><div class="detail-val">${ccount ? ccount.length : 0}</div></div>
       <div class="detail-row"><div class="detail-key">Cadastro</div><div class="detail-val">${formatDate(r.created_at.split('T')[0])}</div></div>
@@ -3280,7 +3287,7 @@ async function verRevendedora(id) {
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;gap:8px">
         <div style="font-size:11px;color:var(--muted)">Cole o ID que aparece ao lado do nome dela na lista de pedidos do Bling</div>
-        <button class="btn-secondary btn-sm" style="white-space:nowrap;font-size:11px" onclick="detectarBlingId('${r.id}','${(r.nome || '').replace(/'/g,"\\'")}')">🔍 Detectar pelo Bling</button>
+        <button class="btn-secondary btn-sm" style="white-space:nowrap;font-size:11px" data-rev-nome="${esc(r.nome || '')}" onclick="detectarBlingId('${r.id}', this.dataset.revNome)">🔍 Detectar pelo Bling</button>
       </div>
       <div id="bling-candidatos" style="margin-top:10px"></div>
     </div>
@@ -3409,7 +3416,7 @@ async function detectarBlingId(revId, nomeRev) {
         <button type="button" class="btn-secondary" style="text-align:left;padding:8px 10px;font-size:12px;line-height:1.3;display:flex;justify-content:space-between;align-items:center;gap:8px"
           onclick="escolherBlingCandidato('${c.id}')">
           <div style="min-width:0;flex:1">
-            <div style="color:var(--plum);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.nome}</div>
+            <div style="color:var(--plum);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.nome)}</div>
             <div style="color:var(--muted);font-size:11px">ID ${c.id} · último pedido ${formatDate(c.ultimaData)}</div>
           </div>
           <div style="font-size:10px;color:var(--rose);white-space:nowrap">${c.score}/${tot} nomes</div>
@@ -3464,8 +3471,8 @@ function openFechamento() {
           ${restantes.map(c => {
             const qtd = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
             return `<tr class="ciclo-row">
-              <td class="ciclo-td"><span class="ciclo-ref">${c.referencia||'—'}</span></td>
-              <td class="ciclo-td"><span class="ciclo-desc">${c.descricao}</span></td>
+              <td class="ciclo-td"><span class="ciclo-ref">${esc(c.referencia||'—')}</span></td>
+              <td class="ciclo-td"><span class="ciclo-desc">${esc(c.descricao)}</span></td>
               <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${qtd}</span></td>
               <td class="ciclo-td"><span class="ciclo-preco">${c.preco_venda ? 'R$ '+Number(c.preco_venda).toFixed(2) : '—'}</span></td>
             </tr>`;
@@ -3495,8 +3502,8 @@ function gerarPdfFechamento() {
   const linhas = restantes.map((c, i) => {
     const qtd = c.quantidade_enviada - c.quantidade_vendida - c.quantidade_devolvida;
     return `<tr style="background:${i%2===0?'#faf7f2':'#fff'}">
-      <td style="padding:9px 12px;font-size:12px;color:#8a7590">${c.referencia||'—'}</td>
-      <td style="padding:9px 12px;font-size:13px">${c.descricao}</td>
+      <td style="padding:9px 12px;font-size:12px;color:#8a7590">${esc(c.referencia||'—')}</td>
+      <td style="padding:9px 12px;font-size:13px">${esc(c.descricao)}</td>
       <td style="padding:9px 12px;text-align:center;font-size:13px">${qtd}</td>
       <td style="padding:9px 12px;text-align:right;font-size:13px">${c.preco_venda?'R$ '+Number(c.preco_venda).toFixed(2):'—'}</td>
     </tr>`;
@@ -3506,7 +3513,7 @@ function gerarPdfFechamento() {
     <div style="margin-bottom:24px">
       <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8a7590;margin-bottom:6px">Lizzie Semijoias</div>
       <h1 style="font-family:'Georgia',serif;font-size:22px;font-weight:400;margin:0 0 4px">Fechamento do Catálogo</h1>
-      <div style="font-size:13px;color:#8a7590">Revendedora: <strong style="color:#2d1f35">${nomeRev}</strong> &nbsp;·&nbsp; Data: ${hoje} &nbsp;·&nbsp; ${restantes.length} iten${restantes.length!==1?'s':''} · ${total} unidade${total!==1?'s':''}</div>
+      <div style="font-size:13px;color:#8a7590">Revendedora: <strong style="color:#2d1f35">${esc(nomeRev)}</strong> &nbsp;·&nbsp; Data: ${hoje} &nbsp;·&nbsp; ${restantes.length} iten${restantes.length!==1?'s':''} · ${total} unidade${total!==1?'s':''}</div>
     </div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
       <thead>
