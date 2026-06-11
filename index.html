@@ -1328,9 +1328,11 @@ function showPanel(name) {
 // ═══════════════════════════════════════════════
 async function loadDashboard() {
   const isAdmin = currentProfile.role === 'admin';
-  let q = sb.from('garantias').select('*');
+  // Sem .limit(): os contadores (abertas/conserto/prontas/vencendo) precisam
+  // de TODAS as garantias. Seleciona so os campos usados nos cards/contadores.
+  let q = sb.from('garantias').select('id,status,prazo_maximo,created_at,descricao_item,nome_cliente,foto_url,data_entrada');
   if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
-  const { data, error } = await sbQ(q.order('created_at', { ascending: false }).limit(50));
+  const { data, error } = await sbQ(q.order('created_at', { ascending: false }));
 
   if (error) {
     const msg = error.message === 'timeout' ? 'Conexão lenta. Aguarde e tente novamente.' : 'Erro ao carregar dados.';
