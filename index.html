@@ -2162,6 +2162,7 @@ async function confirmarVendaCarrinho(btn) {
     await Promise.all(updates);
 
     carrinhoVenda = [];
+    resetBtn();
     toast('✅ Venda registrada!');
     closeModal('modal-finalizar');
     renderCartBar();
