@@ -655,6 +655,20 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   <button class="btn-secondary" style="color:#fff;border-color:rgba(255,255,255,0.2)" onclick="sb.auth.signOut().then(()=>location.reload())">Sair</button>
 </div>
 
+<!-- DEFINIR NOVA SENHA (vindo do link de recuperação no e-mail) -->
+<div id="recovery-screen" style="display:none;position:fixed;inset:0;z-index:1001;background:linear-gradient(145deg,#1a0a2e 0%,#2d1248 50%,#1a0a2e 100%);flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:24px">
+  <div style="font-size:48px;filter:drop-shadow(0 0 20px rgba(212,168,75,0.5))">🔑</div>
+  <div class="auth-box">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--gold);text-align:center;margin-bottom:6px">Definir nova senha</div>
+    <p style="color:rgba(255,255,255,0.6);font-size:13px;text-align:center;margin-bottom:20px">Crie a nova senha de acesso da sua conta.</p>
+    <div class="auth-form">
+      <input type="password" id="recovery-senha" placeholder="Nova senha (mín. 6 caracteres)" autocomplete="new-password" onkeydown="if(event.key==='Enter')salvarNovaSenha(this)">
+      <button class="btn-gold" onclick="salvarNovaSenha(this)">Salvar nova senha</button>
+      <div id="recovery-msg" class="auth-msg" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
 <!-- MAIN APP -->
 <div id="app">
   <!-- TOP BAR -->
@@ -816,7 +830,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 </div>
 
 <!-- MODAL NOVA GARANTIA -->
-<div class="modal-overlay" id="modal-garantia">
+<div class="modal-overlay" id="modal-garantia" data-lock-outside>
   <div class="modal">
     <div class="modal-handle"></div>
     <div class="modal-title" id="modal-gTitle">Nova Garantia</div>
@@ -880,7 +894,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 </div>
 
 <!-- MODAL DETALHE GARANTIA -->
-<div class="modal-overlay" id="modal-detalhe-g">
+<div class="modal-overlay" id="modal-detalhe-g" data-lock-outside>
   <div class="modal">
     <div class="modal-handle"></div>
     <div id="detalhe-g-content"></div>
@@ -1132,6 +1146,11 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 // Se criar tabela nova, lembrar de habilitar RLS + policies antes de publicar.
 const SUPABASE_URL = 'https://qoouzjntyfzcxnwjksiu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvb3V6am50eWZ6Y3hud2prc2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDgzMjksImV4cCI6MjA5NDA4NDMyOX0.eOXGwJJshAtRrO_g4aldYau6qeU25Usy7PydvEfN1a4';
+// Detecta o link de recuperacao de senha na URL ANTES de criar o cliente
+// (o supabase-js consome e limpa o hash ao inicializar).
+const RECOVERY_IN_URL = /[?#&]type=recovery/.test(location.hash + '&' + location.search);
+let recoveryAtiva = false;
+
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // Escapa dados do banco/Bling antes de interpolar em innerHTML (anti-XSS).
@@ -1199,18 +1218,33 @@ let cicloRevSelecionada = null;
 // INIT
 // ═══════════════════════════════════════════════
 async function init() {
-  const { data: { session } } = await sb.auth.getSession();
-  if (session) await loadUser(session.user);
-  else showSplash();
-
+  // Listener ANTES do getSession para nao perder o evento PASSWORD_RECOVERY.
   sb.auth.onAuthStateChange(async (event, session) => {
-    if (event === 'PASSWORD_RECOVERY') { await fluxoRecuperarSenha(); return; }
+    if (event === 'PASSWORD_RECOVERY') { mostrarRecovery(); return; }
+    if (recoveryAtiva) return; // durante a redefinicao, ignora SIGNED_IN/OUT
     if (event === 'SIGNED_IN' && session) await loadUser(session.user);
     if (event === 'SIGNED_OUT') { showSplash(); }
   });
 
+  const { data: { session } } = await sb.auth.getSession();
+
+  // Veio pelo link de recuperacao do e-mail: mostra a tela de nova senha,
+  // nao entra no app (mesmo que o link tenha criado uma sessao temporaria).
+  if (RECOVERY_IN_URL) { mostrarRecovery(); }
+  else if (session) await loadUser(session.user);
+  else showSplash();
+
   document.getElementById('g-entrada').value = hojeBR();
   calcPrazoGarantia();
+}
+
+function mostrarRecovery() {
+  recoveryAtiva = true;
+  document.getElementById('splash').style.display = 'none';
+  document.getElementById('pending-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('recovery-screen').style.display = 'flex';
+  setTimeout(() => { const el = document.getElementById('recovery-senha'); if (el) el.focus(); }, 100);
 }
 
 function calcPrazoGarantia() {
@@ -1281,24 +1315,35 @@ async function fazerLogin() {
 }
 
 async function esqueciSenha() {
-  const email = document.getElementById('login-email').value.trim();
   const msg = document.getElementById('login-msg');
-  if (!email) { showMsg(msg, 'Digite seu e-mail no campo acima para recuperar a senha', 'error'); return; }
+  const atual = document.getElementById('login-email').value.trim();
+  // Pergunta o e-mail num prompt (pre-preenchido) — fica obvio o que fazer.
+  const email = (prompt('Digite seu e-mail para receber o link de recuperação de senha:', atual) || '').trim();
+  if (!email) return;
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
-  if (error) { showMsg(msg, 'Erro ao enviar e-mail de recuperação. Tente de novo.', 'error'); return; }
-  showMsg(msg, 'Enviamos um link de recuperação para o seu e-mail. 📧', 'success');
+  if (error) { showMsg(msg, 'Erro ao enviar. Confira o e-mail e tente de novo.', 'error'); return; }
+  showMsg(msg, '📧 Link de recuperação enviado para ' + email + '. Confira sua caixa de entrada.', 'success');
 }
 
-// Disparado quando a usuaria volta pelo link de recuperacao (evento PASSWORD_RECOVERY).
-async function fluxoRecuperarSenha() {
-  const nova = prompt('Defina sua nova senha (mínimo 6 caracteres):');
-  if (nova == null) return;
-  if (nova.length < 6) { toast('Senha deve ter ao menos 6 caracteres'); return; }
+// Chamado na tela de nova senha (apos clicar no link do e-mail de recuperacao).
+async function salvarNovaSenha(btn) {
+  const msg = document.getElementById('recovery-msg');
+  const nova = document.getElementById('recovery-senha').value;
+  if (nova.length < 6) { showMsg(msg, 'A senha deve ter ao menos 6 caracteres', 'error'); return; }
+  btn.disabled = true; btn.textContent = 'Salvando...';
   const { error } = await sb.auth.updateUser({ password: nova });
-  if (error) { toast('Erro ao redefinir senha: ' + (error.message || 'tente novamente')); return; }
-  toast('Senha redefinida com sucesso!');
+  btn.disabled = false; btn.textContent = 'Salvar nova senha';
+  if (error) {
+    showMsg(msg, 'Erro ao salvar a senha. O link pode ter expirado — peça um novo.', 'error');
+    return;
+  }
+  // Limpa o hash de recuperacao da URL e entra no app com a nova senha.
+  history.replaceState(null, '', location.pathname);
+  recoveryAtiva = false;
+  document.getElementById('recovery-screen').style.display = 'none';
   const { data: { session } } = await sb.auth.getSession();
-  if (session) await loadUser(session.user);
+  if (session) { await loadUser(session.user); }
+  else { showSplash(); showMsg(document.getElementById('login-msg'), 'Senha alterada! Entre com a nova senha.', 'success'); }
 }
 
 async function fazerCadastro() {
@@ -1569,7 +1614,9 @@ async function editarGarantia(id) {
   document.getElementById('g-destino').value = g.destino || 'outro';
   document.getElementById('g-destino-det').value = g.destino_detalhe || '';
   document.getElementById('g-obs').value = g.observacoes || '';
-  document.getElementById('g-status-group').style.display = 'block';
+  // Status e campo de processo do admin: revendedora nem ve o seletor.
+  const isAdmin = currentProfile.role === 'admin';
+  document.getElementById('g-status-group').style.display = isAdmin ? 'block' : 'none';
   document.getElementById('g-status').value = g.status;
   if (g.foto_url) {
     document.getElementById('g-foto-preview').src = g.foto_url;
@@ -1607,6 +1654,7 @@ async function salvarGarantia(btn) {
     }
   }
 
+  const isAdmin = currentProfile.role === 'admin';
   const payload = {
     descricao_item: desc,
     nome_cliente: cliente,
@@ -1614,8 +1662,6 @@ async function salvarGarantia(btn) {
     problema_relatado: problema,
     data_entrada: brToISO(document.getElementById('g-entrada').value),
     prazo_maximo: brToISO(document.getElementById('g-prazo').value),
-    destino: document.getElementById('g-destino').value || 'outro',
-    destino_detalhe: document.getElementById('g-destino-det').value.trim() || null,
     observacoes: document.getElementById('g-obs').value.trim() || null,
     foto_url,
     updated_at: new Date().toISOString()
@@ -1623,11 +1669,19 @@ async function salvarGarantia(btn) {
 
   let error;
   if (editId) {
-    payload.status = document.getElementById('g-status').value;
+    // Campos de processo (status/destino) so o admin altera numa edicao —
+    // a edicao da revendedora nao sobrescreve o fluxo controlado pelo admin.
+    if (isAdmin) {
+      payload.status = document.getElementById('g-status').value;
+      payload.destino = document.getElementById('g-destino').value || 'outro';
+      payload.destino_detalhe = document.getElementById('g-destino-det').value.trim() || null;
+    }
     ({ error } = await sb.from('garantias').update(payload).eq('id', editId));
   } else {
     payload.status = 'aberta';
     payload.revendedora_id = currentUser.id;
+    payload.destino = document.getElementById('g-destino').value || 'outro';
+    payload.destino_detalhe = document.getElementById('g-destino-det').value.trim() || null;
     ({ error } = await sb.from('garantias').insert(payload));
   }
 
@@ -3580,7 +3634,11 @@ function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 document.querySelectorAll('.modal-overlay').forEach(o => {
-  o.addEventListener('click', e => { if (e.target === o) o.classList.remove('show'); });
+  // data-lock-outside: so fecha pelo botao Fechar/Cancelar (ex.: garantia),
+  // evitando perder dados por um clique acidental fora do pop-up.
+  o.addEventListener('click', e => {
+    if (e.target === o && !o.hasAttribute('data-lock-outside')) o.classList.remove('show');
+  });
 });
 
 function formatDate(d) {
