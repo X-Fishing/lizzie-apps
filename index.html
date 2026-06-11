@@ -630,8 +630,17 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <input type="email" id="login-email" placeholder="E-mail" autocomplete="email" onkeydown="if(event.key==='Enter')fazerLogin()">
       <input type="password" id="login-senha" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')fazerLogin()">
       <button class="btn-gold" onclick="fazerLogin()">Entrar</button>
-      <button type="button" onclick="esqueciSenha()" style="background:none;border:none;color:var(--rose);font-size:13px;cursor:pointer;padding:4px;font-family:inherit;text-decoration:underline">Esqueci minha senha</button>
+      <button type="button" onclick="mostrarRecuperar()" style="background:none;border:none;color:var(--rose);font-size:13px;cursor:pointer;padding:4px;font-family:inherit;text-decoration:underline">Esqueci minha senha</button>
       <div id="login-msg" class="auth-msg" style="display:none"></div>
+    </div>
+
+    <!-- RECUPERAR SENHA -->
+    <div id="tab-recuperar" class="auth-form" style="display:none">
+      <p style="color:rgba(255,255,255,0.6);font-size:13px;text-align:center;margin:0 0 4px">Digite seu e-mail e enviaremos um link para criar uma nova senha.</p>
+      <input type="email" id="rec-email" placeholder="E-mail" autocomplete="email" onkeydown="if(event.key==='Enter')enviarLinkRecuperacao(this)">
+      <button class="btn-gold" onclick="enviarLinkRecuperacao(this)">Enviar link de recuperação</button>
+      <button type="button" onclick="voltarLogin()" style="background:none;border:none;color:rgba(255,255,255,0.5);font-size:13px;cursor:pointer;padding:4px;font-family:inherit">← Voltar para o login</button>
+      <div id="rec-msg" class="auth-msg" style="display:none"></div>
     </div>
 
     <!-- CADASTRO -->
@@ -1314,15 +1323,32 @@ async function fazerLogin() {
   if (error) { showMsg(msg, 'E-mail ou senha incorretos', 'error'); }
 }
 
-async function esqueciSenha() {
-  const msg = document.getElementById('login-msg');
-  const atual = document.getElementById('login-email').value.trim();
-  // Pergunta o e-mail num prompt (pre-preenchido) — fica obvio o que fazer.
-  const email = (prompt('Digite seu e-mail para receber o link de recuperação de senha:', atual) || '').trim();
-  if (!email) return;
+// Mostra o painel embutido de recuperacao (sem prompt, que e bloqueado em PWA).
+function mostrarRecuperar() {
+  document.getElementById('tab-login').style.display = 'none';
+  document.getElementById('tab-cadastro').style.display = 'none';
+  document.querySelector('.auth-tabs').style.display = 'none';
+  document.getElementById('tab-recuperar').style.display = 'flex';
+  document.getElementById('rec-msg').style.display = 'none';
+  document.getElementById('rec-email').value = document.getElementById('login-email').value.trim();
+  setTimeout(() => document.getElementById('rec-email').focus(), 50);
+}
+
+function voltarLogin() {
+  document.getElementById('tab-recuperar').style.display = 'none';
+  document.querySelector('.auth-tabs').style.display = 'flex';
+  switchTab('login');
+}
+
+async function enviarLinkRecuperacao(btn) {
+  const msg = document.getElementById('rec-msg');
+  const email = document.getElementById('rec-email').value.trim();
+  if (!email) { showMsg(msg, 'Digite seu e-mail', 'error'); return; }
+  btn.disabled = true; btn.textContent = 'Enviando...';
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+  btn.disabled = false; btn.textContent = 'Enviar link de recuperação';
   if (error) { showMsg(msg, 'Erro ao enviar. Confira o e-mail e tente de novo.', 'error'); return; }
-  showMsg(msg, '📧 Link de recuperação enviado para ' + email + '. Confira sua caixa de entrada.', 'success');
+  showMsg(msg, '📧 Link enviado para ' + email + '. Confira sua caixa de entrada (e o spam).', 'success');
 }
 
 // Chamado na tela de nova senha (apos clicar no link do e-mail de recuperacao).
