@@ -1553,7 +1553,7 @@ async function salvarGarantia() {
     problema_relatado: problema,
     data_entrada: brToISO(document.getElementById('g-entrada').value),
     prazo_maximo: brToISO(document.getElementById('g-prazo').value),
-    destino,
+    destino: document.getElementById('g-destino').value || 'outro',
     destino_detalhe: document.getElementById('g-destino-det').value.trim() || null,
     observacoes: document.getElementById('g-obs').value.trim() || null,
     foto_url,
