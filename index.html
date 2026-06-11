@@ -1289,13 +1289,30 @@ async function fazerCadastro() {
   if (!nome || !email || !senha) { showMsg(msg, 'Preencha nome, e-mail e senha', 'error'); return; }
   if (senha.length < 6) { showMsg(msg, 'Senha deve ter ao menos 6 caracteres', 'error'); return; }
 
-  const { data, error } = await sb.auth.signUp({ email, password: senha });
+  // Manda nome/telefone/cidade nos metadados: o trigger handle_new_user
+  // (db-functions.sql) cria o profile mesmo sem sessao (confirmacao de e-mail).
+  const { data, error } = await sb.auth.signUp({
+    email, password: senha,
+    options: { data: { nome, telefone: tel, cidade } }
+  });
   if (error) { showMsg(msg, error.message, 'error'); return; }
 
-  await sb.from('profiles').insert({
-    id: data.user.id, role: 'revendedora',
-    nome, telefone: tel, cidade, aprovada: false
-  });
+  // Fallback: se houver sessao (confirmacao de e-mail desligada), garante o
+  // profile pelo cliente. ignoreDuplicates evita conflito com o trigger.
+  if (data.user) {
+    const { error: pErr } = await sb.from('profiles').upsert({
+      id: data.user.id, role: 'revendedora',
+      nome, telefone: tel, cidade, aprovada: false
+    }, { onConflict: 'id', ignoreDuplicates: true });
+    if (pErr && !data.session) {
+      // Sem sessao: o trigger e quem cria o profile; erro de RLS aqui e esperado.
+      console.warn('Profile via cliente falhou (trigger deve criar):', pErr.message);
+    } else if (pErr) {
+      console.error('Erro ao criar profile:', pErr.message);
+      showMsg(msg, 'Conta criada, mas houve um problema no cadastro. Fale com a Lizzie.', 'error');
+      return;
+    }
+  }
   showMsg(msg, 'Cadastro enviado! Aguarde aprovação da Lizzie.', 'success');
 }
 

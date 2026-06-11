@@ -78,3 +78,37 @@ $$;
 
 revoke all on function public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb) from public;
 grant execute on function public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════════
+-- handle_new_user: cria o profile automaticamente quando um usuario se
+-- cadastra (after insert on auth.users). Resolve o caso em que a confirmacao
+-- de e-mail esta ativa: nao ha sessao apos signUp, o insert client-side
+-- falharia por RLS e a usuaria ficaria sem profile (preso no splash).
+-- SECURITY DEFINER: roda com privilegios do dono, ignorando RLS.
+-- Le nome/telefone/cidade de raw_user_meta_data (enviados em options.data).
+-- ════════════════════════════════════════════════════════════════════
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, role, nome, telefone, cidade, aprovada)
+  values (
+    new.id,
+    'revendedora',
+    coalesce(new.raw_user_meta_data->>'nome', ''),
+    new.raw_user_meta_data->>'telefone',
+    new.raw_user_meta_data->>'cidade',
+    false
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
