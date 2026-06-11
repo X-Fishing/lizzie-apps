@@ -1769,6 +1769,17 @@ function agruparPorRevendedora() {
   return groups;
 }
 
+function pedidosDoCatalogo(list) {
+  return [...new Set((list || []).map(c => c.pedido_numero).filter(Boolean))];
+}
+
+function pedidoLabelHtml(list, fontSize) {
+  const peds = pedidosDoCatalogo(list);
+  if (!peds.length) return '';
+  const label = peds.length > 1 ? 'Pedidos' : 'Pedido';
+  return `<div style="font-size:${fontSize}px;color:var(--rose);font-family:monospace;margin-top:2px">${label} ${peds.map(n => '#' + n).join(', ')}</div>`;
+}
+
 function statsRevendedora(list) {
   const ativos = list.filter(c => c.status === 'ativo');
   const totalEnv = list.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
@@ -1799,6 +1810,7 @@ function renderCicloAdmin() {
     const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
     return `<div class="rev-card${temAtivos ? '' : ' inativo'}" onclick="abrirCicloRev('${revId}')">
       <div class="rev-card-nome">${nome}</div>
+      ${pedidoLabelHtml(list, 11)}
       <div class="rev-card-status${temAtivos ? '' : ' inativo'}">${temAtivos ? `● ${ativos.length} ativa${ativos.length!==1?'s':''}` : '○ Sem catálogo ativo'}</div>
       <div class="rev-card-valor-label">Vendido até agora</div>
       <div class="rev-card-valor">${fmtBRL(totalRecv)}</div>
@@ -1853,6 +1865,7 @@ function renderCicloAdminDetalhe(revId, list) {
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
         <div>
           <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">${nome}</div>
+          ${pedidoLabelHtml(list, 12)}
           <div style="font-size:12px;color:var(--muted);margin-top:2px">${list.length} peça${list.length!==1?'s':''} · ${totalVend}/${totalEnv} vendidas ${temAtivos ? `· <span style="color:var(--success)">${ativos.length} ativa${ativos.length!==1?'s':''}</span>` : ''}</div>
         </div>
         <div style="text-align:right">
@@ -2214,6 +2227,8 @@ const BLING_ITENS_FN = 'https://qoouzjntyfzcxnwjksiu.supabase.co/functions/v1/bl
 const BLING_HEADERS  = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` };
 let blingRevs = [];
 let blingItensAtual = [];
+let blingPedidosCache = [];
+let blingFiltro = '';
 let proximaTrocaMap = {};
 let proximaTrocaCarregado = false;
 let proximaTrocaPromessa = null;
@@ -2489,29 +2504,67 @@ async function buscarBling() {
 
   const todos = await fetchTodosBling(ini, fim);
   if (!todos) {
+    blingPedidosCache = [];
     res.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao conectar com o Bling.</p></div>';
     return;
   }
   if (!todos.length) {
+    blingPedidosCache = [];
     res.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Nenhum pedido nesse período.</p></div>';
     return;
   }
 
+  blingPedidosCache = todos;
+  blingFiltro = '';
+  renderListaBling();
+}
+
+function renderBlingRow(p) {
   const situMap = { 6:{label:'Em aberto',badge:'badge-pendente'}, 9:{label:'Atendido',badge:'badge-quitado'} };
+  const sit = situMap[p.situacao?.id] || { label:'Outro', badge:'badge-aberta' };
+  return `<div class="bling-row">
+    <div class="bling-num">#${p.numero}</div>
+    <div class="bling-info">
+      <div class="bling-cliente">${p.contato?.nome || '—'}</div>
+      <div class="bling-data">${formatDate(p.data)} &nbsp;<span class="badge ${sit.badge}" style="font-size:10px">${sit.label}</span> &nbsp;<span style="font-size:10px;color:var(--muted);font-family:monospace">id:${p.contato?.id}</span></div>
+    </div>
+    <div class="bling-total">R$ ${Number(p.total).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
+    <button class="btn-import" onclick="verItensBling('${p.id}',${p.numero},this)">Ver itens</button>
+  </div>`;
+}
+
+function renderListaBling() {
+  const res = document.getElementById('bling-resultado');
   res.innerHTML =
-    `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">${todos.length} pedido${todos.length!==1?'s':''} encontrado${todos.length!==1?'s':''}</div>` +
-    todos.map(p => {
-      const sit = situMap[p.situacao?.id] || { label:'Outro', badge:'badge-aberta' };
-      return `<div class="bling-row">
-        <div class="bling-num">#${p.numero}</div>
-        <div class="bling-info">
-          <div class="bling-cliente">${p.contato?.nome || '—'}</div>
-          <div class="bling-data">${formatDate(p.data)} &nbsp;<span class="badge ${sit.badge}" style="font-size:10px">${sit.label}</span> &nbsp;<span style="font-size:10px;color:var(--muted);font-family:monospace">id:${p.contato?.id}</span></div>
-        </div>
-        <div class="bling-total">R$ ${Number(p.total).toLocaleString('pt-BR',{minimumFractionDigits:2})}</div>
-        <button class="btn-import" onclick="verItensBling('${p.id}',${p.numero},this)">Ver itens</button>
-      </div>`;
-    }).join('');
+    `<input type="text" id="bling-filtro" class="form-control" style="margin-bottom:12px" placeholder="🔍 Buscar por nome da revendedora..." oninput="filtrarBling(this.value)" value="${blingFiltro.replace(/"/g,'&quot;')}">
+     <div id="bling-lista-info" style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>
+     <div id="bling-lista"></div>`;
+  aplicarFiltroBling();
+}
+
+function aplicarFiltroBling() {
+  const total = blingPedidosCache.length;
+  const filtro = normalizarNome(blingFiltro);
+  const filtrados = filtro
+    ? blingPedidosCache.filter(p => normalizarNome(p.contato?.nome).includes(filtro))
+    : blingPedidosCache;
+
+  const info = document.getElementById('bling-lista-info');
+  const lista = document.getElementById('bling-lista');
+  if (!info || !lista) return;
+
+  info.textContent = filtro
+    ? `${filtrados.length} de ${total} pedido${total!==1?'s':''}`
+    : `${total} pedido${total!==1?'s':''} encontrado${total!==1?'s':''}`;
+
+  lista.innerHTML = filtrados.length
+    ? filtrados.map(renderBlingRow).join('')
+    : '<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhum pedido com esse nome</p></div>';
+}
+
+function filtrarBling(val) {
+  blingFiltro = val;
+  aplicarFiltroBling();
 }
 
 async function verItensBling(pedidoId, numero, btn) {
@@ -2601,8 +2654,12 @@ async function renderItensBling(pedidoId, numero, fixedRevId, mostrarSeletor) {
 
 function voltarListaBling() {
   document.getElementById('bling-header').style.display = 'block';
-  document.getElementById('bling-resultado').innerHTML = '';
-  buscarBling();
+  if (blingPedidosCache.length) {
+    renderListaBling();
+  } else {
+    document.getElementById('bling-resultado').innerHTML = '';
+    buscarBling();
+  }
 }
 
 async function importarItensBling(numero, btn) {
@@ -2624,7 +2681,8 @@ async function importarItensBling(numero, btn) {
       quantidade_enviada: Number(it.quantidade),
       preco_venda: Number(it.valor),
       foto_url: null,
-      status: 'ativo'
+      status: 'ativo',
+      pedido_numero: numero != null ? String(numero) : null
     }))
   );
 
