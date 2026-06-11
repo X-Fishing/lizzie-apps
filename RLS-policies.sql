@@ -35,6 +35,25 @@ revoke all on function public.is_admin() from public;
 grant execute on function public.is_admin() to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════
+-- LIMPEZA: derruba TODAS as policies existentes nestas tabelas antes de
+-- recriar as corretas. Necessario porque policies template do Supabase
+-- (ex.: "Enable read access for all users" com using(true)) liberavam
+-- leitura anonima — e com RLS as policies se somam por OU. Sem isso, a
+-- policy permissiva antiga continua vazando profiles/consignados.
+-- ════════════════════════════════════════════════════════════════════
+do $$
+declare r record;
+begin
+  for r in
+    select policyname, tablename from pg_policies
+    where schemaname = 'public'
+      and tablename in ('profiles','consignados','garantias','vendas','venda_itens','recebimentos')
+  loop
+    execute format('drop policy if exists %I on public.%I', r.policyname, r.tablename);
+  end loop;
+end $$;
+
+-- ════════════════════════════════════════════════════════════════════
 -- profiles
 -- ════════════════════════════════════════════════════════════════════
 alter table public.profiles enable row level security;
