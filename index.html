@@ -1546,7 +1546,6 @@ async function salvarGarantia() {
   }
 
   const payload = {
-    revendedora_id: currentUser.id,
     descricao_item: desc,
     nome_cliente: cliente,
     telefone_cliente: document.getElementById('g-tel').value.trim() || null,
@@ -1566,6 +1565,7 @@ async function salvarGarantia() {
     toast('Garantia atualizada!');
   } else {
     payload.status = 'aberta';
+    payload.revendedora_id = currentUser.id;
     await sb.from('garantias').insert(payload);
     toast('Garantia registrada!');
   }
