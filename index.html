@@ -444,9 +444,13 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   white-space: nowrap;
 }
 .btn-vender:hover { opacity: 0.88; }
+/* Coluna de ação (Vender/Status) fixa na direita: fica sempre visível
+   mesmo quando a tabela rola na horizontal no celular. */
+.ciclo-acao { position: sticky; right: 0; background: #fff; box-shadow: -6px 0 8px -5px rgba(0,0,0,0.12); }
+.ciclo-th.ciclo-acao { z-index: 2; }
 
-/* CARRINHO DE VENDA */
-#cart-bar { margin-top: 16px; background: linear-gradient(135deg, var(--rose), #b5526a); color: #fff; border-radius: 14px; padding: 14px 16px; box-shadow: 0 4px 16px rgba(201,116,138,0.3); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+/* CARRINHO DE VENDA — barra flutuante fixa acima do menu, sempre visível */
+#cart-bar { position: fixed; left: 50%; transform: translateX(-50%); bottom: 74px; width: calc(100% - 24px); max-width: 576px; z-index: 95; background: linear-gradient(135deg, var(--rose), #b5526a); color: #fff; border-radius: 14px; padding: 10px 14px; box-shadow: 0 6px 24px rgba(201,116,138,0.45); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .cart-info { font-size: 14px; }
 .cart-info b { font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 500; }
 .cart-info-total { font-size: 12px; opacity: 0.9; margin-top: 2px; }
@@ -1876,7 +1880,7 @@ function cicloRowHtml(c, isAdmin) {
     <td class="ciclo-td"><span class="ciclo-badge">${CAT_LABEL[cat] || cat}</span></td>
     <td class="ciclo-td"><span class="ciclo-num">${c.quantidade_enviada}</span></td>
     <td class="ciclo-td">${c.preco_venda ? `<span class="ciclo-preco">R$ ${Number(c.preco_venda).toFixed(2)}</span>` : '—'}</td>
-    <td class="ciclo-td">${acao}</td>
+    <td class="ciclo-td ciclo-acao">${acao}</td>
   </tr>`;
 }
 
@@ -1891,7 +1895,7 @@ function cicloTableHtml(list, isAdmin) {
           ${cicloTh('categoria','Categoria')}
           ${cicloTh('quantidade_enviada','Enviadas')}
           ${cicloTh('preco_venda','Preço')}
-          <th class="ciclo-th ciclo-th-nosort">${isAdmin ? 'Status' : 'Ações'}</th>
+          <th class="ciclo-th ciclo-th-nosort ciclo-acao">${isAdmin ? 'Status' : 'Ações'}</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
@@ -2210,16 +2214,23 @@ function removerDoCarrinho(idx) {
 function renderCartBar() {
   const bar = document.getElementById('cart-bar');
   if (!bar) return;
-  if (!carrinhoVenda.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
+  const cl = document.getElementById('c-list');
+  if (!carrinhoVenda.length) {
+    bar.style.display = 'none'; bar.innerHTML = '';
+    if (cl) cl.style.paddingBottom = '';
+    return;
+  }
   const totalItens = carrinhoVenda.reduce((s, i) => s + i.quantidade, 0);
   const totalValor = carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
   bar.style.display = 'flex';
   bar.innerHTML = `
     <div class="cart-info">
-      <div>🛒 <b>${totalItens}</b> ite${totalItens!==1?'ns':'m'} no carrinho</div>
-      <div class="cart-info-total">Total: R$ ${totalValor.toFixed(2)}</div>
+      <div>🛒 <b>${totalItens}</b> ite${totalItens!==1?'ns':'m'}</div>
+      <div class="cart-info-total">R$ ${totalValor.toFixed(2)}</div>
     </div>
-    <button class="btn-finalizar" onclick="abrirFinalizarVenda()">Finalizar venda →</button>`;
+    <button class="btn-finalizar" onclick="abrirFinalizarVenda()">Finalizar →</button>`;
+  // Espaço extra no fim da lista para o último item não ficar atrás da barra fixa.
+  if (cl) cl.style.paddingBottom = '84px';
 }
 
 function abrirFinalizarVenda() {
