@@ -411,10 +411,10 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
 /* CICLO GRID */
 .ciclo-wrap { overflow-x: auto; border-radius: 16px; background: #fff; border: 1px solid var(--border); box-shadow: 0 2px 12px rgba(0,0,0,0.04); margin-bottom: 14px; }
-.ciclo-table { width: 100%; border-collapse: collapse; min-width: 480px; }
+.ciclo-table { width: 100%; border-collapse: collapse; }
 .ciclo-th {
   font-size: 11px; font-weight: 500; color: var(--muted); text-transform: uppercase;
-  letter-spacing: 0.5px; padding: 12px 10px; text-align: left; cursor: pointer;
+  letter-spacing: 0.5px; padding: 12px 7px; text-align: left; cursor: pointer;
   border-bottom: 2px solid var(--border); white-space: nowrap; user-select: none;
   transition: color 0.2s;
 }
@@ -422,7 +422,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .ciclo-th.sorted { color: var(--plum); font-weight: 600; }
 .ciclo-th-nosort { cursor: default; }
 .ciclo-th-nosort:hover { color: var(--muted); }
-.ciclo-td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 13px; }
+.ciclo-td { padding: 10px 7px; border-bottom: 1px solid var(--border); vertical-align: middle; font-size: 13px; }
 .ciclo-row { transition: background 0.15s; }
 .ciclo-row:hover { background: rgba(201,116,138,0.04); }
 .ciclo-row:last-child .ciclo-td { border-bottom: none; }
@@ -837,7 +837,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <span class="nav-icon">🛍️</span>Trocas
     </button>
     <button class="nav-item" id="nav-admin" onclick="showPanel('admin')" style="display:none">
-      <span class="nav-icon">👑</span>Admin
+      <span class="nav-icon">👑</span>Revendedoras
     </button>
   </nav>
 </div>
@@ -1866,13 +1866,11 @@ function cicloTh(col, label) {
 function cicloRowHtml(c, isAdmin) {
   const disp = qtdDisp(c);
   const esgotado = disp <= 0;
-  const fotoHtml = c.foto_url ? `<img src="${c.foto_url}" class="ciclo-img">` : `<div class="ciclo-emoji">💍</div>`;
   const cat = c.categoria || detectarCategoria(c.descricao);
   const acao = isAdmin
     ? `<span style="font-size:11px;color:var(--muted)">${c.status === 'encerrado' ? 'Encerrado' : (esgotado ? 'Vendido' : '—')}</span>`
     : (!esgotado ? `<button class="btn-vender" onclick="openVenda('${c.id}')">Vender</button>` : '<span style="font-size:11px;color:var(--muted)">Vendido</span>');
   return `<tr class="ciclo-row${esgotado ? ' esgotado' : ''}">
-    <td class="ciclo-td ciclo-foto-cell">${fotoHtml}</td>
     <td class="ciclo-td">
       <div class="ciclo-desc">${esc(c.descricao)}</div>
       ${c.referencia ? `<div class="ciclo-ref">${esc(c.referencia)}</div>` : ''}
@@ -1890,7 +1888,6 @@ function cicloTableHtml(list, isAdmin) {
     <table class="ciclo-table">
       <thead>
         <tr>
-          <th class="ciclo-th ciclo-th-nosort" style="width:52px"></th>
           ${cicloTh('descricao','Descrição')}
           ${cicloTh('categoria','Categoria')}
           ${cicloTh('quantidade_enviada','Enviadas')}
@@ -3429,12 +3426,13 @@ async function verRevendedora(id) {
       </div>
       <div id="bling-candidatos" style="margin-top:10px"></div>
     </div>
-    <div class="detail-actions" style="margin-top:12px">
+    <div class="detail-actions" id="rev-actions" style="margin-top:12px">
       ${!r.aprovada
         ? `<button class="btn-primary" onclick="aprovarRev('${r.id}')">✅ Aprovar acesso</button>`
         : `<button class="btn-danger" onclick="revogarRev('${r.id}')">🚫 Revogar acesso</button>`
       }
       <button class="btn-secondary" onclick="closeModal('modal-detalhe-rev')">Fechar</button>
+      <button class="btn-danger" data-rev-nome="${esc(r.nome || '')}" onclick="confirmarExclusaoRev('${r.id}', this)">🗑️ Excluir revendedora</button>
     </div>
   `;
   openModal('modal-detalhe-rev');
@@ -3459,6 +3457,53 @@ async function revogarRev(id) {
   } catch (e) { error = e; }
   if (await handleSupabaseError(error, 'Erro ao revogar acesso')) return;
   toast('Acesso revogado');
+  closeModal('modal-detalhe-rev');
+  loadAdmin();
+}
+
+// Confirmacao embutida (sem confirm() nativo, que nao aparece no PWA).
+function confirmarExclusaoRev(id, btn) {
+  const nome = (btn && btn.dataset.revNome) || 'esta revendedora';
+  const actions = document.getElementById('rev-actions');
+  if (!actions) return;
+  actions.innerHTML = `
+    <div style="width:100%;background:rgba(224,85,85,0.08);border:1px solid var(--danger);border-radius:12px;padding:12px;font-size:13px;color:var(--text)">
+      <strong style="color:var(--danger)">Excluir ${esc(nome)} para sempre?</strong><br>
+      Apaga o cadastro e <strong>todos os dados dela</strong>: catálogo (peças), garantias e vendas/pagamentos. Não dá pra desfazer.
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="btn-danger" onclick="excluirRevendedora('${id}', this)">Sim, excluir tudo</button>
+        <button class="btn-secondary" onclick="verRevendedora('${id}')">Cancelar</button>
+      </div>
+    </div>`;
+}
+
+async function excluirRevendedora(id, btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Excluindo...'; }
+  try {
+    // Apaga os dados filhos antes do profile (nao depende de ON DELETE CASCADE).
+    const { data: vendas } = await sbQ(sb.from('vendas').select('id').eq('revendedora_id', id));
+    const vendaIds = (vendas || []).map(v => v.id);
+    if (vendaIds.length) {
+      await sbQ(sb.from('venda_itens').delete().in('venda_id', vendaIds));
+      await sbQ(sb.from('recebimentos').delete().in('venda_id', vendaIds));
+      await sbQ(sb.from('vendas').delete().eq('revendedora_id', id));
+    }
+    await sbQ(sb.from('garantias').delete().eq('revendedora_id', id));
+    await sbQ(sb.from('consignados').delete().eq('revendedora_id', id));
+    const { error } = await sbQ(sb.from('profiles').delete().eq('id', id));
+    if (error) {
+      if (await handleSupabaseError(error, 'Erro ao excluir revendedora')) return;
+      if (btn) { btn.disabled = false; btn.textContent = 'Sim, excluir tudo'; }
+      return;
+    }
+  } catch (e) {
+    console.error('Erro ao excluir revendedora:', e);
+    toast('Erro ao excluir revendedora');
+    if (btn) { btn.disabled = false; btn.textContent = 'Sim, excluir tudo'; }
+    return;
+  }
+  toast('Revendedora excluída');
+  blingRevs = []; aprovadasCache = []; proximaTrocaCarregado = false;
   closeModal('modal-detalhe-rev');
   loadAdmin();
 }
