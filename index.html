@@ -1157,6 +1157,16 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   </div>
 </div>
 
+<!-- MODAL ATUALIZAR ITENS DA MALETA (admin/gestor) -->
+<div class="modal-overlay" id="modal-maleta" data-lock-outside>
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">🔄 Atualizar itens da maleta</div>
+    <div id="maleta-content"></div>
+    <button class="btn-secondary" style="width:100%;margin-top:12px" onclick="closeModal('modal-maleta')">Fechar</button>
+  </div>
+</div>
+
 <!-- PWA install UI -->
 <button id="install-btn" type="button" aria-label="Instalar app">
   <span style="font-size:16px">📲</span><span>Instalar app</span>
@@ -3530,6 +3540,7 @@ async function verRevendedora(id) {
       ${ehGestor() ? (!r.aprovada
         ? `<button class="btn-primary" onclick="aprovarRev('${r.id}')">✅ Aprovar acesso</button>`
         : `<button class="btn-danger" onclick="revogarRev('${r.id}')">🚫 Revogar acesso</button>`) : ''}
+      ${ehGestor() ? `<button class="btn-secondary" style="border-color:var(--rose);color:var(--rose)" data-bling-id="${r.bling_contato_id || ''}" data-rev-nome="${esc(r.nome || '')}" onclick="atualizarMaleta('${r.id}', this)">🔄 Atualizar itens da maleta</button>` : ''}
       <button class="btn-secondary" onclick="closeModal('modal-detalhe-rev')">Fechar</button>
       ${ehAdmin() ? `<button class="btn-danger" data-rev-nome="${esc(r.nome || '')}" onclick="confirmarExclusaoRev('${r.id}', this)">🗑️ Excluir revendedora</button>` : ''}
     </div>
@@ -3617,6 +3628,128 @@ async function excluirRevendedora(id, btn) {
   blingRevs = []; aprovadasCache = []; proximaTrocaCarregado = false;
   closeModal('modal-detalhe-rev');
   loadAdmin();
+}
+
+// ── Atualizar itens da maleta (Bling -> app, append-only, gestor) ──────
+let maletaCtx = { revId: null, nome: '', pedidoNumero: null, pedidos: {}, itensRpc: [] };
+
+async function atualizarMaleta(revId, btn) {
+  if (!ehGestor()) { toast('Sem permissão'); return; }
+  const blingId = ((btn && btn.dataset.blingId) || '').trim();
+  const nome = (btn && btn.dataset.revNome) || 'revendedora';
+  if (!blingId) { toast('Revendedora sem vínculo Bling — vincule o ID do contato primeiro.'); return; }
+
+  openModal('modal-maleta');
+  const cont = document.getElementById('maleta-content');
+  cont.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Buscando pedidos no Bling...</div>';
+
+  const hoje = new Date().toISOString().split('T')[0];
+  const inicio = new Date(); inicio.setMonth(inicio.getMonth() - 6);
+  const todos = await fetchTodosBling(inicio.toISOString().split('T')[0], hoje);
+  if (!todos) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao conectar com o Bling. Tente de novo.</p></div>'; return; }
+
+  const abertos = todos.filter(p => String(p.contato?.id) === String(blingId) && p.situacao?.id === SITUACAO_ABERTO);
+  if (!abertos.length) {
+    cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Nenhum pedido em aberto encontrado no Bling para <strong>${esc(nome)}</strong>.</p></div>`;
+    return;
+  }
+
+  if (abertos.length === 1) { previewMaleta(revId, nome, abertos[0]); return; }
+
+  // Mais de um pedido aberto: o admin escolhe (não assume nada).
+  maletaCtx = { revId, nome, pedidos: {} };
+  abertos.forEach(p => { maletaCtx.pedidos[p.id] = p; });
+  cont.innerHTML = `<p style="font-size:13px;color:var(--muted);margin-bottom:10px"><strong>${esc(nome)}</strong> tem ${abertos.length} pedidos em aberto. Escolha qual maleta atualizar:</p>` +
+    abertos.map(p => `<button class="btn-secondary" style="width:100%;text-align:left;margin-bottom:8px" onclick="previewMaletaPorId('${p.id}')">Pedido #${p.numero} — ${formatDate(p.data)}</button>`).join('');
+}
+
+function previewMaletaPorId(pedidoId) {
+  const p = maletaCtx.pedidos[pedidoId];
+  if (p) previewMaleta(maletaCtx.revId, maletaCtx.nome, p);
+}
+
+async function previewMaleta(revId, nome, pedido) {
+  const cont = document.getElementById('maleta-content');
+  cont.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Comparando com a maleta...</div>';
+
+  const resp = await fetch(`${BLING_ITENS_FN}?id=${pedido.id}`, { headers: BLING_HEADERS });
+  if (!resp.ok) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao buscar os itens do pedido.</p></div>'; return; }
+  const json = await resp.json();
+  const itensBling = json.data?.itens || json.itens || json.data || [];
+
+  const { data: ativos, error } = await sbQ(sb.from('consignados').select('referencia,quantidade_enviada').eq('revendedora_id', revId).eq('status', 'ativo'));
+  if (error) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao ler a maleta atual.</p></div>'; return; }
+
+  // Soma por SKU na maleta (inclui vendidas, pois quantidade_enviada as conta).
+  const appPorRef = {};
+  (ativos || []).forEach(c => { const k = (c.referencia || '').trim(); if (k) appPorRef[k] = (appPorRef[k] || 0) + (c.quantidade_enviada || 0); });
+
+  // Agrupa o pedido do Bling por SKU; separa itens sem código.
+  const blingPorRef = {}; const semCodigo = [];
+  itensBling.forEach(it => {
+    const ref = (it.codigo || '').trim();
+    if (!ref) { semCodigo.push(it); return; }
+    if (!blingPorRef[ref]) blingPorRef[ref] = { referencia: ref, descricao: it.descricao, quantidade: 0, preco: Number(it.valor) || 0 };
+    blingPorRef[ref].quantidade += Number(it.quantidade) || 0;
+  });
+
+  const novos = [], avisosNeg = [];
+  Object.values(blingPorRef).forEach(b => {
+    const delta = Math.floor(b.quantidade) - (appPorRef[b.referencia] || 0);
+    if (delta > 0) novos.push({ ...b, delta });
+    else if (delta < 0) avisosNeg.push({ ...b, app: appPorRef[b.referencia] || 0 });
+  });
+  const totalNovas = novos.reduce((s, n) => s + n.delta, 0);
+
+  maletaCtx.revId = revId;
+  maletaCtx.pedidoNumero = pedido.numero;
+  maletaCtx.itensRpc = Object.values(blingPorRef).map(b => ({ referencia: b.referencia, descricao: b.descricao, quantidade: b.quantidade, preco: b.preco }));
+
+  let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:12px">Maleta de <strong>${esc(nome)}</strong> · Pedido #${pedido.numero}</div>`;
+  if (!novos.length) {
+    html += `<div class="empty-state"><div class="empty-icon">✅</div><p>Maleta já está atualizada.</p></div>`;
+  } else {
+    html += `<div style="font-weight:600;color:var(--plum);margin-bottom:8px">${totalNovas} ite${totalNovas!==1?'ns':'m'} novo${totalNovas!==1?'s':''} serão adicionados ao final:</div>`;
+    html += novos.map(n => `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="color:var(--plum)">${esc(n.descricao)} ${n.referencia ? `<span style="color:var(--muted);font-size:11px">(${esc(n.referencia)})</span>` : ''}</span>
+        <span style="color:var(--success);font-weight:600;white-space:nowrap">+${n.delta}</span></div>`).join('');
+  }
+  if (avisosNeg.length) {
+    html += `<div style="margin-top:12px;background:rgba(212,168,75,0.12);border:1px solid var(--gold);border-radius:10px;padding:10px;font-size:12px;color:var(--text)">
+      ⚠️ <strong>Conferir manualmente</strong> — no Bling estes SKUs têm MENOS unidades que a maleta (nada é removido):
+      ${avisosNeg.map(a => `<div>• ${esc(a.descricao)} — Bling ${Math.floor(a.quantidade)} / maleta ${a.app}</div>`).join('')}</div>`;
+  }
+  if (semCodigo.length) {
+    html += `<div style="margin-top:12px;background:rgba(224,85,85,0.10);border:1px solid var(--danger);border-radius:10px;padding:10px;font-size:12px;color:var(--text)">
+      ⚠️ <strong>${semCodigo.length} item(ns) sem código no Bling</strong> — NÃO sincronizados, conferir manualmente:
+      ${semCodigo.map(s => `<div>• ${esc(s.descricao || '(sem descrição)')} — qtd ${Number(s.quantidade) || 0}</div>`).join('')}</div>`;
+  }
+  if (novos.length) {
+    html += `<button class="btn-primary" style="width:100%;margin-top:14px" onclick="confirmarMaleta(this)">⬇️ Adicionar ${totalNovas} ite${totalNovas!==1?'ns':'m'} à maleta</button>`;
+  }
+  cont.innerHTML = html;
+}
+
+async function confirmarMaleta(btn) {
+  if (!ehGestor()) { toast('Sem permissão'); return; }
+  btn.disabled = true; btn.textContent = '⟳ Adicionando...';
+  const { data, error } = await sbQ(sb.rpc('sincronizar_maleta', {
+    p_revendedora_id: maletaCtx.revId,
+    p_pedido_numero: String(maletaCtx.pedidoNumero || ''),
+    p_itens: maletaCtx.itensRpc || []
+  }));
+  if (error) {
+    console.error('Erro sincronizar_maleta:', error);
+    const msg = /sincronizar_maleta|function|schema cache|does not exist/i.test(error.message || '')
+      ? 'Função do banco não encontrada — rode db-functions.sql no Supabase.'
+      : ('Erro: ' + (error.message || 'tente de novo'));
+    toast(msg); btn.disabled = false; btn.textContent = 'Tentar de novo'; return;
+  }
+  const n = Number(data) || 0;
+  toast(n > 0 ? `✅ ${n} ite${n!==1?'ns':'m'} adicionado${n!==1?'s':''} à maleta!` : 'Maleta já estava atualizada');
+  closeModal('modal-maleta');
+  allConsignados = [];
+  if (document.getElementById('panel-consignados').style.display !== 'none') loadConsignados();
 }
 
 async function salvarBlingId(revId) {

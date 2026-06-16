@@ -117,3 +117,72 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
+
+-- ════════════════════════════════════════════════════════════════════
+-- sincronizar_maleta: ADD-ONLY. Insere no catálogo da revendedora só as
+-- unidades NOVAS de cada SKU vindas do pedido do Bling. Calcula o delta no
+-- SERVIDOR (não confia no front) e NUNCA faz update/delete em linhas
+-- existentes — vendidos/pagos ficam intactos.
+--   delta = quantidade_no_Bling − SOMA(quantidade_enviada das linhas ativas do SKU)
+--   delta > 0  -> insere 1 linha nova com quantidade_enviada = delta
+--   delta <= 0 -> não faz nada (append-only; se < 0, é conferência manual)
+-- Idempotente: rodar 2x seguidas, a 2ª calcula delta 0. Só gestor/admin.
+-- SECURITY INVOKER: respeita RLS (consignados_insert exige is_gestor p/ outra rev).
+-- ════════════════════════════════════════════════════════════════════
+create or replace function public.sincronizar_maleta(
+  p_revendedora_id uuid,
+  p_pedido_numero  text,
+  p_itens          jsonb   -- [{referencia, descricao, quantidade, preco}]
+)
+returns integer
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_item      record;
+  v_qtd_app   integer;
+  v_delta     integer;
+  v_inseridos integer := 0;
+begin
+  if not public.is_gestor() then
+    raise exception 'Sem permissao';
+  end if;
+
+  -- Agrupa por SKU (soma linhas repetidas do mesmo código no pedido).
+  -- Ignora itens sem referência/código (não dá para reconciliar por contagem).
+  for v_item in
+    select
+      x->>'referencia'                       as referencia,
+      max(x->>'descricao')                   as descricao,
+      sum( (x->>'quantidade')::numeric )     as quantidade,
+      max( nullif(x->>'preco','')::numeric ) as preco
+    from jsonb_array_elements(p_itens) as x
+    where coalesce(x->>'referencia','') <> ''
+    group by x->>'referencia'
+  loop
+    select coalesce(sum(quantidade_enviada), 0) into v_qtd_app
+      from consignados
+     where revendedora_id = p_revendedora_id
+       and status = 'ativo'
+       and referencia = v_item.referencia;
+
+    v_delta := floor(v_item.quantidade)::int - v_qtd_app;
+
+    if v_delta > 0 then
+      insert into consignados
+        (revendedora_id, descricao, referencia, quantidade_enviada,
+         quantidade_vendida, quantidade_devolvida, preco_venda, foto_url, status, pedido_numero)
+      values
+        (p_revendedora_id, v_item.descricao, v_item.referencia, v_delta,
+         0, 0, v_item.preco, null, 'ativo', p_pedido_numero);
+      v_inseridos := v_inseridos + v_delta;
+    end if;
+  end loop;
+
+  return v_inseridos;
+end;
+$$;
+
+revoke all on function public.sincronizar_maleta(uuid,text,jsonb) from public;
+grant execute on function public.sincronizar_maleta(uuid,text,jsonb) to authenticated;
