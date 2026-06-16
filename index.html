@@ -1288,8 +1288,13 @@ async function init() {
     // IMPORTANTE: nao usar await/chamadas Supabase direto aqui — isso causa
     // deadlock do lock de auth (login novo travava em "carregando"). Adia com
     // setTimeout(0) para o callback liberar o lock antes de loadUser consultar.
-    if (event === 'SIGNED_IN' && session) setTimeout(() => loadUser(session.user), 0);
-    if (event === 'SIGNED_OUT') showSplash();
+    if (event === 'SIGNED_IN' && session) {
+      // O supabase re-dispara SIGNED_IN ao voltar o foco da aba / refresh de token.
+      // Se já é o mesmo usuário carregado, NÃO recarrega (senão pula pro dashboard).
+      if (currentUser && currentUser.id === session.user.id) return;
+      setTimeout(() => loadUser(session.user), 0);
+    }
+    if (event === 'SIGNED_OUT') { currentUser = null; currentProfile = null; showSplash(); }
   });
 
   const { data: { session } } = await sb.auth.getSession();
@@ -2009,6 +2014,8 @@ function renderCicloRevendedora() {
     ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()">📋 Fechamento do Catálogo</button>`
     : '';
 
+  const cabecalho = pedidoLabelHtml(allConsignados, 12);
+
   const termo = (document.getElementById('c-search')?.value || '').toLowerCase().trim();
   if (termo) {
     const lista = allConsignados.filter(c =>
@@ -2018,10 +2025,10 @@ function renderCicloRevendedora() {
     if (!lista.length) {
       return `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhuma peça encontrada com "${termo}"</p></div>`;
     }
-    return cicloTableHtml(lista, false) + btnFechamento;
+    return cabecalho + cicloTableHtml(lista, false) + btnFechamento;
   }
 
-  return cicloTableHtml(allConsignados, false) + btnFechamento;
+  return cabecalho + cicloTableHtml(allConsignados, false) + btnFechamento;
 }
 
 function agruparPorRevendedora() {
