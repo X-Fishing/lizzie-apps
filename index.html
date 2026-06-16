@@ -90,6 +90,11 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .auth-msg { font-size: 12px; text-align: center; padding: 8px; border-radius: 8px; }
 .auth-msg.error { background: rgba(224,85,85,0.15); color: #ff8a8a; }
 .auth-msg.success { background: rgba(76,175,130,0.15); color: #7de8b4; }
+.auth-sep { display: flex; align-items: center; gap: 10px; color: rgba(255,255,255,0.35); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+.auth-sep::before, .auth-sep::after { content: ''; flex: 1; height: 1px; background: rgba(255,255,255,0.15); }
+.btn-google { display: flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #3c4043; border: none; border-radius: 10px; padding: 12px; font-size: 14px; font-weight: 500; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: box-shadow 0.2s, transform 0.2s; }
+.btn-google:hover { box-shadow: 0 4px 14px rgba(0,0,0,0.25); transform: translateY(-1px); }
+.btn-google svg { width: 18px; height: 18px; }
 
 /* PENDING APPROVAL */
 #pending-screen {
@@ -634,6 +639,11 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <input type="email" id="login-email" placeholder="E-mail" autocomplete="email" onkeydown="if(event.key==='Enter')fazerLogin()">
       <input type="password" id="login-senha" placeholder="Senha" autocomplete="current-password" onkeydown="if(event.key==='Enter')fazerLogin()">
       <button class="btn-gold" onclick="fazerLogin()">Entrar</button>
+      <div class="auth-sep">ou</div>
+      <button type="button" class="btn-google" onclick="loginGoogle()">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+        Continuar com o Google
+      </button>
       <button type="button" onclick="mostrarRecuperar()" style="background:none;border:none;color:var(--rose);font-size:13px;cursor:pointer;padding:4px;font-family:inherit;text-decoration:underline">Esqueci minha senha</button>
       <div id="login-msg" class="auth-msg" style="display:none"></div>
     </div>
@@ -655,6 +665,11 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <input type="text" id="cad-cidade" placeholder="Cidade / Estado" onkeydown="if(event.key==='Enter')fazerCadastro()">
       <input type="password" id="cad-senha" placeholder="Senha (mín. 6 caracteres)" autocomplete="new-password" onkeydown="if(event.key==='Enter')fazerCadastro()">
       <button class="btn-gold" onclick="fazerCadastro()">Solicitar acesso</button>
+      <div class="auth-sep">ou</div>
+      <button type="button" class="btn-google" onclick="loginGoogle()">
+        <svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.611 20.083H42V20H24v8h11.303c-1.649 4.657-6.08 8-11.303 8-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"/><path fill="#FF3D00" d="M6.306 14.691l6.571 4.819C14.655 15.108 18.961 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"/><path fill="#4CAF50" d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238C29.211 35.091 26.715 36 24 36c-5.202 0-9.619-3.317-11.283-7.946l-6.522 5.025C9.505 39.556 16.227 44 24 44z"/><path fill="#1976D2" d="M43.611 20.083H42V20H24v8h11.303c-.792 2.237-2.231 4.166-4.087 5.571l6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"/></svg>
+        Continuar com o Google
+      </button>
       <div id="cad-msg" class="auth-msg" style="display:none"></div>
     </div>
   </div>
@@ -1359,6 +1374,17 @@ function voltarLogin() {
   document.getElementById('tab-recuperar').style.display = 'none';
   document.querySelector('.auth-tabs').style.display = 'flex';
   switchTab('login');
+}
+
+async function loginGoogle() {
+  // O retorno do OAuth volta no hash (#access_token) e e processado pelo
+  // supabase-js -> evento SIGNED_IN -> loadUser. O codigo de recovery so
+  // intercepta type=recovery, entao nao conflita.
+  const { error } = await sb.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: location.origin + location.pathname }
+  });
+  if (error) toast('Erro ao conectar com o Google');
 }
 
 async function enviarLinkRecuperacao(btn) {
