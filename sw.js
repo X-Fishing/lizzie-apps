@@ -1,4 +1,4 @@
-const CACHE = 'lizzie-shell-v3';
+const CACHE = 'lizzie-shell-v4';
 const SHELL = [
   './',
   './index.html',
