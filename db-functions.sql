@@ -98,9 +98,14 @@ begin
   values (
     new.id,
     'revendedora',
-    coalesce(new.raw_user_meta_data->>'nome', ''),
-    new.raw_user_meta_data->>'telefone',
-    new.raw_user_meta_data->>'cidade',
+    coalesce(
+      new.raw_user_meta_data->>'nome',       -- cadastro por formulario
+      new.raw_user_meta_data->>'full_name',  -- Google
+      new.raw_user_meta_data->>'name',
+      split_part(new.email, '@', 1)
+    ),
+    new.raw_user_meta_data->>'telefone',     -- null no Google
+    new.raw_user_meta_data->>'cidade',       -- null no Google
     false
   )
   on conflict (id) do nothing;
