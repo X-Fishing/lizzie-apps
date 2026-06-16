@@ -1272,6 +1272,7 @@ let allConsignados = [];
 let allVendas = [];
 let vendaItensCache = {};
 let revNameMap = {};
+let revBlingMap = {};
 let gFilter = 'todas';
 let pFilter = 'todos';
 let cSort = { col: 'descricao', dir: 'asc' };
@@ -1895,7 +1896,7 @@ async function loadConsignados() {
   if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
   const queries = [sbQ(q.order('created_at', { ascending: false }))];
   if (isAdmin) {
-    queries.push(sbQ(sb.from('profiles').select('id,nome').eq('role','revendedora')));
+    queries.push(sbQ(sb.from('profiles').select('id,nome,bling_contato_id').eq('role','revendedora')));
   }
   const results = await Promise.all(queries);
   const { data, error } = results[0];
@@ -1909,7 +1910,8 @@ async function loadConsignados() {
   if (isAdmin) {
     const revs = results[1].data || [];
     revNameMap = {};
-    revs.forEach(r => { revNameMap[r.id] = r.nome; });
+    revBlingMap = {};
+    revs.forEach(r => { revNameMap[r.id] = r.nome; revBlingMap[r.id] = r.bling_contato_id || ''; });
   }
   renderCicloGrid();
   renderCartBar();
@@ -2113,10 +2115,14 @@ function renderCicloAdminDetalhe(revId, list) {
   const nome = revNameMap[revId] || 'Revendedora desconhecida';
   const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
 
-  const acoes = (temAtivos && ehGestor())
+  const btnMaleta = ehGestor()
+    ? `<button class="btn-secondary btn-sm" style="border-color:var(--rose);color:var(--rose)" data-bling-id="${revBlingMap[revId] || ''}" data-rev-nome="${esc(nome)}" onclick="atualizarMaleta('${revId}', this)">🔄 Atualizar itens da maleta</button>`
+    : '';
+  const acoes = ehGestor()
     ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        <button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="finalizarCicloRev('${revId}')">✓ Finalizar catálogo</button>
-        <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')">🗑️ Deletar catálogo</button>
+        ${btnMaleta}
+        ${temAtivos ? `<button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="finalizarCicloRev('${revId}')">✓ Finalizar catálogo</button>
+        <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')">🗑️ Deletar catálogo</button>` : ''}
       </div>`
     : (temAtivos ? '' : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem catálogo ativo</div>`);
 
@@ -3547,7 +3553,6 @@ async function verRevendedora(id) {
       ${ehGestor() ? (!r.aprovada
         ? `<button class="btn-primary" onclick="aprovarRev('${r.id}')">✅ Aprovar acesso</button>`
         : `<button class="btn-danger" onclick="revogarRev('${r.id}')">🚫 Revogar acesso</button>`) : ''}
-      ${ehGestor() ? `<button class="btn-secondary" style="border-color:var(--rose);color:var(--rose)" data-bling-id="${r.bling_contato_id || ''}" data-rev-nome="${esc(r.nome || '')}" onclick="atualizarMaleta('${r.id}', this)">🔄 Atualizar itens da maleta</button>` : ''}
       <button class="btn-secondary" onclick="closeModal('modal-detalhe-rev')">Fechar</button>
       ${ehAdmin() ? `<button class="btn-danger" data-rev-nome="${esc(r.nome || '')}" onclick="confirmarExclusaoRev('${r.id}', this)">🗑️ Excluir revendedora</button>` : ''}
     </div>
