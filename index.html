@@ -1319,6 +1319,18 @@ function calcPrazoGarantia() {
   prazoEl.value = `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
 
+// ── Níveis de acesso ──────────────────────────────────────────────
+// revendedora | func_basico | func_completo | admin
+const ROLE_LABELS = {
+  revendedora:   'Revendedora',
+  func_basico:   'Funcionário – básico',
+  func_completo: 'Funcionário – completo',
+  admin:         'Admin total'
+};
+function ehAdmin()  { return currentProfile?.role === 'admin'; }                                  // gestão de acesso (papéis, excluir)
+function ehGestor() { return ['admin','func_completo'].includes(currentProfile?.role); }          // Bling, catálogo, aprovar
+function ehStaff()  { return ['admin','func_completo','func_basico'].includes(currentProfile?.role); } // vê tudo (não-revendedora)
+
 async function loadUser(user) {
   currentUser = user;
   const { data: profile } = await sbQ(sb.from('profiles').select('*').eq('id', user.id).single());
@@ -1337,24 +1349,24 @@ async function loadUser(user) {
   document.getElementById('app').style.display = 'flex';
   document.getElementById('app').style.flexDirection = 'column';
 
-  const badge = profile.role === 'admin' ? '👑 Admin' : '💍 ' + profile.nome.split(' ')[0];
-  document.getElementById('user-badge').textContent = badge;
+  const ehRevendedora = profile.role === 'revendedora';
+  const icone = profile.role === 'admin' ? '👑' : ehRevendedora ? '💍' : '🧑‍💼';
+  const nomeBadge = ehRevendedora ? profile.nome.split(' ')[0] : (ROLE_LABELS[profile.role] || profile.nome.split(' ')[0]);
+  document.getElementById('user-badge').textContent = `${icone} ${nomeBadge}`;
 
-  document.getElementById('btn-bling-sync').style.display = 'block';
-  if (profile.role === 'admin') {
-    document.getElementById('nav-admin').style.display = 'flex';
-    document.getElementById('nav-trocas').style.display = 'flex';
-    document.getElementById('btn-novo-consig').style.display = 'block';
-    document.getElementById('nav-pagamentos').style.display = 'none';
-    document.getElementById('nav-historico').style.display = 'none';
-  }
+  // Visibilidade por nível. Pagamentos/Histórico são do próprio (só revendedora).
+  document.getElementById('btn-bling-sync').style.display = (ehRevendedora || ehGestor()) ? 'block' : 'none';
+  document.getElementById('btn-novo-consig').style.display = ehGestor() ? 'block' : 'none';
+  document.getElementById('nav-admin').style.display = ehGestor() ? 'flex' : 'none';
+  document.getElementById('nav-trocas').style.display = ehStaff() ? 'flex' : 'none';
+  document.getElementById('nav-pagamentos').style.display = ehRevendedora ? 'flex' : 'none';
+  document.getElementById('nav-historico').style.display = ehRevendedora ? 'flex' : 'none';
 
   showPanel('dashboard');
   loadDashboard();
 
-  // Primeiro acesso (tipicamente via Google) sem telefone: pede o complemento.
-  // O telefone e essencial para o WhatsApp das trocas. Admin nao precisa.
-  if (profile.role !== 'admin' && !(profile.telefone && profile.telefone.trim())) {
+  // Primeiro acesso de revendedora sem telefone: pede o WhatsApp (trocas).
+  if (ehRevendedora && !(profile.telefone && profile.telefone.trim())) {
     abrirComplementoCadastro();
   }
 }
@@ -1518,7 +1530,8 @@ function showMsg(el, text, type) {
 // ═══════════════════════════════════════════════
 function showPanel(name) {
   // Tela de trocas é só de admin
-  if (name === 'trocas' && currentProfile?.role !== 'admin') name = 'dashboard';
+  if (name === 'trocas' && !ehStaff()) name = 'dashboard';
+  if (name === 'admin' && !ehGestor()) name = 'dashboard';
   ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin'].forEach(p => {
     document.getElementById('panel-' + p).style.display = p === name ? 'block' : 'none';
     const nav = document.getElementById('nav-' + p);
@@ -1537,7 +1550,7 @@ function showPanel(name) {
 // DASHBOARD
 // ═══════════════════════════════════════════════
 async function loadDashboard() {
-  const isAdmin = currentProfile.role === 'admin';
+  const isAdmin = ehStaff();
   // Sem .limit(): os contadores (abertas/conserto/prontas/vencendo) precisam
   // de TODAS as garantias. Seleciona so os campos usados nos cards/contadores.
   let q = sb.from('garantias').select('id,status,prazo_maximo,created_at,descricao_item,nome_cliente,foto_url,data_entrada');
@@ -1585,7 +1598,7 @@ async function loadDashboard() {
 // ═══════════════════════════════════════════════
 async function loadGarantias() {
   document.getElementById('g-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
-  const isAdmin = currentProfile.role === 'admin';
+  const isAdmin = ehStaff();
   let q = sb.from('garantias').select('*');
   if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
   const { data, error } = await sbQ(q.order('created_at', { ascending: false }));
@@ -1639,7 +1652,7 @@ function renderGarantiaCard(g) {
 
   const steps = ['aberta','em_conserto','pronta','entregue'];
   const stepLabels = { aberta:'Aberta', em_conserto:'Em conserto', pronta:'Pronta', entregue:'Entregue' };
-  const isAdmin = currentProfile && currentProfile.role === 'admin';
+  const isAdmin = ehStaff();
   const nextStep = steps[Math.min(steps.indexOf(g.status) + 1, steps.length - 1)];
   const hasNext = g.status !== 'entregue';
 
@@ -1677,7 +1690,7 @@ async function verGarantia(id) {
     g = data;
   }
 
-  const isAdmin = currentProfile.role === 'admin';
+  const isAdmin = ehStaff();
   const destMap = { rebanho:'Rebanho', fornecedor:'Fornecedor', conserto_local:'Conserto local', outro:'Outro' };
   const statusMap = { aberta:'🔵 Aberta', em_conserto:'🟡 Em conserto', pronta:'🟢 Pronta', entregue:'⚫ Entregue' };
 
@@ -1688,7 +1701,7 @@ async function verGarantia(id) {
     adminActions = `
       <button class="btn-secondary btn-sm" onclick="editarGarantia('${g.id}')">✏️ Editar</button>
       ${isAdmin ? `<button class="btn-secondary btn-sm" onclick="mudarStatus('${g.id}')">🔄 Status</button>` : ''}
-      ${isAdmin ? `<button class="btn-danger btn-sm" onclick="excluirGarantia('${g.id}')">🗑️ Excluir</button>` : ''}
+      ${ehGestor() ? `<button class="btn-danger btn-sm" onclick="excluirGarantia('${g.id}')">🗑️ Excluir</button>` : ''}
     `;
   }
 
@@ -1740,7 +1753,7 @@ async function editarGarantia(id) {
   document.getElementById('g-destino-det').value = g.destino_detalhe || '';
   document.getElementById('g-obs').value = g.observacoes || '';
   // Status e campo de processo do admin: revendedora nem ve o seletor.
-  const isAdmin = currentProfile.role === 'admin';
+  const isAdmin = ehStaff();
   document.getElementById('g-status-group').style.display = isAdmin ? 'block' : 'none';
   document.getElementById('g-status').value = g.status;
   if (g.foto_url) {
@@ -1779,7 +1792,7 @@ async function salvarGarantia(btn) {
     }
   }
 
-  const isAdmin = currentProfile.role === 'admin';
+  const isAdmin = ehStaff();
   const payload = {
     descricao_item: desc,
     nome_cliente: cliente,
@@ -1842,7 +1855,7 @@ async function atualizarStatusCard(id, novoStatus, event) {
 }
 
 async function excluirGarantia(id) {
-  if (currentProfile.role !== 'admin') { toast('Sem permissão'); return; }
+  if (!ehGestor()) { toast('Sem permissão'); return; }
   const g = allGarantias.find(x => x.id === id);
   const desc = g ? g.descricao_item : 'esta garantia';
   if (!confirm(`Excluir a garantia "${desc}"?\n\nEssa ação não pode ser desfeita.`)) return;
@@ -1862,7 +1875,7 @@ async function excluirGarantia(id) {
 // ═══════════════════════════════════════════════
 async function loadConsignados() {
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
-  const isAdmin = currentProfile.role === 'admin';
+  const isAdmin = ehStaff();
   let q = sb.from('consignados').select('*');
   if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
   const queries = [sbQ(q.order('created_at', { ascending: false }))];
@@ -1906,7 +1919,7 @@ function detectarCategoria(descricao) {
 
 function renderCicloGrid() {
   const div = document.getElementById('c-list');
-  const isAdmin = currentProfile.role === 'admin';
+  const isAdmin = ehStaff();
   const searchBar = document.getElementById('c-search-bar');
   // Revendedora: sempre. Admin: só dentro do detalhe de uma revendedora (na tela de cards usa o pop-up "Buscar peça").
   const mostrarBusca = allConsignados.length && (!isAdmin || cicloRevSelecionada);
@@ -2083,12 +2096,12 @@ function renderCicloAdminDetalhe(revId, list) {
   const nome = revNameMap[revId] || 'Revendedora desconhecida';
   const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
 
-  const acoes = temAtivos
+  const acoes = (temAtivos && ehGestor())
     ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
         <button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="finalizarCicloRev('${revId}')">✓ Finalizar catálogo</button>
         <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')">🗑️ Deletar catálogo</button>
       </div>`
-    : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem catálogo ativo</div>`;
+    : (temAtivos ? '' : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem catálogo ativo</div>`);
 
   const termo = (document.getElementById('c-search')?.value || '').toLowerCase().trim();
   let listaTabela = list;
@@ -2178,7 +2191,7 @@ function renderBuscaPeca() {
 }
 
 async function finalizarCicloRev(revId) {
-  if (currentProfile.role !== 'admin') { toast('Sem permissão'); return; }
+  if (!ehGestor()) { toast('Sem permissão'); return; }
   const nome = revNameMap[revId] || 'esta revendedora';
   const ativos = allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
   if (!ativos.length) { toast('Nenhum catálogo ativo para finalizar'); return; }
@@ -2197,7 +2210,7 @@ async function finalizarCicloRev(revId) {
 }
 
 async function deletarCicloRev(revId) {
-  if (currentProfile.role !== 'admin') { toast('Sem permissão'); return; }
+  if (!ehGestor()) { toast('Sem permissão'); return; }
   const nome = revNameMap[revId] || 'esta revendedora';
   const ativos = allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
   if (!ativos.length) { toast('Nenhum catálogo ativo para deletar'); return; }
@@ -2478,7 +2491,7 @@ function tokensNome(s) {
 }
 
 function openBlingSync() {
-  const isAdmin = currentProfile.role === 'admin';
+  const isAdmin = ehGestor();
   document.getElementById('bling-resultado').innerHTML = '';
   if (isAdmin) {
     const mes = new Date(); mes.setDate(1);
@@ -3491,6 +3504,7 @@ async function verRevendedora(id) {
       <div class="detail-row"><div class="detail-key">Cadastro</div><div class="detail-val">${formatDate(r.created_at.split('T')[0])}</div></div>
       <div class="detail-row"><div class="detail-key">Próx. troca</div><div class="detail-val" data-troca-bling-id="${r.bling_contato_id || ''}">Carregando...</div></div>
     </div>
+    ${ehGestor() ? `
     <div class="divider"></div>
     <div class="form-group">
       <label class="form-label">🔗 ID do contato no Bling</label>
@@ -3503,14 +3517,21 @@ async function verRevendedora(id) {
         <button class="btn-secondary btn-sm" style="white-space:nowrap;font-size:11px" data-rev-nome="${esc(r.nome || '')}" onclick="detectarBlingId('${r.id}', this.dataset.revNome)">🔍 Detectar pelo Bling</button>
       </div>
       <div id="bling-candidatos" style="margin-top:10px"></div>
-    </div>
+    </div>` : ''}
+    ${ehAdmin() ? `
+    <div class="divider"></div>
+    <div class="form-group">
+      <label class="form-label">Nível de acesso</label>
+      <select id="rev-role" class="form-control" onchange="definirPapel('${r.id}', this.value)">
+        ${Object.entries(ROLE_LABELS).map(([v,l]) => `<option value="${v}" ${r.role===v?'selected':''}>${l}</option>`).join('')}
+      </select>
+    </div>` : ''}
     <div class="detail-actions" id="rev-actions" style="margin-top:12px">
-      ${!r.aprovada
+      ${ehGestor() ? (!r.aprovada
         ? `<button class="btn-primary" onclick="aprovarRev('${r.id}')">✅ Aprovar acesso</button>`
-        : `<button class="btn-danger" onclick="revogarRev('${r.id}')">🚫 Revogar acesso</button>`
-      }
+        : `<button class="btn-danger" onclick="revogarRev('${r.id}')">🚫 Revogar acesso</button>`) : ''}
       <button class="btn-secondary" onclick="closeModal('modal-detalhe-rev')">Fechar</button>
-      <button class="btn-danger" data-rev-nome="${esc(r.nome || '')}" onclick="confirmarExclusaoRev('${r.id}', this)">🗑️ Excluir revendedora</button>
+      ${ehAdmin() ? `<button class="btn-danger" data-rev-nome="${esc(r.nome || '')}" onclick="confirmarExclusaoRev('${r.id}', this)">🗑️ Excluir revendedora</button>` : ''}
     </div>
   `;
   openModal('modal-detalhe-rev');
@@ -3518,6 +3539,7 @@ async function verRevendedora(id) {
 }
 
 async function aprovarRev(id) {
+  if (!ehGestor()) { toast('Sem permissão'); return; }
   let error;
   try {
     ({ error } = await sb.from('profiles').update({ aprovada: true }).eq('id', id));
@@ -3529,6 +3551,7 @@ async function aprovarRev(id) {
 }
 
 async function revogarRev(id) {
+  if (!ehGestor()) { toast('Sem permissão'); return; }
   let error;
   try {
     ({ error } = await sb.from('profiles').update({ aprovada: false }).eq('id', id));
@@ -3536,6 +3559,15 @@ async function revogarRev(id) {
   if (await handleSupabaseError(error, 'Erro ao revogar acesso')) return;
   toast('Acesso revogado');
   closeModal('modal-detalhe-rev');
+  loadAdmin();
+}
+
+async function definirPapel(id, novoPapel) {
+  if (!ehAdmin()) { toast('Sem permissão'); return; }
+  const { error } = await sbQ(sb.from('profiles').update({ role: novoPapel }).eq('id', id));
+  if (await handleSupabaseError(error, 'Erro ao definir papel')) return;
+  toast('Nível atualizado: ' + (ROLE_LABELS[novoPapel] || novoPapel));
+  blingRevs = []; aprovadasCache = [];
   loadAdmin();
 }
 
@@ -3556,6 +3588,7 @@ function confirmarExclusaoRev(id, btn) {
 }
 
 async function excluirRevendedora(id, btn) {
+  if (!ehAdmin()) { toast('Sem permissão'); return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Excluindo...'; }
   try {
     // Apaga os dados filhos antes do profile (nao depende de ON DELETE CASCADE).
