@@ -1139,6 +1139,24 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   </div>
 </div>
 
+<!-- MODAL COMPLEMENTO DE CADASTRO (1º acesso, ex.: via Google) -->
+<div class="modal-overlay" id="modal-complemento" data-lock-outside>
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Quase lá! 📱</div>
+    <p style="font-size:13px;color:var(--muted);margin:-4px 0 16px">Confirme seu WhatsApp para combinarmos as trocas da maleta.</p>
+    <div class="form-group">
+      <label class="form-label">WhatsApp *</label>
+      <input type="tel" id="comp-tel" class="form-control" placeholder="(00) 00000-0000" maxlength="16" inputmode="numeric" oninput="maskTelBR(this)">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Cidade / Estado</label>
+      <input type="text" id="comp-cidade" class="form-control" placeholder="Ex: Campinas/SP">
+    </div>
+    <button class="btn-primary" style="width:100%" onclick="salvarComplemento(this)">Salvar e continuar</button>
+  </div>
+</div>
+
 <!-- PWA install UI -->
 <button id="install-btn" type="button" aria-label="Instalar app">
   <span style="font-size:16px">📲</span><span>Instalar app</span>
@@ -1333,6 +1351,40 @@ async function loadUser(user) {
 
   showPanel('dashboard');
   loadDashboard();
+
+  // Primeiro acesso (tipicamente via Google) sem telefone: pede o complemento.
+  // O telefone e essencial para o WhatsApp das trocas. Admin nao precisa.
+  if (profile.role !== 'admin' && !(profile.telefone && profile.telefone.trim())) {
+    abrirComplementoCadastro();
+  }
+}
+
+function maskTelBR(el) {
+  const v = el.value.replace(/\D/g, '').slice(0, 11);
+  if (v.length > 6)      el.value = `(${v.slice(0,2)}) ${v.slice(2,7)}-${v.slice(7)}`;
+  else if (v.length > 2) el.value = `(${v.slice(0,2)}) ${v.slice(2)}`;
+  else if (v.length > 0) el.value = `(${v}`;
+  else                   el.value = '';
+}
+
+function abrirComplementoCadastro() {
+  document.getElementById('comp-tel').value = currentProfile.telefone || '';
+  document.getElementById('comp-cidade').value = currentProfile.cidade || '';
+  openModal('modal-complemento');
+}
+
+async function salvarComplemento(btn) {
+  const tel = document.getElementById('comp-tel').value.trim();
+  const cidade = document.getElementById('comp-cidade').value.trim();
+  if (tel.replace(/\D/g, '').length < 10) { toast('Informe um WhatsApp válido com DDD'); return; }
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  const { error } = await sbQ(sb.from('profiles').update({ telefone: tel, cidade: cidade || null }).eq('id', currentUser.id));
+  btn.disabled = false; btn.textContent = 'Salvar e continuar';
+  if (await handleSupabaseError(error, 'Erro ao salvar')) return;
+  currentProfile.telefone = tel;
+  currentProfile.cidade = cidade || null;
+  closeModal('modal-complemento');
+  toast('Tudo certo! 💖');
 }
 
 function showSplash() {
