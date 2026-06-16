@@ -3649,30 +3649,50 @@ async function atualizarMaleta(revId, btn) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
   const blingId = ((btn && btn.dataset.blingId) || '').trim();
   const nome = (btn && btn.dataset.revNome) || 'revendedora';
-  if (!blingId) { toast('Revendedora sem vínculo Bling — vincule o ID do contato primeiro.'); return; }
 
   openModal('modal-maleta');
   const cont = document.getElementById('maleta-content');
   cont.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Buscando pedidos no Bling...</div>';
 
+  // Pedido(s) já vinculados à maleta (carimbados na importação/sync). É a forma
+  // confiável de achar o pedido: o Bling não retorna o vendedor, e o "contato"
+  // do pedido pode ser o CLIENTE (não a revendedora).
+  const { data: rows } = await sbQ(sb.from('consignados').select('pedido_numero').eq('revendedora_id', revId));
+  const pedidoNums = [...new Set((rows || []).map(r => (r.pedido_numero || '').toString().trim()).filter(Boolean))];
+
   const hoje = new Date().toISOString().split('T')[0];
-  const inicio = new Date(); inicio.setMonth(inicio.getMonth() - 6);
+  const inicio = new Date(); inicio.setMonth(inicio.getMonth() - 12);
   const todos = await fetchTodosBling(inicio.toISOString().split('T')[0], hoje);
   if (!todos) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao conectar com o Bling. Tente de novo.</p></div>'; return; }
 
-  const abertos = todos.filter(p => String(p.contato?.id) === String(blingId) && p.situacao?.id === SITUACAO_ABERTO);
-  if (!abertos.length) {
-    cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div><p>Nenhum pedido em aberto encontrado no Bling para <strong>${esc(nome)}</strong>.</p></div>`;
+  let candidatos;
+  if (pedidoNums.length) {
+    // Casa pelo NÚMERO do pedido vinculado (independe de contato/vendedor).
+    candidatos = todos.filter(p => pedidoNums.includes(String(p.numero)));
+  } else if (blingId) {
+    // Sem vínculo ainda: tenta achar pedido EM ABERTO pelo contato.
+    candidatos = todos.filter(p => String(p.contato?.id) === String(blingId) && p.situacao?.id === SITUACAO_ABERTO);
+  } else {
+    candidatos = [];
+  }
+
+  if (!candidatos.length) {
+    const dica = pedidoNums.length
+      ? `Pedido(s) vinculado(s): ${pedidoNums.map(n => '#' + n).join(', ')} — não retornaram na busca (mais de 12 meses atrás?).`
+      : 'Importe a relação uma vez (📥 Baixar Relação de Peças) para vincular o pedido, ou confira o ID do contato Bling.';
+    cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div>
+      <p>Nenhum pedido encontrado no Bling para <strong>${esc(nome)}</strong>.</p>
+      <p style="font-size:12px;color:var(--muted);margin-top:6px">${dica}</p></div>`;
     return;
   }
 
-  if (abertos.length === 1) { previewMaleta(revId, nome, abertos[0]); return; }
+  if (candidatos.length === 1) { previewMaleta(revId, nome, candidatos[0]); return; }
 
-  // Mais de um pedido aberto: o admin escolhe (não assume nada).
+  // Mais de um pedido: o admin escolhe (não assume nada).
   maletaCtx = { revId, nome, pedidos: {} };
-  abertos.forEach(p => { maletaCtx.pedidos[p.id] = p; });
-  cont.innerHTML = `<p style="font-size:13px;color:var(--muted);margin-bottom:10px"><strong>${esc(nome)}</strong> tem ${abertos.length} pedidos em aberto. Escolha qual maleta atualizar:</p>` +
-    abertos.map(p => `<button class="btn-secondary" style="width:100%;text-align:left;margin-bottom:8px" onclick="previewMaletaPorId('${p.id}')">Pedido #${p.numero} — ${formatDate(p.data)}</button>`).join('');
+  candidatos.forEach(p => { maletaCtx.pedidos[p.id] = p; });
+  cont.innerHTML = `<p style="font-size:13px;color:var(--muted);margin-bottom:10px"><strong>${esc(nome)}</strong> tem ${candidatos.length} pedidos vinculados. Escolha qual atualizar:</p>` +
+    candidatos.map(p => `<button class="btn-secondary" style="width:100%;text-align:left;margin-bottom:8px" onclick="previewMaletaPorId('${p.id}')">Pedido #${p.numero} — ${formatDate(p.data)}${p.situacao?.id === SITUACAO_ABERTO ? '' : ' (atendido)'}</button>`).join('');
 }
 
 function previewMaletaPorId(pedidoId) {
