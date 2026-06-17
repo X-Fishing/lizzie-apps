@@ -613,6 +613,36 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   .content { padding: 28px 24px 100px; }
   .stats-grid { grid-template-columns: repeat(4, 1fr); }
 }
+
+/* Tag "Em breve" para seções ainda não construídas */
+.badge-soon { display: inline-block; font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+  text-transform: uppercase; color: var(--gold); background: rgba(212,168,75,0.12);
+  border: 1px solid rgba(212,168,75,0.4); border-radius: 10px; padding: 2px 8px; margin-left: 8px;
+  vertical-align: middle; }
+
+/* DASHBOARD PC (staff em tela larga): nav inferior vira barra lateral. So aplica
+   com a classe .staff-desktop (setada no loadUser para staff) E >=900px. Sem a
+   classe / em telas estreitas, tudo no-op -> mobile e revendedora intactos. */
+@media (min-width: 900px) {
+  /* .nav vira fixed (fora do fluxo); #app continua coluna (topbar sobre content),
+     e topbar/content são empurrados pra direita da barra lateral via margin-left. */
+  #app.staff-desktop .nav {
+    position: fixed; top: 0; left: 0; bottom: 0; right: auto;
+    flex-direction: column; width: 220px; border-top: none;
+    border-right: 1px solid var(--border); box-shadow: 2px 0 16px rgba(0,0,0,0.05);
+    justify-content: flex-start; padding: 12px 8px; gap: 2px; overflow-y: auto;
+  }
+  #app.staff-desktop .nav-item {
+    flex: none; flex-direction: row; justify-content: flex-start; gap: 12px;
+    font-size: 13px; text-transform: none; letter-spacing: 0; padding: 12px 16px;
+    border-radius: 10px;
+  }
+  #app.staff-desktop .nav-item.active { background: rgba(201,116,138,0.10); }
+  #app.staff-desktop .nav-item .nav-icon { font-size: 18px; margin-bottom: 0; }
+  #app.staff-desktop .topbar { margin-left: 220px; }
+  #app.staff-desktop .content { max-width: 1200px; margin-left: 240px; padding: 28px 32px 40px; }
+  #app.staff-desktop .nav-item.staff-desk { display: flex; }   /* mostra os 5 novos só aqui */
+}
 </style>
 </head>
 <body>
@@ -829,6 +859,13 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <div id="rev-list"></div>
     </div>
 
+    <!-- DASHBOARD PC (staff) — seções futuras -->
+    <div id="panel-financeiro" style="display:none"></div>
+    <div id="panel-calculadora" style="display:none"></div>
+    <div id="panel-clientes" style="display:none"></div>
+    <div id="panel-garantias-staff" style="display:none"></div>
+    <div id="panel-marketing" style="display:none"></div>
+
   </div><!-- /content -->
 
   <!-- BOTTOM NAV -->
@@ -853,6 +890,21 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     </button>
     <button class="nav-item" id="nav-admin" onclick="showPanel('admin')" style="display:none">
       <span class="nav-icon">👑</span>Revendedoras
+    </button>
+    <button class="nav-item staff-desk" id="nav-financeiro" onclick="showPanel('financeiro')" style="display:none">
+      <span class="nav-icon">💰</span>Financeiro<span class="badge-soon">Em breve</span>
+    </button>
+    <button class="nav-item staff-desk" id="nav-calculadora" onclick="showPanel('calculadora')" style="display:none">
+      <span class="nav-icon">🧮</span>Calculadora<span class="badge-soon">Em breve</span>
+    </button>
+    <button class="nav-item staff-desk" id="nav-clientes" onclick="showPanel('clientes')" style="display:none">
+      <span class="nav-icon">👥</span>Clientes<span class="badge-soon">Em breve</span>
+    </button>
+    <button class="nav-item staff-desk" id="nav-garantias-staff" onclick="showPanel('garantias-staff')" style="display:none">
+      <span class="nav-icon">🛡️</span>Garantias<span class="badge-soon">Em breve</span>
+    </button>
+    <button class="nav-item staff-desk" id="nav-marketing" onclick="showPanel('marketing')" style="display:none">
+      <span class="nav-icon">📣</span>Marketing<span class="badge-soon">Em breve</span>
     </button>
   </nav>
 </div>
@@ -1377,6 +1429,8 @@ async function loadUser(user) {
   document.getElementById('nav-trocas').style.display = ehStaff() ? 'flex' : 'none';
   document.getElementById('nav-pagamentos').style.display = ehRevendedora ? 'flex' : 'none';
   document.getElementById('nav-historico').style.display = ehRevendedora ? 'flex' : 'none';
+  // Dashboard PC (barra lateral) só para staff; o CSS faz o resto em telas >=900px.
+  document.getElementById('app').classList.toggle('staff-desktop', ehStaff());
 
   showPanel('dashboard');
   loadDashboard();
@@ -1544,11 +1598,13 @@ function showMsg(el, text, type) {
 // ═══════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════
+const PANEIS_STAFF = ['financeiro','calculadora','clientes','garantias-staff','marketing'];
+
 function showPanel(name) {
-  // Tela de trocas é só de admin
   if (name === 'trocas' && !ehStaff()) name = 'dashboard';
   if (name === 'admin' && !ehGestor()) name = 'dashboard';
-  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin'].forEach(p => {
+  if (PANEIS_STAFF.includes(name) && !ehStaff()) name = 'dashboard';
+  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin', ...PANEIS_STAFF].forEach(p => {
     document.getElementById('panel-' + p).style.display = p === name ? 'block' : 'none';
     const nav = document.getElementById('nav-' + p);
     if (nav) nav.classList.toggle('active', p === name);
@@ -1560,6 +1616,37 @@ function showPanel(name) {
   if (name === 'historico') loadHistorico();
   if (name === 'trocas') loadTrocasDashboard();
   if (name === 'admin') loadAdmin();
+  if (name === 'financeiro') loadFinanceiro();
+  if (name === 'calculadora') loadCalculadora();
+  if (name === 'clientes') loadClientes();
+  if (name === 'garantias-staff') loadGarantiasStaff();
+  if (name === 'marketing') loadMarketing();
+}
+
+// ── Seções do dashboard PC (stubs "Em breve" — implementadas por etapa) ──
+function emBreveHtml(titulo, descricao, icone) {
+  return `<div class="section-header"><div><div class="section-title">${titulo} <span class="badge-soon">Em breve</span></div></div></div>
+    <div class="empty-state"><div class="empty-icon">${icone}</div><p>${descricao}</p></div>`;
+}
+function loadFinanceiro() {
+  document.getElementById('panel-financeiro').innerHTML = emBreveHtml('Financeiro',
+    'Compras, pagamentos e lançamentos de estoque vão ficar aqui.', '💰');
+}
+function loadCalculadora() {
+  document.getElementById('panel-calculadora').innerHTML = emBreveHtml('Calculadora de custo',
+    'Cálculo de custo das peças, leitura de foto por IA e envio ao Bling — em construção.', '🧮');
+}
+function loadClientes() {
+  document.getElementById('panel-clientes').innerHTML = emBreveHtml('Clientes finais',
+    'Base de clientes (aniversários, garantias e contato) — em construção.', '👥');
+}
+function loadGarantiasStaff() {
+  document.getElementById('panel-garantias-staff').innerHTML = emBreveHtml('Garantias — visão geral',
+    'Painel visual: status, prazos, alertas de atraso e ranking de B.O. — em construção.', '🛡️');
+}
+function loadMarketing() {
+  document.getElementById('panel-marketing').innerHTML = emBreveHtml('Marketing',
+    'Aniversários de revendedoras e clientes, bônus e disparos por WhatsApp — em construção.', '📣');
 }
 
 // ═══════════════════════════════════════════════
