@@ -3756,15 +3756,25 @@ async function atualizarMaleta(revId, btn) {
   const todos = await fetchTodosBling(inicio.toISOString().split('T')[0], hoje);
   if (!todos) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao conectar com o Bling. Tente de novo.</p></div>'; return; }
 
-  let candidatos;
+  let candidatos = [];
   if (pedidoNums.length) {
     // Casa pelo NÚMERO do pedido vinculado (independe de contato/vendedor).
     candidatos = todos.filter(p => pedidoNums.includes(String(p.numero)));
-  } else if (blingId) {
-    // Sem vínculo ainda: tenta achar pedido EM ABERTO pelo contato.
-    candidatos = todos.filter(p => String(p.contato?.id) === String(blingId) && p.situacao?.id === SITUACAO_ABERTO);
-  } else {
-    candidatos = [];
+  }
+  if (!candidatos.length) {
+    // Sem pedido vinculado: procura entre os pedidos EM ABERTO, primeiro pelo ID
+    // de contato e, se não casar, pelo NOME (igual ao "Baixar Relação") — cobre
+    // bling_contato_id vazio/divergente e nomes parciais (ex.: "Pamela Rodrigues"
+    // x contato "Pamela Rodrigues Oliveira").
+    const abertos = todos.filter(p => p.situacao?.id === SITUACAO_ABERTO);
+    candidatos = blingId ? abertos.filter(p => String(p.contato?.id) === String(blingId)) : [];
+    if (!candidatos.length && nome) {
+      const alvo = normalizarNome(nome);
+      candidatos = abertos.filter(p => {
+        const cn = normalizarNome(p.contato?.nome);
+        return cn && (cn === alvo || cn.includes(alvo) || alvo.includes(cn));
+      });
+    }
   }
 
   if (!candidatos.length) {
