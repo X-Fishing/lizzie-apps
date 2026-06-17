@@ -620,6 +620,10 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   border: 1px solid rgba(212,168,75,0.4); border-radius: 10px; padding: 2px 8px; margin-left: 8px;
   vertical-align: middle; }
 
+/* Itens novos do dashboard PC: escondidos por padrão (mobile/estreito) via CSS —
+   NÃO usar style inline, senão a regra do @media não consegue mostrá-los. */
+.nav-item.staff-desk { display: none; }
+
 /* DASHBOARD PC (staff em tela larga): nav inferior vira barra lateral. So aplica
    com a classe .staff-desktop (setada no loadUser para staff) E >=900px. Sem a
    classe / em telas estreitas, tudo no-op -> mobile e revendedora intactos. */
@@ -891,19 +895,19 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     <button class="nav-item" id="nav-admin" onclick="showPanel('admin')" style="display:none">
       <span class="nav-icon">👑</span>Revendedoras
     </button>
-    <button class="nav-item staff-desk" id="nav-financeiro" onclick="showPanel('financeiro')" style="display:none">
+    <button class="nav-item staff-desk" id="nav-financeiro" onclick="showPanel('financeiro')">
       <span class="nav-icon">💰</span>Financeiro<span class="badge-soon">Em breve</span>
     </button>
-    <button class="nav-item staff-desk" id="nav-calculadora" onclick="showPanel('calculadora')" style="display:none">
+    <button class="nav-item staff-desk" id="nav-calculadora" onclick="showPanel('calculadora')">
       <span class="nav-icon">🧮</span>Calculadora<span class="badge-soon">Em breve</span>
     </button>
-    <button class="nav-item staff-desk" id="nav-clientes" onclick="showPanel('clientes')" style="display:none">
+    <button class="nav-item staff-desk" id="nav-clientes" onclick="showPanel('clientes')">
       <span class="nav-icon">👥</span>Clientes<span class="badge-soon">Em breve</span>
     </button>
-    <button class="nav-item staff-desk" id="nav-garantias-staff" onclick="showPanel('garantias-staff')" style="display:none">
+    <button class="nav-item staff-desk" id="nav-garantias-staff" onclick="showPanel('garantias-staff')">
       <span class="nav-icon">🛡️</span>Garantias<span class="badge-soon">Em breve</span>
     </button>
-    <button class="nav-item staff-desk" id="nav-marketing" onclick="showPanel('marketing')" style="display:none">
+    <button class="nav-item staff-desk" id="nav-marketing" onclick="showPanel('marketing')">
       <span class="nav-icon">📣</span>Marketing<span class="badge-soon">Em breve</span>
     </button>
   </nav>
