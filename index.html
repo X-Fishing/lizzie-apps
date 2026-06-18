@@ -620,33 +620,59 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   border: 1px solid rgba(212,168,75,0.4); border-radius: 10px; padding: 2px 8px; margin-left: 8px;
   vertical-align: middle; }
 
-/* Itens novos do dashboard PC: escondidos por padrão (mobile/estreito) via CSS —
-   NÃO usar style inline, senão a regra do @media não consegue mostrá-los. */
-.nav-item.staff-desk { display: none; }
-
-/* DASHBOARD PC (staff em tela larga): nav inferior vira barra lateral. So aplica
-   com a classe .staff-desktop (setada no loadUser para staff) E >=900px. Sem a
-   classe / em telas estreitas, tudo no-op -> mobile e revendedora intactos. */
+/* ── DASHBOARD PC (staff, tela larga): barra lateral dedicada estilo Bling/Zenply.
+   Só aparece com .staff-desktop (setada no loadUser p/ staff) E >=900px. Sem isso,
+   tudo no-op -> mobile e revendedora 100% intactos (continuam na nav inferior). */
+.staff-nav { display: none; }
 @media (min-width: 900px) {
-  /* .nav vira fixed (fora do fluxo); #app continua coluna (topbar sobre content),
-     e topbar/content são empurrados pra direita da barra lateral via margin-left. */
-  #app.staff-desktop .nav {
-    position: fixed; top: 0; left: 0; bottom: 0; right: auto;
-    flex-direction: column; width: 220px; border-top: none;
-    border-right: 1px solid var(--border); box-shadow: 2px 0 16px rgba(0,0,0,0.05);
-    justify-content: flex-start; padding: 12px 8px; gap: 2px; overflow-y: auto;
+  #app.staff-desktop .nav { display: none; }                 /* esconde a nav inferior */
+  #app.staff-desktop .staff-nav {
+    display: flex; flex-direction: column; gap: 1px;
+    position: fixed; top: 0; left: 0; bottom: 0; width: 232px; z-index: 100;
+    background: #fff; border-right: 1px solid var(--border);
+    box-shadow: 2px 0 16px rgba(0,0,0,0.05); padding: 14px 10px; overflow-y: auto;
   }
-  #app.staff-desktop .nav-item {
-    flex: none; flex-direction: row; justify-content: flex-start; gap: 12px;
-    font-size: 13px; text-transform: none; letter-spacing: 0; padding: 12px 16px;
-    border-radius: 10px;
-  }
-  #app.staff-desktop .nav-item.active { background: rgba(201,116,138,0.10); }
-  #app.staff-desktop .nav-item .nav-icon { font-size: 18px; margin-bottom: 0; }
-  #app.staff-desktop .topbar { margin-left: 220px; }
-  #app.staff-desktop .content { max-width: 1200px; margin-left: 240px; padding: 28px 32px 40px; }
-  #app.staff-desktop .nav-item.staff-desk { display: flex; }   /* mostra os 5 novos só aqui */
+  #app.staff-desktop .topbar { margin-left: 232px; }
+  #app.staff-desktop .content { max-width: 1280px; margin-left: 252px; padding: 26px 32px 48px; }
 }
+.snav-brand { font-family:'Cormorant Garamond',serif; font-size:20px; letter-spacing:3px;
+  color: var(--plum); text-transform: uppercase; padding: 4px 12px 14px; }
+.snav-item { display:flex; align-items:center; gap:11px; padding:10px 14px; border-radius:10px;
+  border:none; background:none; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:13px;
+  color: var(--text); text-align:left; width:100%; transition: background .15s; }
+.snav-item:hover { background: rgba(0,0,0,0.035); }
+.snav-item.active { background: rgba(201,116,138,0.12); color: var(--rose); font-weight:600; }
+.snav-ic { font-size:17px; width:22px; text-align:center; flex:none; }
+.snav-group-label { display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none;
+  font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted);
+  padding:16px 14px 6px; }
+.snav-group-label .snav-caret { transition: transform .2s; font-size:9px; }
+.snav-group.collapsed .snav-caret { transform: rotate(-90deg); }
+.snav-group.collapsed .snav-sub { display:none; }
+.snav-sub .snav-item { font-size:12.5px; padding:9px 14px 9px 22px; }
+
+/* ── Cards do dashboard PC (estilo Zenply) ── */
+.dash-grid { display:grid; grid-template-columns: 1fr; gap:16px; }
+@media (min-width:900px){ #app.staff-desktop .dash-grid { grid-template-columns: 2fr 2fr 1.4fr; } }
+.dash-card { background:#fff; border:1px solid var(--border); border-radius:16px; padding:18px 20px;
+  box-shadow:0 2px 12px rgba(0,0,0,0.04); }
+.dash-card h3 { font-size:14px; color:var(--plum); margin:0 0 2px; font-weight:600; }
+.dash-card .dash-sub { font-size:11px; color:var(--muted); margin-bottom:14px; }
+.dash-kpi { font-family:'Cormorant Garamond',serif; font-size:30px; color:var(--rose); line-height:1.1; }
+.dash-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0;
+  border-bottom:1px solid var(--border); font-size:13px; }
+.dash-row:last-child { border-bottom:none; }
+.dash-bars { display:flex; align-items:flex-end; gap:10px; height:130px; padding-top:10px; }
+.dash-bar-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; height:100%;
+  justify-content:flex-end; }
+.dash-bar { width:60%; max-width:34px; background:linear-gradient(180deg,var(--rose),#b5526a);
+  border-radius:6px 6px 0 0; min-height:2px; }
+.dash-bar-lbl { font-size:10px; color:var(--muted); text-transform:uppercase; }
+.dash-donut { width:120px; height:120px; border-radius:50%; margin:6px auto 10px;
+  display:flex; align-items:center; justify-content:center; }
+.dash-donut span { background:#fff; width:84px; height:84px; border-radius:50%; display:flex;
+  align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif;
+  font-size:22px; color:var(--plum); }
 </style>
 </head>
 <body>
@@ -867,8 +893,10 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     <div id="panel-financeiro" style="display:none"></div>
     <div id="panel-calculadora" style="display:none"></div>
     <div id="panel-clientes" style="display:none"></div>
-    <div id="panel-garantias-staff" style="display:none"></div>
     <div id="panel-marketing" style="display:none"></div>
+    <div id="panel-funcionarios" style="display:none"></div>
+    <div id="panel-formas-pagamento" style="display:none"></div>
+    <div id="panel-categorias-financeiras" style="display:none"></div>
 
   </div><!-- /content -->
 
@@ -895,22 +923,29 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     <button class="nav-item" id="nav-admin" onclick="showPanel('admin')" style="display:none">
       <span class="nav-icon">👑</span>Revendedoras
     </button>
-    <button class="nav-item staff-desk" id="nav-financeiro" onclick="showPanel('financeiro')">
-      <span class="nav-icon">💰</span>Financeiro<span class="badge-soon">Em breve</span>
-    </button>
-    <button class="nav-item staff-desk" id="nav-calculadora" onclick="showPanel('calculadora')">
-      <span class="nav-icon">🧮</span>Calculadora<span class="badge-soon">Em breve</span>
-    </button>
-    <button class="nav-item staff-desk" id="nav-clientes" onclick="showPanel('clientes')">
-      <span class="nav-icon">👥</span>Clientes<span class="badge-soon">Em breve</span>
-    </button>
-    <button class="nav-item staff-desk" id="nav-garantias-staff" onclick="showPanel('garantias-staff')">
-      <span class="nav-icon">🛡️</span>Garantias<span class="badge-soon">Em breve</span>
-    </button>
-    <button class="nav-item staff-desk" id="nav-marketing" onclick="showPanel('marketing')">
-      <span class="nav-icon">📣</span>Marketing<span class="badge-soon">Em breve</span>
-    </button>
   </nav>
+
+  <!-- BARRA LATERAL (dashboard PC / staff em tela larga) -->
+  <aside class="staff-nav">
+    <div class="snav-brand">Lizzie</div>
+    <button class="snav-item" data-panel="dashboard" onclick="showPanel('dashboard')"><span class="snav-ic">📊</span>Dashboard</button>
+    <button class="snav-item" data-panel="consignados" onclick="showPanel('consignados')"><span class="snav-ic">💍</span>Catálogo</button>
+    <button class="snav-item" data-panel="trocas" onclick="showPanel('trocas')"><span class="snav-ic">🛍️</span>Trocas</button>
+    <button class="snav-item" data-panel="financeiro" onclick="showPanel('financeiro')"><span class="snav-ic">💰</span>Financeiro<span class="badge-soon">Em breve</span></button>
+    <button class="snav-item" data-panel="calculadora" onclick="showPanel('calculadora')"><span class="snav-ic">🧮</span>Calculadora<span class="badge-soon">Em breve</span></button>
+    <button class="snav-item" data-panel="marketing" onclick="showPanel('marketing')"><span class="snav-ic">📣</span>Marketing<span class="badge-soon">Em breve</span></button>
+    <div class="snav-group" id="snav-cadastros">
+      <div class="snav-group-label" onclick="toggleCadastros()"><span class="snav-caret">▼</span>Cadastros</div>
+      <div class="snav-sub">
+        <button class="snav-item" data-panel="clientes" onclick="showPanel('clientes')"><span class="snav-ic">👥</span>Clientes<span class="badge-soon">Em breve</span></button>
+        <button class="snav-item" data-panel="admin" onclick="showPanel('admin')"><span class="snav-ic">👑</span>Revendedoras</button>
+        <button class="snav-item" data-panel="garantias" onclick="showPanel('garantias')"><span class="snav-ic">🛡️</span>Garantias</button>
+        <button class="snav-item" data-panel="funcionarios" onclick="showPanel('funcionarios')"><span class="snav-ic">🧑‍💼</span>Funcionários<span class="badge-soon">Em breve</span></button>
+        <button class="snav-item" data-panel="formas-pagamento" onclick="showPanel('formas-pagamento')"><span class="snav-ic">💳</span>Formas de Pagamento<span class="badge-soon">Em breve</span></button>
+        <button class="snav-item" data-panel="categorias-financeiras" onclick="showPanel('categorias-financeiras')"><span class="snav-ic">🏷️</span>Categorias Financeiras<span class="badge-soon">Em breve</span></button>
+      </div>
+    </div>
+  </aside>
 </div>
 
 <!-- MODAL NOVA GARANTIA -->
@@ -1436,8 +1471,7 @@ async function loadUser(user) {
   // Dashboard PC (barra lateral) só para staff; o CSS faz o resto em telas >=900px.
   document.getElementById('app').classList.toggle('staff-desktop', ehStaff());
 
-  showPanel('dashboard');
-  loadDashboard();
+  showPanel('dashboard');   // já dispara loadDashboard()
 
   // Primeiro acesso de revendedora sem telefone: pede o WhatsApp (trocas).
   if (ehRevendedora && !(profile.telefone && profile.telefone.trim())) {
@@ -1602,7 +1636,7 @@ function showMsg(el, text, type) {
 // ═══════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════
-const PANEIS_STAFF = ['financeiro','calculadora','clientes','garantias-staff','marketing'];
+const PANEIS_STAFF = ['financeiro','calculadora','clientes','marketing','funcionarios','formas-pagamento','categorias-financeiras'];
 
 function showPanel(name) {
   if (name === 'trocas' && !ehStaff()) name = 'dashboard';
@@ -1613,7 +1647,11 @@ function showPanel(name) {
     const nav = document.getElementById('nav-' + p);
     if (nav) nav.classList.toggle('active', p === name);
   });
+  // Sincroniza o estado ativo na barra lateral do dashboard PC.
+  document.querySelectorAll('.staff-nav [data-panel]').forEach(b =>
+    b.classList.toggle('active', b.dataset.panel === name));
 
+  if (name === 'dashboard') loadDashboard();
   if (name === 'garantias') loadGarantias();
   if (name === 'consignados') loadConsignados();
   if (name === 'pagamentos') loadVendas();
@@ -1623,8 +1661,14 @@ function showPanel(name) {
   if (name === 'financeiro') loadFinanceiro();
   if (name === 'calculadora') loadCalculadora();
   if (name === 'clientes') loadClientes();
-  if (name === 'garantias-staff') loadGarantiasStaff();
   if (name === 'marketing') loadMarketing();
+  if (name === 'funcionarios') loadFuncionarios();
+  if (name === 'formas-pagamento') loadFormasPagamento();
+  if (name === 'categorias-financeiras') loadCategoriasFinanceiras();
+}
+
+function toggleCadastros() {
+  document.getElementById('snav-cadastros').classList.toggle('collapsed');
 }
 
 // ── Seções do dashboard PC (stubs "Em breve" — implementadas por etapa) ──
@@ -1644,19 +1688,28 @@ function loadClientes() {
   document.getElementById('panel-clientes').innerHTML = emBreveHtml('Clientes finais',
     'Base de clientes (aniversários, garantias e contato) — em construção.', '👥');
 }
-function loadGarantiasStaff() {
-  document.getElementById('panel-garantias-staff').innerHTML = emBreveHtml('Garantias — visão geral',
-    'Painel visual: status, prazos, alertas de atraso e ranking de B.O. — em construção.', '🛡️');
-}
 function loadMarketing() {
   document.getElementById('panel-marketing').innerHTML = emBreveHtml('Marketing',
     'Aniversários de revendedoras e clientes, bônus e disparos por WhatsApp — em construção.', '📣');
+}
+function loadFuncionarios() {
+  document.getElementById('panel-funcionarios').innerHTML = emBreveHtml('Funcionários',
+    'Cadastro de funcionários e níveis de acesso — em construção.', '🧑‍💼');
+}
+function loadFormasPagamento() {
+  document.getElementById('panel-formas-pagamento').innerHTML = emBreveHtml('Formas de Pagamento',
+    'Cadastro das formas de pagamento aceitas — em construção.', '💳');
+}
+function loadCategoriasFinanceiras() {
+  document.getElementById('panel-categorias-financeiras').innerHTML = emBreveHtml('Categorias Financeiras',
+    'Cadastro de categorias de Despesas e Recebimentos — em construção.', '🏷️');
 }
 
 // ═══════════════════════════════════════════════
 // DASHBOARD
 // ═══════════════════════════════════════════════
 async function loadDashboard() {
+  if (ehStaff()) return loadDashboardStaff();   // dashboard PC (vendas/operação)
   const isAdmin = ehStaff();
   // Sem .limit(): os contadores (abertas/conserto/prontas/vencendo) precisam
   // de TODAS as garantias. Seleciona so os campos usados nos cards/contadores.
@@ -1698,6 +1751,110 @@ async function loadDashboard() {
   const recentDiv = document.getElementById('dash-recentes');
   if (!recentes.length) { recentDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Nenhuma garantia ainda</p></div>'; return; }
   recentDiv.innerHTML = recentes.map(g => renderGarantiaCard(g)).join('');
+}
+
+// Dashboard PC (staff) estilo Zenply — vendas/operação. Cards de despesa/DRE
+// ficam "Em breve" até o módulo Financeiro existir.
+async function loadDashboardStaff() {
+  const panel = document.getElementById('panel-dashboard');
+  panel.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando dashboard...</div>';
+
+  const [vRes, gRes, pRes] = await Promise.all([
+    fetchPaginado(() => sb.from('vendas').select('valor_total,valor_pago,status,data_venda,revendedora_id')),
+    sbQ(sb.from('garantias').select('status,prazo_maximo')),
+    sbQ(sb.from('profiles').select('id,nome,aprovada').eq('role', 'revendedora'))
+  ]);
+  const vendas = vRes.data || [], garantias = gRes.data || [], revs = pRes.data || [];
+  const nomeDe = {}; revs.forEach(r => { nomeDe[r.id] = r.nome; });
+
+  const num = v => Number(v) || 0;
+  const ym = d => (d || '').slice(0, 7);
+  const agora = new Date();
+  const ymAtual = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, '0')}`;
+  const dAnt = new Date(agora.getFullYear(), agora.getMonth() - 1, 1);
+  const ymAnt = `${dAnt.getFullYear()}-${String(dAnt.getMonth() + 1).padStart(2, '0')}`;
+
+  let vendidoMes = 0, recebidoMes = 0, vendidoAnt = 0, aReceber = 0;
+  vendas.forEach(v => {
+    const m = ym(v.data_venda);
+    if (m === ymAtual) { vendidoMes += num(v.valor_total); recebidoMes += num(v.valor_pago); }
+    if (m === ymAnt) vendidoAnt += num(v.valor_total);
+    aReceber += Math.max(0, num(v.valor_total) - num(v.valor_pago));
+  });
+  const variacao = vendidoAnt > 0 ? ((vendidoMes - vendidoAnt) / vendidoAnt * 100) : (vendidoMes > 0 ? 100 : 0);
+
+  const MES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
+  const meses = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(agora.getFullYear(), agora.getMonth() - i, 1);
+    meses.push({ ym: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`, lbl: MES[d.getMonth()], total: 0 });
+  }
+  vendas.forEach(v => { const mm = meses.find(x => x.ym === ym(v.data_venda)); if (mm) mm.total += num(v.valor_total); });
+  const maxMes = Math.max(1, ...meses.map(m => m.total));
+
+  const porRev = {};
+  vendas.forEach(v => { porRev[v.revendedora_id] = (porRev[v.revendedora_id] || 0) + num(v.valor_total); });
+  const ranking = Object.entries(porRev).map(([id, tot]) => ({ nome: nomeDe[id] || '—', tot }))
+    .sort((a, b) => b.tot - a.tot).slice(0, 5);
+
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const diasPrazo = g => Math.ceil((new Date(g.prazo_maximo + 'T00:00:00') - hoje) / 86400000);
+  const gAbertas = garantias.filter(g => g.status === 'aberta').length;
+  const gConserto = garantias.filter(g => g.status === 'em_conserto').length;
+  const gVencendo = garantias.filter(g => g.status !== 'entregue' && diasPrazo(g) <= 7 && diasPrazo(g) >= 0).length;
+  const gAtraso = garantias.filter(g => g.status !== 'entregue' && diasPrazo(g) < 0).length;
+
+  const revsAtivas = revs.filter(r => r.aprovada).length;
+  const mesLabel = agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
+  const pct = vendidoMes > 0 ? Math.round(recebidoMes / vendidoMes * 100) : 0;
+
+  panel.innerHTML = `
+    <div class="section-header"><div>
+      <div class="section-title">Dashboard</div>
+      <div class="section-subtitle">${mesLabel} · ${revsAtivas} revendedora${revsAtivas !== 1 ? 's' : ''} ativa${revsAtivas !== 1 ? 's' : ''}</div>
+    </div></div>
+    <div class="dash-grid">
+      <div class="dash-card">
+        <h3>Vendas do mês</h3><div class="dash-sub">Realizado em ${mesLabel}</div>
+        <div class="dash-kpi">${fmtBRL(vendidoMes)}</div>
+        <div style="font-size:12px;margin-top:6px;color:${variacao >= 0 ? 'var(--success)' : 'var(--danger)'}">
+          ${variacao >= 0 ? '▲' : '▼'} ${Math.abs(variacao).toFixed(0)}% vs mês anterior (${fmtBRL(vendidoAnt)})</div>
+        <div style="margin-top:16px">
+          <div class="dash-row"><span>Recebido no mês</span><b style="color:var(--success)">${fmtBRL(recebidoMes)}</b></div>
+          <div class="dash-row"><span>A receber (pendente)</span><b style="color:var(--danger)">${fmtBRL(aReceber)}</b></div>
+        </div>
+      </div>
+      <div class="dash-card">
+        <h3>Vendas — últimos 6 meses</h3><div class="dash-sub">Total vendido por mês</div>
+        <div class="dash-bars">
+          ${meses.map(m => `<div class="dash-bar-col">
+            <div class="dash-bar" style="height:${Math.round(m.total / maxMes * 100)}%" title="${fmtBRL(m.total)}"></div>
+            <div class="dash-bar-lbl">${m.lbl}</div></div>`).join('')}
+        </div>
+      </div>
+      <div class="dash-card">
+        <h3>Recebido do mês</h3><div class="dash-sub">% do vendido já recebido</div>
+        <div class="dash-donut" style="background: conic-gradient(var(--rose) ${pct}%, var(--blush) ${pct}% 100%)"><span>${pct}%</span></div>
+        <div class="dash-row"><span>Vendido</span><b>${fmtBRL(vendidoMes)}</b></div>
+        <div class="dash-row"><span>Recebido</span><b style="color:var(--success)">${fmtBRL(recebidoMes)}</b></div>
+      </div>
+      <div class="dash-card">
+        <h3>Ranking de revendedoras</h3><div class="dash-sub">Por total vendido</div>
+        ${ranking.length ? ranking.map((r, i) => `<div class="dash-row"><span>${i + 1}. ${esc(r.nome)}</span><b>${fmtBRL(r.tot)}</b></div>`).join('') : '<div class="dash-sub">Sem vendas ainda.</div>'}
+      </div>
+      <div class="dash-card">
+        <h3>Garantias</h3><div class="dash-sub">Situação atual</div>
+        <div class="dash-row"><span>🔵 Abertas</span><b>${gAbertas}</b></div>
+        <div class="dash-row"><span>🟡 Em conserto</span><b>${gConserto}</b></div>
+        <div class="dash-row"><span>⏰ Vencendo (7 dias)</span><b style="color:var(--warning)">${gVencendo}</b></div>
+        <div class="dash-row"><span>🔴 Em atraso</span><b style="color:var(--danger)">${gAtraso}</b></div>
+      </div>
+      <div class="dash-card">
+        <h3>Demonstração de Resultados <span class="badge-soon">Em breve</span></h3>
+        <div class="dash-sub">Despesas, lucro e DRE chegam com o módulo Financeiro</div>
+        <div class="empty-state" style="padding:18px 0"><div class="empty-icon">📈</div><p style="font-size:12px">Em construção</p></div>
+      </div>
+    </div>`;
 }
 
 // ═══════════════════════════════════════════════
