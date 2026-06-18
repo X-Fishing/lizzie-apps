@@ -3932,26 +3932,26 @@ async function atualizarMaleta(revId, btn) {
   const todos = await fetchTodosBling(inicio.toISOString().split('T')[0], hoje);
   if (!todos) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao conectar com o Bling. Tente de novo.</p></div>'; return; }
 
-  let candidatos = [];
-  if (pedidoNums.length) {
-    // Casa pelo NÚMERO do pedido vinculado (independe de contato/vendedor).
-    candidatos = todos.filter(p => pedidoNums.includes(String(p.numero)));
+  // Candidatos = UNIÃO de:
+  //  (1) pedidos JÁ vinculados à maleta (por número carimbado) — cobre o modelo
+  //      em que a revendedora é o VENDEDOR e o contato do pedido é o cliente; e
+  //  (2) pedidos EM ABERTO da revendedora (por id de contato ou, se não casar,
+  //      por nome) — inclui pedidos NOVOS ainda não vinculados (nova maleta).
+  // Sem isso, um pedido novo em aberto (ex.: #18526) não aparecia quando a maleta
+  // já tinha outros pedidos vinculados.
+  const vinculados = pedidoNums.length ? todos.filter(p => pedidoNums.includes(String(p.numero))) : [];
+  const abertos = todos.filter(p => p.situacao?.id === SITUACAO_ABERTO);
+  let abertosRev = blingId ? abertos.filter(p => String(p.contato?.id) === String(blingId)) : [];
+  if (!abertosRev.length && nome) {
+    const alvo = normalizarNome(nome);
+    abertosRev = abertos.filter(p => {
+      const cn = normalizarNome(p.contato?.nome);
+      return cn && (cn === alvo || cn.includes(alvo) || alvo.includes(cn));
+    });
   }
-  if (!candidatos.length) {
-    // Sem pedido vinculado: procura entre os pedidos EM ABERTO, primeiro pelo ID
-    // de contato e, se não casar, pelo NOME (igual ao "Baixar Relação") — cobre
-    // bling_contato_id vazio/divergente e nomes parciais (ex.: "Pamela Rodrigues"
-    // x contato "Pamela Rodrigues Oliveira").
-    const abertos = todos.filter(p => p.situacao?.id === SITUACAO_ABERTO);
-    candidatos = blingId ? abertos.filter(p => String(p.contato?.id) === String(blingId)) : [];
-    if (!candidatos.length && nome) {
-      const alvo = normalizarNome(nome);
-      candidatos = abertos.filter(p => {
-        const cn = normalizarNome(p.contato?.nome);
-        return cn && (cn === alvo || cn.includes(alvo) || alvo.includes(cn));
-      });
-    }
-  }
+  const porNumero = new Map();
+  [...vinculados, ...abertosRev].forEach(p => porNumero.set(String(p.numero), p));
+  const candidatos = [...porNumero.values()].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
 
   if (!candidatos.length) {
     const dica = pedidoNums.length
@@ -3968,8 +3968,8 @@ async function atualizarMaleta(revId, btn) {
   // Mais de um pedido: o admin escolhe (não assume nada).
   maletaCtx = { revId, nome, pedidos: {} };
   candidatos.forEach(p => { maletaCtx.pedidos[p.id] = p; });
-  cont.innerHTML = `<p style="font-size:13px;color:var(--muted);margin-bottom:10px"><strong>${esc(nome)}</strong> tem ${candidatos.length} pedidos vinculados. Escolha qual atualizar:</p>` +
-    candidatos.map(p => `<button class="btn-secondary" style="width:100%;text-align:left;margin-bottom:8px" onclick="previewMaletaPorId('${p.id}')">Pedido #${p.numero} — ${formatDate(p.data)}${p.situacao?.id === SITUACAO_ABERTO ? '' : ' (atendido)'}</button>`).join('');
+  cont.innerHTML = `<p style="font-size:13px;color:var(--muted);margin-bottom:10px"><strong>${esc(nome)}</strong> tem ${candidatos.length} pedidos no Bling. Escolha qual atualizar:</p>` +
+    candidatos.map(p => `<button class="btn-secondary" style="width:100%;text-align:left;margin-bottom:8px" onclick="previewMaletaPorId('${p.id}')">Pedido #${p.numero} — ${formatDate(p.data)} ${p.situacao?.id === SITUACAO_ABERTO ? '<span style="color:var(--success);font-size:11px">• em aberto</span>' : '<span style="color:var(--muted);font-size:11px">• atendido</span>'}</button>`).join('');
 }
 
 function previewMaletaPorId(pedidoId) {
