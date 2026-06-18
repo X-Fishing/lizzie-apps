@@ -1706,9 +1706,11 @@ async function loadDashboard() {
 async function loadGarantias() {
   document.getElementById('g-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
   const isAdmin = ehStaff();
-  let q = sb.from('garantias').select('*');
-  if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
-  const { data, error } = await sbQ(q.order('created_at', { ascending: false }));
+  const { data, error } = await fetchPaginado(() => {
+    let q = sb.from('garantias').select('*');
+    if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
+    return q.order('created_at', { ascending: false });
+  });
   if (error) {
     const msg = error.message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar garantias.';
     document.getElementById('g-list').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`;
@@ -1980,12 +1982,29 @@ async function excluirGarantia(id) {
 // ═══════════════════════════════════════════════
 // CICLO (CONSIGNADOS)
 // ═══════════════════════════════════════════════
+// Busca TODAS as linhas paginando de 1000 em 1000 (o Supabase/PostgREST corta
+// em 1000 por requisição; sem isso, catálogos grandes "somem" peças antigas).
+async function fetchPaginado(makeQuery, pageSize = 1000) {
+  let from = 0; const todas = [];
+  while (true) {
+    const { data, error } = await sbQ(makeQuery().range(from, from + pageSize - 1));
+    if (error) return { data: null, error };
+    todas.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+    from += pageSize;
+  }
+  return { data: todas, error: null };
+}
+
 async function loadConsignados() {
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
   const isAdmin = ehStaff();
-  let q = sb.from('consignados').select('*');
-  if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
-  const queries = [sbQ(q.order('created_at', { ascending: false }))];
+  const makeQ = () => {
+    let q = sb.from('consignados').select('*');
+    if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
+    return q.order('created_at', { ascending: false });
+  };
+  const queries = [fetchPaginado(makeQ)];
   if (isAdmin) {
     queries.push(sbQ(sb.from('profiles').select('id,nome,bling_contato_id').eq('role','revendedora')));
   }
