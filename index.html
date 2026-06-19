@@ -202,6 +202,10 @@ svg.ico { width: 1em; height: 1em; fill: none; stroke: currentColor;
   font-size: 26px; font-weight: 400; color: var(--plum);
 }
 .section-subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+/* Polimento estilo Zenply/Bling: na área de PC (staff) os títulos de seção
+   ficam sem serifa, mais leves e menores (a serifa fica só na marca). */
+#app.staff-desktop .section-title { font-family: 'DM Sans', sans-serif; font-weight: 600; font-size: 19px; }
+#app.staff-desktop .dash-row:hover, #app.staff-desktop .ciclo-row:hover { background: rgba(0,0,0,0.02); }
 
 /* CARDS */
 .card {
