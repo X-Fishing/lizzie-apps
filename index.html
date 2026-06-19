@@ -1389,6 +1389,7 @@ let vendaItensCache = {};
 let revNameMap = {};
 let revBlingMap = {};
 let gFilter = 'todas';
+let gSort = { col: 'prazo_maximo', dir: 'asc' };   // ordenação da tabela de garantias (staff)
 let pFilter = 'todos';
 let cSort = { col: 'descricao', dir: 'asc' };
 let cicloRevSelecionada = null;
@@ -1887,17 +1888,21 @@ async function loadDashboardStaff() {
 async function loadGarantias() {
   document.getElementById('g-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
   const isAdmin = ehStaff();
-  const { data, error } = await fetchPaginado(() => {
+  const queries = [fetchPaginado(() => {
     let q = sb.from('garantias').select('*');
     if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
     return q.order('created_at', { ascending: false });
-  });
+  })];
+  if (isAdmin) queries.push(sbQ(sb.from('profiles').select('id,nome').eq('role', 'revendedora')));
+  const results = await Promise.all(queries);
+  const { data, error } = results[0];
   if (error) {
     const msg = error.message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar garantias.';
     document.getElementById('g-list').innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
     return;
   }
   allGarantias = data || [];
+  if (isAdmin && results[1] && results[1].data) results[1].data.forEach(r => { revNameMap[r.id] = r.nome; });
   filtrarGarantias();
 }
 
@@ -1910,9 +1915,109 @@ function filtrarGarantias() {
     (g.nome_cliente || '').toLowerCase().includes(search) ||
     (g.problema_relatado || '').toLowerCase().includes(search)
   );
+  if (ehStaff()) { renderGarantiasStaff(list); return; }   // visão visual (PC)
   const div = document.getElementById('g-list');
   if (!list.length) { div.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhuma garantia encontrada</p></div>'; return; }
   div.innerHTML = list.map(g => renderGarantiaCard(g)).join('');
+}
+
+// ── Garantias: visão visual do staff (distribuição, alertas, ranking B.O. + tabela) ──
+const GSTATUS = {
+  aberta:      { label: 'Aberta',      cor: '#3f7fe0' },
+  em_conserto: { label: 'Em conserto', cor: 'var(--warning)' },
+  pronta:      { label: 'Pronta',      cor: 'var(--success)' },
+  entregue:    { label: 'Entregue',    cor: '#5a4a60' }
+};
+function gDot(cor) { return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${cor};margin-right:6px;vertical-align:middle"></span>`; }
+function gDias(g) { const h = new Date(); h.setHours(0,0,0,0); return Math.ceil((new Date(g.prazo_maximo + 'T00:00:00') - h) / 86400000); }
+function sortGarantiasStaff(col) {
+  if (gSort.col === col) gSort.dir = gSort.dir === 'asc' ? 'desc' : 'asc';
+  else { gSort.col = col; gSort.dir = 'asc'; }
+  filtrarGarantias();
+}
+function renderGarantiasStaff(list) {
+  const div = document.getElementById('g-list');
+  const todas = allGarantias, total = todas.length;
+  const cont = { aberta: 0, em_conserto: 0, pronta: 0, entregue: 0 };
+  todas.forEach(g => { if (cont[g.status] != null) cont[g.status]++; });
+  const naoEntreg = todas.filter(g => g.status !== 'entregue');
+  const atras = naoEntreg.filter(g => gDias(g) < 0).length;
+  const venc = naoEntreg.filter(g => { const d = gDias(g); return d >= 0 && d <= 7; }).length;
+  const porRev = {};
+  todas.forEach(g => { porRev[g.revendedora_id] = (porRev[g.revendedora_id] || 0) + 1; });
+  const ranking = Object.entries(porRev).map(([id, n]) => ({ nome: revNameMap[id] || '—', n }))
+    .sort((a, b) => b.n - a.n).slice(0, 6);
+
+  const sorted = [...list].sort((a, b) => {
+    let va, vb;
+    if (gSort.col === 'dias') { va = gDias(a); vb = gDias(b); }
+    else if (gSort.col === 'revendedora') { va = (revNameMap[a.revendedora_id] || '').toLowerCase(); vb = (revNameMap[b.revendedora_id] || '').toLowerCase(); }
+    else { va = a[gSort.col] ?? ''; vb = b[gSort.col] ?? ''; if (typeof va === 'string') { va = va.toLowerCase(); vb = (vb || '').toLowerCase(); } }
+    if (va < vb) return gSort.dir === 'asc' ? -1 : 1;
+    if (va > vb) return gSort.dir === 'asc' ? 1 : -1;
+    return 0;
+  });
+
+  const pct = n => total ? Math.round(n / total * 100) : 0;
+  const barra = (label, n, cor) => `<div style="margin-bottom:9px">
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>${gDot(cor)}${label}</span><span style="color:var(--muted)">${n} · ${pct(n)}%</span></div>
+    <div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:${pct(n)}%;height:100%;background:${cor}"></div></div></div>`;
+  const th = (col, label) => {
+    const arrow = gSort.col !== col ? '<span style="opacity:.3">⇅</span>' : (gSort.dir === 'asc' ? '▲' : '▼');
+    return `<th class="ciclo-th" onclick="sortGarantiasStaff('${col}')">${label} ${arrow}</th>`;
+  };
+  const linha = g => {
+    const si = GSTATUS[g.status] || { label: g.status, cor: 'var(--muted)' };
+    const d = gDias(g);
+    let diasTxt = '—', cor = 'var(--muted)';
+    if (g.status !== 'entregue') {
+      if (d < 0) { diasTxt = `${Math.abs(d)}d atraso`; cor = 'var(--danger)'; }
+      else if (d <= 7) { diasTxt = `${d}d`; cor = 'var(--warning)'; }
+      else { diasTxt = `${d}d`; cor = 'var(--text)'; }
+    }
+    return `<tr class="ciclo-row" onclick="verGarantia('${g.id}')" style="cursor:pointer">
+      <td class="ciclo-td"><div class="ciclo-desc">${esc(g.nome_cliente)}</div><div class="ciclo-ref">${esc(g.descricao_item)}</div></td>
+      <td class="ciclo-td">${esc(revNameMap[g.revendedora_id] || '—')}</td>
+      <td class="ciclo-td" style="white-space:nowrap">${gDot(si.cor)}${si.label}</td>
+      <td class="ciclo-td">${formatDate(g.data_entrada)}</td>
+      <td class="ciclo-td">${formatDate(g.prazo_maximo)}</td>
+      <td class="ciclo-td" style="color:${cor};font-weight:600;white-space:nowrap">${diasTxt}</td>
+    </tr>`;
+  };
+
+  div.innerHTML = `
+    <div class="dash-grid" style="margin-bottom:18px">
+      <div class="dash-card">
+        <h3>Distribuição por status</h3><div class="dash-sub">${total} garantia${total !== 1 ? 's' : ''} no total</div>
+        ${barra('Aberta', cont.aberta, '#3f7fe0')}
+        ${barra('Em conserto', cont.em_conserto, 'var(--warning)')}
+        ${barra('Pronta', cont.pronta, 'var(--success)')}
+        ${barra('Entregue', cont.entregue, '#5a4a60')}
+      </div>
+      <div class="dash-card">
+        <h3>Alertas de prazo</h3><div class="dash-sub">Garantias não entregues</div>
+        <div class="dash-row"><span>${gDot('var(--danger)')}Em atraso</span><b style="color:var(--danger)">${atras}</b></div>
+        <div class="dash-row"><span>${gDot('var(--warning)')}Vencendo (7 dias)</span><b style="color:var(--warning)">${venc}</b></div>
+        <div class="dash-row"><span>${gDot('var(--success)')}No prazo</span><b>${Math.max(0, naoEntreg.length - atras - venc)}</b></div>
+      </div>
+      <div class="dash-card">
+        <h3>Ranking de B.O.</h3><div class="dash-sub">Revendedoras com mais garantias</div>
+        ${ranking.length ? ranking.map((r, i) => `<div class="dash-row"><span>${i + 1}. ${esc(r.nome)}</span><b>${r.n}</b></div>`).join('') : '<div class="dash-sub">Sem garantias.</div>'}
+      </div>
+    </div>
+    <div class="ciclo-wrap">
+      <table class="ciclo-table">
+        <thead><tr>
+          ${th('nome_cliente', 'Cliente / Item')}
+          ${th('revendedora', 'Revendedora')}
+          ${th('status', 'Status')}
+          ${th('data_entrada', 'Entrada')}
+          ${th('prazo_maximo', 'Prazo')}
+          ${th('dias', 'Dias')}
+        </tr></thead>
+        <tbody>${sorted.length ? sorted.map(linha).join('') : '<tr><td class="ciclo-td" colspan="6" style="text-align:center;color:var(--muted);padding:20px">Nenhuma garantia neste filtro</td></tr>'}</tbody>
+      </table>
+    </div>`;
 }
 
 function setGFilter(el, f) {
