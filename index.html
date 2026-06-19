@@ -46,6 +46,8 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
   filter: drop-shadow(0 0 20px rgba(212,168,75,0.5));
   animation: float 3s ease-in-out infinite;
 }
+#splash .logo-icon svg { width: 56px; height: 56px; stroke: var(--gold); }
+#pending-screen .big-icon svg, #recovery-screen .rec-icon svg { stroke: var(--gold); }
 @keyframes float { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-8px)} }
 #splash h1 {
   font-family: 'Cormorant Garamond', serif;
@@ -180,9 +182,13 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
   color: var(--muted); font-size: 10px; font-weight: 500; letter-spacing: 0.5px;
   text-transform: uppercase; font-family: 'DM Sans', sans-serif;
 }
-.nav-item .nav-icon { font-size: 20px; margin-bottom: 3px; }
+.nav-item .nav-icon { font-size: 20px; margin-bottom: 3px; display: inline-flex; }
+.nav-item .nav-icon svg { width: 22px; height: 22px; display: block; }
 .nav-item.active { color: var(--rose); }
 .nav-item.active .nav-icon { transform: scale(1.1); }
+/* Ícones SVG de linha (estilo Zenply/Bling): herdam a cor do texto */
+svg.ico { width: 1em; height: 1em; fill: none; stroke: currentColor;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
 
 /* CONTENT */
 .content { flex: 1; padding: 20px 16px 90px; max-width: 600px; margin: 0 auto; width: 100%; }
@@ -642,7 +648,8 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   color: var(--text); text-align:left; width:100%; transition: background .15s; }
 .snav-item:hover { background: rgba(0,0,0,0.035); }
 .snav-item.active { background: rgba(201,116,138,0.12); color: var(--rose); font-weight:600; }
-.snav-ic { font-size:17px; width:22px; text-align:center; flex:none; }
+.snav-ic { font-size:17px; width:22px; flex:none; display:inline-flex; align-items:center; justify-content:center; }
+.snav-ic svg { width:18px; height:18px; display:block; }
 .snav-group-label { display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none;
   font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted);
   padding:16px 14px 6px; }
@@ -683,7 +690,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 <!-- SPLASH / AUTH -->
 <div id="splash">
   <div class="logo-wrap">
-    <span class="logo-icon">💎</span>
+    <span class="logo-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></span>
     <h1>Lizzie</h1>
     <div class="tagline">Semijoias</div>
   </div>
@@ -737,7 +744,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
 <!-- PENDING APPROVAL -->
 <div id="pending-screen">
-  <div class="big-icon">⏳</div>
+  <div class="big-icon"><svg class="ico" viewBox="0 0 24 24" style="width:56px;height:56px"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
   <h2>Aguardando aprovação</h2>
   <p>Seu cadastro foi enviado para a Lizzie Semijoias. Você receberá acesso assim que for aprovada.</p>
   <button class="btn-secondary" style="color:#fff;border-color:rgba(255,255,255,0.2)" onclick="sb.auth.signOut().then(()=>location.reload())">Sair</button>
@@ -745,7 +752,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
 <!-- DEFINIR NOVA SENHA (vindo do link de recuperação no e-mail) -->
 <div id="recovery-screen" style="display:none;position:fixed;inset:0;z-index:1001;background:linear-gradient(145deg,#1a0a2e 0%,#2d1248 50%,#1a0a2e 100%);flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:24px">
-  <div style="font-size:48px;filter:drop-shadow(0 0 20px rgba(212,168,75,0.5))">🔑</div>
+  <div class="rec-icon" style="filter:drop-shadow(0 0 20px rgba(212,168,75,0.5))"><svg class="ico" viewBox="0 0 24 24" style="width:48px;height:48px"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg></div>
   <div class="auth-box">
     <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--gold);text-align:center;margin-bottom:6px">Definir nova senha</div>
     <p style="color:rgba(255,255,255,0.6);font-size:13px;text-align:center;margin-bottom:20px">Crie a nova senha de acesso da sua conta.</p>
@@ -903,46 +910,46 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   <!-- BOTTOM NAV -->
   <nav class="nav">
     <button class="nav-item active" id="nav-dashboard" onclick="showPanel('dashboard')">
-      <span class="nav-icon">🏠</span>Início
+      <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></span>Início
     </button>
     <button class="nav-item" id="nav-garantias" onclick="showPanel('garantias')">
-      <span class="nav-icon">🔧</span>Garantias
+      <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span>Garantias
     </button>
     <button class="nav-item" id="nav-consignados" onclick="showPanel('consignados')">
-      <span class="nav-icon">💍</span>Catálogo
+      <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></span>Catálogo
     </button>
     <button class="nav-item" id="nav-pagamentos" onclick="showPanel('pagamentos')">
-      <span class="nav-icon">💰</span>Pagamentos
+      <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg></span>Pagamentos
     </button>
     <button class="nav-item" id="nav-historico" onclick="showPanel('historico')">
-      <span class="nav-icon">📚</span>Histórico
+      <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></span>Histórico
     </button>
     <button class="nav-item" id="nav-trocas" onclick="showPanel('trocas')" style="display:none">
-      <span class="nav-icon">🛍️</span>Trocas
+      <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></span>Trocas
     </button>
     <button class="nav-item" id="nav-admin" onclick="showPanel('admin')" style="display:none">
-      <span class="nav-icon">👑</span>Revendedoras
+      <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Revendedoras
     </button>
   </nav>
 
   <!-- BARRA LATERAL (dashboard PC / staff em tela larga) -->
   <aside class="staff-nav">
     <div class="snav-brand">Lizzie</div>
-    <button class="snav-item" data-panel="dashboard" onclick="showPanel('dashboard')"><span class="snav-ic">📊</span>Dashboard</button>
-    <button class="snav-item" data-panel="consignados" onclick="showPanel('consignados')"><span class="snav-ic">💍</span>Catálogo</button>
-    <button class="snav-item" data-panel="trocas" onclick="showPanel('trocas')"><span class="snav-ic">🛍️</span>Trocas</button>
-    <button class="snav-item" data-panel="financeiro" onclick="showPanel('financeiro')"><span class="snav-ic">💰</span>Financeiro<span class="badge-soon">Em breve</span></button>
-    <button class="snav-item" data-panel="calculadora" onclick="showPanel('calculadora')"><span class="snav-ic">🧮</span>Calculadora<span class="badge-soon">Em breve</span></button>
-    <button class="snav-item" data-panel="marketing" onclick="showPanel('marketing')"><span class="snav-ic">📣</span>Marketing<span class="badge-soon">Em breve</span></button>
+    <button class="snav-item" data-panel="dashboard" onclick="showPanel('dashboard')"><span class="snav-ic"><svg class="ico" viewBox="0 0 24 24"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg></span>Dashboard</button>
+    <button class="snav-item" data-panel="consignados" onclick="showPanel('consignados')"><span class="snav-ic"><svg class="ico" viewBox="0 0 24 24"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></span>Catálogo</button>
+    <button class="snav-item" data-panel="trocas" onclick="showPanel('trocas')"><span class="snav-ic"><svg class="ico" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></span>Trocas</button>
+    <button class="snav-item" data-panel="financeiro" onclick="showPanel('financeiro')"><span class="snav-ic"><svg class="ico" viewBox="0 0 24 24"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg></span>Financeiro<span class="badge-soon">Em breve</span></button>
+    <button class="snav-item" data-panel="calculadora" onclick="showPanel('calculadora')"><span class="snav-ic"><svg class="ico" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg></span>Calculadora<span class="badge-soon">Em breve</span></button>
+    <button class="snav-item" data-panel="marketing" onclick="showPanel('marketing')"><span class="snav-ic"><svg class="ico" viewBox="0 0 24 24"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg></span>Marketing<span class="badge-soon">Em breve</span></button>
     <div class="snav-group" id="snav-cadastros">
       <div class="snav-group-label" onclick="toggleCadastros()"><span class="snav-caret">▼</span>Cadastros</div>
       <div class="snav-sub">
-        <button class="snav-item" data-panel="clientes" onclick="showPanel('clientes')"><span class="snav-ic">👥</span>Clientes<span class="badge-soon">Em breve</span></button>
-        <button class="snav-item" data-panel="admin" onclick="showPanel('admin')"><span class="snav-ic">👑</span>Revendedoras</button>
-        <button class="snav-item" data-panel="garantias" onclick="showPanel('garantias')"><span class="snav-ic">🛡️</span>Garantias</button>
-        <button class="snav-item" data-panel="funcionarios" onclick="showPanel('funcionarios')"><span class="snav-ic">🧑‍💼</span>Funcionários<span class="badge-soon">Em breve</span></button>
-        <button class="snav-item" data-panel="formas-pagamento" onclick="showPanel('formas-pagamento')"><span class="snav-ic">💳</span>Formas de Pagamento<span class="badge-soon">Em breve</span></button>
-        <button class="snav-item" data-panel="categorias-financeiras" onclick="showPanel('categorias-financeiras')"><span class="snav-ic">🏷️</span>Categorias Financeiras<span class="badge-soon">Em breve</span></button>
+        <button class="snav-item" data-panel="clientes" onclick="showPanel('clientes')"><span class="snav-ic"><svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Clientes<span class="badge-soon">Em breve</span></button>
+        <button class="snav-item" data-panel="admin" onclick="showPanel('admin')"><span class="snav-ic"><svg class="ico" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg></span>Revendedoras</button>
+        <button class="snav-item" data-panel="garantias" onclick="showPanel('garantias')"><span class="snav-ic"><svg class="ico" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg></span>Garantias</button>
+        <button class="snav-item" data-panel="funcionarios" onclick="showPanel('funcionarios')"><span class="snav-ic"><svg class="ico" viewBox="0 0 24 24"><path d="M16 2v2"/><path d="M7 22v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/><path d="M8 2v2"/><circle cx="12" cy="11" r="3"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg></span>Funcionários<span class="badge-soon">Em breve</span></button>
+        <button class="snav-item" data-panel="formas-pagamento" onclick="showPanel('formas-pagamento')"><span class="snav-ic"><svg class="ico" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg></span>Formas de Pagamento<span class="badge-soon">Em breve</span></button>
+        <button class="snav-item" data-panel="categorias-financeiras" onclick="showPanel('categorias-financeiras')"><span class="snav-ic"><svg class="ico" viewBox="0 0 24 24"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg></span>Categorias Financeiras<span class="badge-soon">Em breve</span></button>
       </div>
     </div>
   </aside>
