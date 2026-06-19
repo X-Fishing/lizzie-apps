@@ -768,10 +768,10 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 <div id="app">
   <!-- TOP BAR -->
   <div class="topbar">
-    <div class="topbar-logo">💎 Lizzie</div>
+    <div class="topbar-logo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg> Lizzie</div>
     <div class="topbar-right">
       <div class="user-badge" id="user-badge">—</div>
-      <button class="btn-icon" onclick="sb.auth.signOut().then(()=>location.reload())" title="Sair">⏻</button>
+      <button class="btn-icon" onclick="sb.auth.signOut().then(()=>location.reload())" title="Sair"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></button>
     </div>
   </div>
 
@@ -829,12 +829,12 @@ textarea.form-control { resize: vertical; min-height: 80px; }
           <div class="section-subtitle">Peças disponíveis para venda</div>
         </div>
         <div style="display:flex;gap:8px;align-items:center">
-          <button class="btn-secondary btn-sm" id="btn-bling-sync" onclick="openBlingSync()" style="display:none">📥 Baixar Relação de Peças</button>
+          <button class="btn-secondary btn-sm" id="btn-bling-sync" onclick="openBlingSync()" style="display:none"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Baixar Relação de Peças</button>
           <button class="btn-primary btn-sm" id="btn-novo-consig" onclick="openNovoConsignado()" style="display:none">+ Novo</button>
         </div>
       </div>
       <div class="search-bar" id="c-search-bar" style="display:none">
-        <input class="search-input" id="c-search" placeholder="🔍 Buscar por nome ou código..." oninput="renderCicloGrid()">
+        <input class="search-input" id="c-search" placeholder="Buscar por nome ou código..." oninput="renderCicloGrid()">
       </div>
       <div id="c-list"></div>
       <div id="cart-bar" style="display:none"></div>
@@ -866,7 +866,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
         </div>
       </div>
       <div class="search-bar">
-        <input class="search-input" id="h-search" placeholder="🔍 Digite o nome da cliente..." oninput="filtrarHistorico()">
+        <input class="search-input" id="h-search" placeholder="Digite o nome da cliente..." oninput="filtrarHistorico()">
       </div>
       <div id="h-list"></div>
     </div>
@@ -966,7 +966,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <label class="form-label">Foto do item</label>
       <div class="foto-upload" onclick="document.getElementById('g-foto-input').click()">
         <input type="file" id="g-foto-input" accept="image/*" onchange="previewFoto(this,'g-foto-preview','g-foto-placeholder')">
-        <div id="g-foto-placeholder">📸<br><small>Toque para adicionar foto</small></div>
+        <div id="g-foto-placeholder"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg><br><small>Toque para adicionar foto</small></div>
         <img id="g-foto-preview" class="foto-preview">
       </div>
     </div>
@@ -1040,7 +1040,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
       <label class="form-label">Foto do item</label>
       <div class="foto-upload" onclick="document.getElementById('c-foto-input').click()">
         <input type="file" id="c-foto-input" accept="image/*" onchange="previewFoto(this,'c-foto-preview','c-foto-placeholder')">
-        <div id="c-foto-placeholder">📸<br><small>Toque para adicionar foto</small></div>
+        <div id="c-foto-placeholder"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg><br><small>Toque para adicionar foto</small></div>
         <img id="c-foto-preview" class="foto-preview">
       </div>
     </div>
@@ -1111,7 +1111,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     </div>
     <div style="display:flex;gap:10px">
       <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-venda')">Cancelar</button>
-      <button class="btn-primary" style="flex:2" onclick="adicionarAoCarrinho()">🛒 Adicionar</button>
+      <button class="btn-primary" style="flex:2" onclick="adicionarAoCarrinho()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg> Adicionar</button>
     </div>
   </div>
 </div>
@@ -1120,10 +1120,10 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 <div class="modal-overlay" id="modal-busca-peca">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">🔍 Buscar peça</div>
+    <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar peça</div>
     <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Digite o nome ou o código para ver com qual revendedora a peça está.</div>
     <div class="search-bar" style="margin-bottom:12px">
-      <input class="search-input" id="bp-search" placeholder="🔍 Nome ou código da peça..." oninput="renderBuscaPeca()">
+      <input class="search-input" id="bp-search" placeholder="Nome ou código da peça..." oninput="renderBuscaPeca()">
     </div>
     <div id="bp-results" style="max-height:55vh;overflow-y:auto"></div>
     <div style="margin-top:12px">
@@ -1136,7 +1136,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 <div class="modal-overlay" id="modal-finalizar">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">🛒 Finalizar Venda</div>
+    <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg> Finalizar Venda</div>
     <div id="f-cart-list" style="margin-bottom:14px"></div>
     <div class="form-group">
       <label class="form-label">Nome da cliente *</label>
@@ -1174,7 +1174,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
     </div>
     <div style="display:flex;gap:10px">
       <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-finalizar')">Cancelar</button>
-      <button class="btn-primary" style="flex:2" onclick="confirmarVendaCarrinho(this)">✓ Confirmar venda</button>
+      <button class="btn-primary" style="flex:2" onclick="confirmarVendaCarrinho(this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Confirmar venda</button>
     </div>
   </div>
 </div>
@@ -1197,7 +1197,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
 <!-- PRINT OVERLAY -->
 <div id="print-overlay">
-  <div class="print-close"><button onclick="fecharPrint()">✕ Fechar</button></div>
+  <div class="print-close"><button onclick="fecharPrint()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg> Fechar</button></div>
   <div id="print-content"></div>
 </div>
 
@@ -1205,11 +1205,11 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 <div class="modal-overlay" id="modal-fechamento">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">📋 Fechamento do Catálogo</div>
+    <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</div>
     <div id="fechamento-content"></div>
     <div style="display:flex;gap:10px;margin-top:16px">
       <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-fechamento')">Fechar</button>
-      <button class="btn-primary" style="flex:2" onclick="gerarPdfFechamento()">🖨 Gerar PDF</button>
+      <button class="btn-primary" style="flex:2" onclick="gerarPdfFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg> Gerar PDF</button>
     </div>
   </div>
 </div>
@@ -1219,7 +1219,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   <div class="modal">
     <div class="modal-handle"></div>
     <div id="bling-header">
-      <div class="modal-title">🔄 Importar do Bling</div>
+      <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Importar do Bling</div>
       <div class="form-row" style="margin-bottom:12px">
         <div class="form-group">
           <label class="form-label">Data inicial</label>
@@ -1241,7 +1241,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 <div class="modal-overlay" id="modal-complemento" data-lock-outside>
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Quase lá! 📱</div>
+    <div class="modal-title">Quase lá! <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
     <p style="font-size:13px;color:var(--muted);margin:-4px 0 16px">Confirme seu WhatsApp para combinarmos as trocas da maleta.</p>
     <div class="form-group">
       <label class="form-label">WhatsApp *</label>
@@ -1259,7 +1259,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 <div class="modal-overlay" id="modal-maleta" data-lock-outside>
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">🔄 Atualizar itens da maleta</div>
+    <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Atualizar itens da maleta</div>
     <div id="maleta-content"></div>
     <button class="btn-secondary" style="width:100%;margin-top:12px" onclick="closeModal('modal-maleta')">Fechar</button>
   </div>
@@ -1267,10 +1267,10 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 
 <!-- PWA install UI -->
 <button id="install-btn" type="button" aria-label="Instalar app">
-  <span style="font-size:16px">📲</span><span>Instalar app</span>
+  <span style="font-size:16px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></span><span>Instalar app</span>
 </button>
 <div id="ios-install-banner" role="dialog" aria-label="Como instalar no iPhone">
-  <span style="font-size:20px">📲</span>
+  <span style="font-size:20px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></span>
   <div class="ios-text">
     Para instalar: toque em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.
   </div>
@@ -1279,7 +1279,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 <div class="modal-overlay" id="modal-install">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">📲 Instalar o app</div>
+    <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Instalar o app</div>
     <div id="install-instrucoes" style="font-size:14px;line-height:1.65;color:var(--plum)"></div>
     <button class="btn-secondary" style="width:100%;margin-top:16px" onclick="closeModal('modal-install')">Entendi</button>
   </div>
@@ -1289,7 +1289,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 // ═══════════════════════════════════════════════
 // CONFIG
 // ═══════════════════════════════════════════════
-// AUDITORIA RLS — 11/06/2026 — ✅ RESOLVIDO
+// AUDITORIA RLS — 11/06/2026 — <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> RESOLVIDO
 // Toda a autorizacao do app e client-side; a seguranca REAL depende de
 // Row Level Security no Postgres. O teste anonimo (anon key publica) inicial
 // mostrou profiles (7 linhas, telefones = PII/LGPD) e consignados (100 linhas)
@@ -1464,9 +1464,9 @@ async function loadUser(user) {
   document.getElementById('app').style.flexDirection = 'column';
 
   const ehRevendedora = profile.role === 'revendedora';
-  const icone = profile.role === 'admin' ? '👑' : ehRevendedora ? '💍' : '🧑‍💼';
+  const icone = '';
   const nomeBadge = ehRevendedora ? profile.nome.split(' ')[0] : (ROLE_LABELS[profile.role] || profile.nome.split(' ')[0]);
-  document.getElementById('user-badge').textContent = `${icone} ${nomeBadge}`;
+  document.getElementById('user-badge').textContent = nomeBadge;
 
   // Visibilidade por nível. Pagamentos/Histórico são do próprio (só revendedora).
   document.getElementById('btn-bling-sync').style.display = (ehRevendedora || ehGestor()) ? 'block' : 'none';
@@ -1511,7 +1511,7 @@ async function salvarComplemento(btn) {
   currentProfile.telefone = tel;
   currentProfile.cidade = cidade || null;
   closeModal('modal-complemento');
-  toast('Tudo certo! 💖');
+  toast('Tudo certo!');
 }
 
 function showSplash() {
@@ -1574,7 +1574,7 @@ async function enviarLinkRecuperacao(btn) {
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
   btn.disabled = false; btn.textContent = 'Enviar link de recuperação';
   if (error) { showMsg(msg, 'Erro ao enviar. Confira o e-mail e tente de novo.', 'error'); return; }
-  showMsg(msg, '📧 Link enviado para ' + email + '. Confira sua caixa de entrada (e o spam).', 'success');
+  showMsg(msg, 'Link enviado para ' + email + '. Confira sua caixa de entrada (e o spam).', 'success');
 }
 
 // Chamado na tela de nova senha (apos clicar no link do e-mail de recuperacao).
@@ -1685,31 +1685,31 @@ function emBreveHtml(titulo, descricao, icone) {
 }
 function loadFinanceiro() {
   document.getElementById('panel-financeiro').innerHTML = emBreveHtml('Financeiro',
-    'Compras, pagamentos e lançamentos de estoque vão ficar aqui.', '💰');
+    'Compras, pagamentos e lançamentos de estoque vão ficar aqui.', '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>');
 }
 function loadCalculadora() {
   document.getElementById('panel-calculadora').innerHTML = emBreveHtml('Calculadora de custo',
-    'Cálculo de custo das peças, leitura de foto por IA e envio ao Bling — em construção.', '🧮');
+    'Cálculo de custo das peças, leitura de foto por IA e envio ao Bling — em construção.', '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>');
 }
 function loadClientes() {
   document.getElementById('panel-clientes').innerHTML = emBreveHtml('Clientes finais',
-    'Base de clientes (aniversários, garantias e contato) — em construção.', '👥');
+    'Base de clientes (aniversários, garantias e contato) — em construção.', '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>');
 }
 function loadMarketing() {
   document.getElementById('panel-marketing').innerHTML = emBreveHtml('Marketing',
-    'Aniversários de revendedoras e clientes, bônus e disparos por WhatsApp — em construção.', '📣');
+    'Aniversários de revendedoras e clientes, bônus e disparos por WhatsApp — em construção.', '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>');
 }
 function loadFuncionarios() {
   document.getElementById('panel-funcionarios').innerHTML = emBreveHtml('Funcionários',
-    'Cadastro de funcionários e níveis de acesso — em construção.', '🧑‍💼');
+    'Cadastro de funcionários e níveis de acesso — em construção.', '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 2v2"/><path d="M7 22v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/><path d="M8 2v2"/><circle cx="12" cy="11" r="3"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>');
 }
 function loadFormasPagamento() {
   document.getElementById('panel-formas-pagamento').innerHTML = emBreveHtml('Formas de Pagamento',
-    'Cadastro das formas de pagamento aceitas — em construção.', '💳');
+    'Cadastro das formas de pagamento aceitas — em construção.', '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>');
 }
 function loadCategoriasFinanceiras() {
   document.getElementById('panel-categorias-financeiras').innerHTML = emBreveHtml('Categorias Financeiras',
-    'Cadastro de categorias de Despesas e Recebimentos — em construção.', '🏷️');
+    'Cadastro de categorias de Despesas e Recebimentos — em construção.', '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>');
 }
 
 // ═══════════════════════════════════════════════
@@ -1726,7 +1726,7 @@ async function loadDashboard() {
 
   if (error) {
     const msg = error.message === 'timeout' ? 'Conexão lenta. Aguarde e tente novamente.' : 'Erro ao carregar dados.';
-    document.getElementById('dash-recentes').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`;
+    document.getElementById('dash-recentes').innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
     return;
   }
   if (!data) return;
@@ -1751,12 +1751,12 @@ async function loadDashboard() {
 
   const alertDiv = document.getElementById('dash-alertas');
   if (vencendo > 0) {
-    alertDiv.innerHTML = `<div class="alert alert-warning">⚠️ ${vencendo} garantia${vencendo>1?'s':''} vencendo em até 7 dias</div>`;
+    alertDiv.innerHTML = `<div class="alert alert-warning"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> ${vencendo} garantia${vencendo>1?'s':''} vencendo em até 7 dias</div>`;
   } else alertDiv.innerHTML = '';
 
   const recentes = data.slice(0, 5);
   const recentDiv = document.getElementById('dash-recentes');
-  if (!recentes.length) { recentDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Nenhuma garantia ainda</p></div>'; return; }
+  if (!recentes.length) { recentDiv.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></div><p>Nenhuma garantia ainda</p></div>'; return; }
   recentDiv.innerHTML = recentes.map(g => renderGarantiaCard(g)).join('');
 }
 
@@ -1851,15 +1851,15 @@ async function loadDashboardStaff() {
       </div>
       <div class="dash-card">
         <h3>Garantias</h3><div class="dash-sub">Situação atual</div>
-        <div class="dash-row"><span>🔵 Abertas</span><b>${gAbertas}</b></div>
-        <div class="dash-row"><span>🟡 Em conserto</span><b>${gConserto}</b></div>
-        <div class="dash-row"><span>⏰ Vencendo (7 dias)</span><b style="color:var(--warning)">${gVencendo}</b></div>
-        <div class="dash-row"><span>🔴 Em atraso</span><b style="color:var(--danger)">${gAtraso}</b></div>
+        <div class="dash-row"><span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#3f7fe0;margin-right:5px;vertical-align:middle"></span>Abertas</span><b>${gAbertas}</b></div>
+        <div class="dash-row"><span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--warning);margin-right:5px;vertical-align:middle"></span>Em conserto</span><b>${gConserto}</b></div>
+        <div class="dash-row"><span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Vencendo (7 dias)</span><b style="color:var(--warning)">${gVencendo}</b></div>
+        <div class="dash-row"><span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--danger);margin-right:5px;vertical-align:middle"></span>Em atraso</span><b style="color:var(--danger)">${gAtraso}</b></div>
       </div>
       <div class="dash-card">
         <h3>Demonstração de Resultados <span class="badge-soon">Em breve</span></h3>
         <div class="dash-sub">Despesas, lucro e DRE chegam com o módulo Financeiro</div>
-        <div class="empty-state" style="padding:18px 0"><div class="empty-icon">📈</div><p style="font-size:12px">Em construção</p></div>
+        <div class="empty-state" style="padding:18px 0"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></div><p style="font-size:12px">Em construção</p></div>
       </div>
     </div>`;
 }
@@ -1877,7 +1877,7 @@ async function loadGarantias() {
   });
   if (error) {
     const msg = error.message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar garantias.';
-    document.getElementById('g-list').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`;
+    document.getElementById('g-list').innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
     return;
   }
   allGarantias = data || [];
@@ -1894,7 +1894,7 @@ function filtrarGarantias() {
     (g.problema_relatado || '').toLowerCase().includes(search)
   );
   const div = document.getElementById('g-list');
-  if (!list.length) { div.innerHTML = '<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhuma garantia encontrada</p></div>'; return; }
+  if (!list.length) { div.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhuma garantia encontrada</p></div>'; return; }
   div.innerHTML = list.map(g => renderGarantiaCard(g)).join('');
 }
 
@@ -1918,7 +1918,7 @@ function renderGarantiaCard(g) {
 
   const foto = g.foto_url
     ? `<div class="garantia-foto"><img src="${g.foto_url}" alt="foto"></div>`
-    : `<div class="garantia-foto">💍</div>`;
+    : `<div class="garantia-foto"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></div>`;
 
   const statusMap = { aberta:'badge-aberta', em_conserto:'badge-em_conserto', pronta:'badge-pronta', entregue:'badge-entregue' };
   const statusLabel = { aberta:'Aberta', em_conserto:'Em conserto', pronta:'Pronta', entregue:'Entregue' };
@@ -1943,7 +1943,7 @@ function renderGarantiaCard(g) {
       ${foto}
       <div class="garantia-info">
         <div class="garantia-item">${esc(g.descricao_item)}</div>
-        <div class="garantia-cliente">👤 ${esc(g.nome_cliente)}</div>
+        <div class="garantia-cliente"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg> ${esc(g.nome_cliente)}</div>
         <span class="badge ${statusMap[g.status]}">${statusLabel[g.status]}</span>
       </div>
     </div>
@@ -1965,16 +1965,16 @@ async function verGarantia(id) {
 
   const isAdmin = ehStaff();
   const destMap = { rebanho:'Rebanho', fornecedor:'Fornecedor', conserto_local:'Conserto local', outro:'Outro' };
-  const statusMap = { aberta:'🔵 Aberta', em_conserto:'🟡 Em conserto', pronta:'🟢 Pronta', entregue:'⚫ Entregue' };
+  const statusMap = { aberta:'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#3f7fe0;margin-right:5px;vertical-align:middle"></span>Aberta', em_conserto:'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--warning);margin-right:5px;vertical-align:middle"></span>Em conserto', pronta:'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--success);margin-right:5px;vertical-align:middle"></span>Pronta', entregue:'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#5a4a60;margin-right:5px;vertical-align:middle"></span>Entregue' };
 
   let fotoHtml = g.foto_url ? `<img src="${g.foto_url}" class="detail-foto">` : '';
 
   let adminActions = '';
   if (isAdmin || currentProfile.role === 'revendedora') {
     adminActions = `
-      <button class="btn-secondary btn-sm" onclick="editarGarantia('${g.id}')">✏️ Editar</button>
-      ${isAdmin ? `<button class="btn-secondary btn-sm" onclick="mudarStatus('${g.id}')">🔄 Status</button>` : ''}
-      ${ehGestor() ? `<button class="btn-danger btn-sm" onclick="excluirGarantia('${g.id}')">🗑️ Excluir</button>` : ''}
+      <button class="btn-secondary btn-sm" onclick="editarGarantia('${g.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> Editar</button>
+      ${isAdmin ? `<button class="btn-secondary btn-sm" onclick="mudarStatus('${g.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Status</button>` : ''}
+      ${ehGestor() ? `<button class="btn-danger btn-sm" onclick="excluirGarantia('${g.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Excluir</button>` : ''}
     `;
   }
 
@@ -2177,7 +2177,7 @@ async function loadConsignados() {
   const div = document.getElementById('c-list');
   if (error) {
     const msg = error.message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar.';
-    div.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`;
+    div.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
     return;
   }
   allConsignados = data || [];
@@ -2216,7 +2216,7 @@ function renderCicloGrid() {
   const mostrarBusca = allConsignados.length && (!isAdmin || cicloRevSelecionada);
   if (searchBar) searchBar.style.display = mostrarBusca ? '' : 'none';
   if (!allConsignados.length) {
-    div.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Nenhuma peça no catálogo</p></div>';
+    div.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></div><p>Nenhuma peça no catálogo</p></div>';
     return;
   }
   if (isAdmin) {
@@ -2287,7 +2287,7 @@ function renderCicloRevendedora() {
     qtdDisp(c) > 0
   );
   const btnFechamento = temAtivos
-    ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()">📋 Fechamento do Catálogo</button>`
+    ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</button>`
     : '';
 
   const cabecalho = pedidoLabelHtml(allConsignados, 12);
@@ -2299,7 +2299,7 @@ function renderCicloRevendedora() {
       (c.referencia || '').toLowerCase().includes(termo)
     );
     if (!lista.length) {
-      return `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhuma peça encontrada com "${termo}"</p></div>`;
+      return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhuma peça encontrada com "${termo}"</p></div>`;
     }
     return cabecalho + cicloTableHtml(lista, false) + btnFechamento;
   }
@@ -2374,7 +2374,7 @@ function renderCicloAdmin() {
   const totalPecasVend = allConsignados.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
   const totalRevsAtivas = Object.values(groups).filter(l => l.some(c => c.status === 'ativo')).length;
 
-  return `<button class="btn-secondary" style="width:100%;margin-bottom:14px;border-color:var(--rose);color:var(--rose)" onclick="openBuscaPeca()">🔍 Buscar peça — com quem está</button>
+  return `<button class="btn-secondary" style="width:100%;margin-bottom:14px;border-color:var(--rose);color:var(--rose)" onclick="openBuscaPeca()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar peça — com quem está</button>
     <div class="rev-grid">${cards}</div>
     <div class="rev-total-geral">
       <div>
@@ -2390,13 +2390,13 @@ function renderCicloAdminDetalhe(revId, list) {
   const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
 
   const btnMaleta = ehGestor()
-    ? `<button class="btn-secondary btn-sm" style="border-color:var(--rose);color:var(--rose)" data-bling-id="${revBlingMap[revId] || ''}" data-rev-nome="${esc(nome)}" onclick="atualizarMaleta('${revId}', this)">🔄 Atualizar itens da maleta</button>`
+    ? `<button class="btn-secondary btn-sm" style="border-color:var(--rose);color:var(--rose)" data-bling-id="${revBlingMap[revId] || ''}" data-rev-nome="${esc(nome)}" onclick="atualizarMaleta('${revId}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Atualizar itens da maleta</button>`
     : '';
   const acoes = ehGestor()
     ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
         ${btnMaleta}
-        ${temAtivos ? `<button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="finalizarCicloRev('${revId}')">✓ Finalizar catálogo</button>
-        <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')">🗑️ Deletar catálogo</button>` : ''}
+        ${temAtivos ? `<button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="finalizarCicloRev('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar catálogo</button>
+        <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Deletar catálogo</button>` : ''}
       </div>`
     : (temAtivos ? '' : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem catálogo ativo</div>`);
 
@@ -2409,7 +2409,7 @@ function renderCicloAdminDetalhe(revId, list) {
     );
   }
   const tabelaHtml = (termo && !listaTabela.length)
-    ? `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhuma peça encontrada com "${termo}"</p></div>`
+    ? `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhuma peça encontrada com "${termo}"</p></div>`
     : cicloTableHtml(listaTabela, true);
 
   return `<button class="btn-voltar-ciclo" onclick="voltarCardsCiclo()">← Voltar para revendedoras</button>
@@ -2456,7 +2456,7 @@ function renderBuscaPeca() {
   const div = document.getElementById('bp-results');
   const termo = (document.getElementById('bp-search').value || '').toLowerCase().trim();
   if (!termo) {
-    div.innerHTML = '<div class="empty-state"><div class="empty-icon">💍</div><p>Digite o nome ou código da peça acima.</p></div>';
+    div.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></div><p>Digite o nome ou código da peça acima.</p></div>';
     return;
   }
   const matches = allConsignados.filter(c =>
@@ -2465,7 +2465,7 @@ function renderBuscaPeca() {
   ).sort((a, b) => (a.descricao || '').localeCompare(b.descricao || ''));
 
   if (!matches.length) {
-    div.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhuma peça encontrada com "${termo}"</p></div>`;
+    div.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhuma peça encontrada com "${termo}"</p></div>`;
     return;
   }
 
@@ -2475,13 +2475,13 @@ function renderBuscaPeca() {
     const nomeRev = revNameMap[c.revendedora_id] || 'Revendedora desconhecida';
     const segs = [];
     if (disp > 0) segs.push(`<span style="color:var(--success);font-weight:600">● ${disp} disponíve${disp !== 1 ? 'is' : 'l'}</span>`);
-    if (vendida > 0) segs.push(`<span style="color:var(--rose);font-weight:600">✓ ${vendida} vendida${vendida !== 1 ? 's' : ''}</span>`);
+    if (vendida > 0) segs.push(`<span style="color:var(--rose);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> ${vendida} vendida${vendida !== 1 ? 's' : ''}</span>`);
     if (!segs.length) segs.push('<span style="color:var(--muted)">Sem unidades</span>');
     const encerrado = c.status === 'encerrado' ? '<span style="color:var(--muted)">Catálogo encerrado · </span>' : '';
     const ref = c.referencia ? `<span style="color:var(--muted)">REF ${esc(c.referencia)} · </span>` : '';
     return `<div style="padding:12px 14px;border:1px solid var(--line,#eee);border-radius:12px;margin-bottom:8px">
       <div style="font-weight:600;color:var(--plum)">${esc(c.descricao)}</div>
-      <div style="font-size:12px;margin-top:3px">${ref}🧍 <b>${esc(nomeRev)}</b></div>
+      <div style="font-size:12px;margin-top:3px">${ref}<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg> <b>${esc(nomeRev)}</b></div>
       <div style="font-size:12px;margin-top:4px">${encerrado}${segs.join(' · ')}${c.preco_venda ? ` <span style="color:var(--muted)">· R$ ${Number(c.preco_venda).toFixed(2)}</span>` : ''}</div>
     </div>`;
   }).join('');
@@ -2511,7 +2511,7 @@ async function deletarCicloRev(revId) {
   const nome = revNameMap[revId] || 'esta revendedora';
   const ativos = allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
   if (!ativos.length) { toast('Nenhum catálogo ativo para deletar'); return; }
-  if (!confirm(`⚠️ DELETAR catálogo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} ativa${ativos.length>1?'s':''} serão apagadas PERMANENTEMENTE. Catálogos já encerrados NÃO serão tocados.\n\nEssa ação não pode ser desfeita. Continuar?`)) return;
+  if (!confirm(`DELETAR catálogo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} ativa${ativos.length>1?'s':''} serão apagadas PERMANENTEMENTE. Catálogos já encerrados NÃO serão tocados.\n\nEssa ação não pode ser desfeita. Continuar?`)) return;
   // Confirmação dupla por ser destrutivo
   if (!confirm(`Tem certeza absoluta? Digite OK no próximo prompt para confirmar.`)) return;
   const verif = prompt(`Para confirmar, digite OK:`);
@@ -2582,7 +2582,7 @@ function adicionarAoCarrinho() {
     });
   }
 
-  toast(`✓ ${qtd}× ${c.descricao} adicionado${qtd>1?'s':''} ao carrinho`);
+  toast(`${qtd}× ${c.descricao} adicionado${qtd>1?'s':''} ao carrinho`);
   closeModal('modal-venda');
   renderCartBar();
 }
@@ -2610,7 +2610,7 @@ function renderCartBar() {
   bar.style.display = 'flex';
   bar.innerHTML = `
     <div class="cart-info">
-      <div>🛒 <b>${totalItens}</b> ite${totalItens!==1?'ns':'m'}</div>
+      <div><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg> <b>${totalItens}</b> ite${totalItens!==1?'ns':'m'}</div>
       <div class="cart-info-total">R$ ${totalValor.toFixed(2)}</div>
     </div>
     <button class="btn-finalizar" onclick="abrirFinalizarVenda()">Finalizar →</button>`;
@@ -2629,7 +2629,7 @@ function abrirFinalizarVenda() {
         <div class="cart-item-meta">${it.quantidade}× R$ ${Number(it.preco_unit).toFixed(2)}</div>
       </div>
       <div class="cart-item-total">R$ ${(it.quantidade * it.preco_unit).toFixed(2)}</div>
-      <button class="cart-remove" onclick="removerDoCarrinho(${idx})" title="Remover">🗑</button>
+      <button class="cart-remove" onclick="removerDoCarrinho(${idx})" title="Remover"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
     </div>`).join('') +
     `<div class="cart-total-row"><span>Total</span><span>R$ ${total.toFixed(2)}</span></div>`;
 
@@ -2664,7 +2664,7 @@ async function confirmarVendaCarrinho(btn) {
 
   btn.disabled = true;
   btn.textContent = '⟳ Salvando...';
-  const resetBtn = () => { btn.disabled = false; btn.textContent = '✓ Confirmar venda'; };
+  const resetBtn = () => { btn.disabled = false; btn.textContent = 'Confirmar venda'; };
 
   try {
     // Venda atômica via RPC: cria venda + itens + recebimento e incrementa
@@ -2701,7 +2701,7 @@ async function confirmarVendaCarrinho(btn) {
 
     carrinhoVenda = [];
     resetBtn();
-    toast('✅ Venda registrada!');
+    toast('Venda registrada!');
     closeModal('modal-finalizar');
     renderCartBar();
     allVendas = [];
@@ -2915,7 +2915,7 @@ function infoProximaTroca(blingId) {
 
 function renderProximaTrocaBadge(info) {
   const aviso = info.abertos > 1
-    ? ` <span style="color:var(--warning);font-weight:600">· ⚠️ ${info.abertos} em aberto</span>`
+    ? ` <span style="color:var(--warning);font-weight:600">· <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> ${info.abertos} em aberto</span>`
     : '';
   if (info.status === 'sem-vinculo') return `<span style="font-size:11px;color:var(--muted)">Sem vínculo Bling</span>`;
   if (info.status === 'sem-pedido') return `<span style="font-size:11px;color:var(--muted)">Sem pedidos nos últimos 6 meses</span>`;
@@ -2923,12 +2923,12 @@ function renderProximaTrocaBadge(info) {
   if (info.status === 'sem-data') return `<span style="font-size:11px;color:var(--muted)">Próxima troca não informada no Bling${aviso}</span>`;
   if (info.status === 'vencida') {
     const d = -info.diasRestantes;
-    return `<span style="font-size:11px;color:var(--danger);font-weight:600">⚠️ Troca vencida há ${d} dia${d!==1?'s':''}</span>${aviso}`;
+    return `<span style="font-size:11px;color:var(--danger);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> Troca vencida há ${d} dia${d!==1?'s':''}</span>${aviso}`;
   }
   if (info.status === 'proximo') {
-    return `<span style="font-size:11px;color:var(--warning);font-weight:600">📅 Próxima troca: ${formatDate(info.dataPrevista)} (em ${info.diasRestantes} dia${info.diasRestantes!==1?'s':''})</span>${aviso}`;
+    return `<span style="font-size:11px;color:var(--warning);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg> Próxima troca: ${formatDate(info.dataPrevista)} (em ${info.diasRestantes} dia${info.diasRestantes!==1?'s':''})</span>${aviso}`;
   }
-  return `<span style="font-size:11px;color:var(--muted)">📅 Próxima troca: ${formatDate(info.dataPrevista)}${aviso}</span>`;
+  return `<span style="font-size:11px;color:var(--muted)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg> Próxima troca: ${formatDate(info.dataPrevista)}${aviso}</span>`;
 }
 
 const PRIORIDADE_TROCA = { vencida: 0, proximo: 1, normal: 2, 'sem-data': 3, 'sem-aberto': 4, 'sem-pedido': 5, 'sem-vinculo': 6 };
@@ -2970,7 +2970,7 @@ async function buscarUltimoPedidoRev() {
 
   const blingId = currentProfile.bling_contato_id;
   if (!blingId) {
-    res.innerHTML = `<div class="empty-state"><div class="empty-icon">🔗</div>
+    res.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
       <p>Seu perfil ainda não está vinculado ao Bling.<br>
       <span style="color:var(--muted)">Peça para a administradora vincular seu ID do Bling no painel Admin → seu nome.</span></p>
     </div>`;
@@ -2986,7 +2986,7 @@ async function buscarUltimoPedidoRev() {
     qtdDisp(c) > 0
   );
   if (temPecasAtivas) {
-    res.innerHTML = `<div class="empty-state"><div class="empty-icon">🔒</div>
+    res.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
       <p><strong>Você já tem um catálogo ativo.</strong><br>
       <span style="color:var(--muted)">Finalize o catálogo atual clicando em <strong>Fechamento do Catálogo</strong> na aba Catálogo antes de baixar uma nova relação.</span></p>
     </div>`;
@@ -3000,7 +3000,7 @@ async function buscarUltimoPedidoRev() {
   const todos = await fetchTodosBling(inicio.toISOString().split('T')[0], hoje);
 
   if (!todos) {
-    res.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao conectar com o Bling.</p></div>';
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Erro ao conectar com o Bling.</p></div>';
     return;
   }
 
@@ -3023,7 +3023,7 @@ async function buscarUltimoPedidoRev() {
   }
 
   if (!meusPedidos.length) {
-    res.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Nenhum pedido encontrado nos últimos 6 meses.</p></div>';
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></div><p>Nenhum pedido encontrado nos últimos 6 meses.</p></div>';
     return;
   }
 
@@ -3045,12 +3045,12 @@ async function buscarBling() {
   const todos = await fetchTodosBling(ini, fim);
   if (!todos) {
     blingPedidosCache = [];
-    res.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao conectar com o Bling.</p></div>';
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Erro ao conectar com o Bling.</p></div>';
     return;
   }
   if (!todos.length) {
     blingPedidosCache = [];
-    res.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Nenhum pedido nesse período.</p></div>';
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></div><p>Nenhum pedido nesse período.</p></div>';
     return;
   }
 
@@ -3076,7 +3076,7 @@ function renderBlingRow(p) {
 function renderListaBling() {
   const res = document.getElementById('bling-resultado');
   res.innerHTML =
-    `<input type="text" id="bling-filtro" class="form-control" style="margin-bottom:12px" placeholder="🔍 Buscar por nome da revendedora..." oninput="filtrarBling(this.value)" value="${blingFiltro.replace(/"/g,'&quot;')}">
+    `<input type="text" id="bling-filtro" class="form-control" style="margin-bottom:12px" placeholder="Buscar por nome da revendedora..." oninput="filtrarBling(this.value)" value="${blingFiltro.replace(/"/g,'&quot;')}">
      <div id="bling-lista-info" style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>
      <div id="bling-lista"></div>`;
   aplicarFiltroBling();
@@ -3099,7 +3099,7 @@ function aplicarFiltroBling() {
 
   lista.innerHTML = filtrados.length
     ? filtrados.map(renderBlingRow).join('')
-    : '<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhum pedido com esse nome</p></div>';
+    : '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhum pedido com esse nome</p></div>';
 }
 
 function filtrarBling(val) {
@@ -3120,7 +3120,7 @@ async function verItensBling(pedidoId, numero, btn) {
   const res = document.getElementById('bling-resultado');
 
   if (!blingRevs.length) {
-    res.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Nenhuma revendedora aprovada encontrada. Verifique o painel Admin.</p></div>';
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Nenhuma revendedora aprovada encontrada. Verifique o painel Admin.</p></div>';
     return;
   }
 
@@ -3132,13 +3132,13 @@ async function renderItensBling(pedidoId, numero, fixedRevId, mostrarSeletor) {
   const res = document.getElementById('bling-resultado');
   const resp = await fetch(`${BLING_ITENS_FN}?id=${pedidoId}`, { headers: BLING_HEADERS });
   if (!resp.ok) {
-    res.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao buscar itens do pedido.</p></div>';
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Erro ao buscar itens do pedido.</p></div>';
     return;
   }
   const json = await resp.json();
   const itens = json.data?.itens || json.itens || json.data || [];
   if (!itens.length) {
-    res.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>Nenhum item nesse pedido.</p></div>';
+    res.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></div><p>Nenhum item nesse pedido.</p></div>';
     return;
   }
 
@@ -3188,7 +3188,7 @@ async function renderItensBling(pedidoId, numero, fixedRevId, mostrarSeletor) {
       </table>
     </div>
     <button class="btn-primary" style="width:100%" onclick="importarItensBling(${numero},this)">
-      ⬇️ Importar ${itens.length} ite${itens.length!==1?'ns':'m'} para o Catálogo
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Importar ${itens.length} ite${itens.length!==1?'ns':'m'} para o Catálogo
     </button>`;
 }
 
@@ -3229,12 +3229,12 @@ async function importarItensBling(numero, btn) {
   if (error) {
     console.error('Erro ao importar itens:', error.message, error.details, error.hint, error);
     toast('Erro: ' + (error.message || 'tente novamente'));
-    btn.textContent = `⬇️ Importar ${itens.length} ite${itens.length!==1?'ns':'m'} para o Catálogo`;
+    btn.textContent = `Importar ${itens.length} ite${itens.length!==1?'ns':'m'} para o Catálogo`;
     btn.disabled = false;
     return;
   }
 
-  btn.textContent = `✅ ${itens.length} ite${itens.length!==1?'ns':'m'} importado${itens.length!==1?'s':''}!`;
+  btn.textContent = `${itens.length} ite${itens.length!==1?'ns':'m'} importado${itens.length!==1?'s':''}!`;
   toast(`Pedido #${numero} — ${itens.length} itens adicionados ao Catálogo!`);
   closeModal('modal-bling');
   loadConsignados();
@@ -3249,7 +3249,7 @@ async function loadVendas() {
   const { data, error } = await sbQ(q.order('data_venda', { ascending: false }));
   if (error) {
     const msg = error.message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar.';
-    document.getElementById('p-list').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`;
+    document.getElementById('p-list').innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
     return;
   }
   allVendas = data || [];
@@ -3271,7 +3271,7 @@ function filtrarPagamentos() {
   </div>`;
 
   if (!list.length) {
-    div.innerHTML = resumo + '<div class="empty-state"><div class="empty-icon">💰</div><p>Nenhuma venda encontrada</p></div>';
+    div.innerHTML = resumo + '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg></div><p>Nenhuma venda encontrada</p></div>';
     return;
   }
 
@@ -3335,13 +3335,13 @@ async function verVenda(id) {
   const recebsHtml = recebimentos.length
     ? recebimentos.map(r => `
         <div class="hist-item-row">
-          <span style="color:var(--success)">✓ ${formatDate(r.data_recebimento)}</span>
+          <span style="color:var(--success)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> ${formatDate(r.data_recebimento)}</span>
           <span>R$ ${Number(r.valor).toFixed(2)}</span>
         </div>`).join('')
     : '<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0">Nenhum recebimento registrado ainda</div>';
 
   document.getElementById('detalhe-venda-content').innerHTML = `
-    <div class="modal-title">💰 ${esc(v.nome_cliente)}</div>
+    <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg> ${esc(v.nome_cliente)}</div>
     <div class="detail-grid">
       <div class="detail-row"><div class="detail-key">Data venda</div><div class="detail-val">${formatDate(v.data_venda)}</div></div>
       <div class="detail-row"><div class="detail-key">Forma</div><div class="detail-val">${v.forma_pagamento}</div></div>
@@ -3367,10 +3367,10 @@ async function verVenda(id) {
       </div>
     </div>
     <button class="btn-primary" style="width:100%" onclick="registrarPagamento('${id}')">Confirmar recebimento</button>
-    ` : `<div class="alert" style="background:rgba(76,175,130,0.1);color:var(--success);border:1px solid rgba(76,175,130,0.3);margin-top:8px;padding:10px 14px;border-radius:10px">✅ Pagamento quitado</div>`}
+    ` : `<div class="alert" style="background:rgba(76,175,130,0.1);color:var(--success);border:1px solid rgba(76,175,130,0.3);margin-top:8px;padding:10px 14px;border-radius:10px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Pagamento quitado</div>`}
     <div style="display:flex;gap:10px;margin-top:10px">
       <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-detalhe-venda')">Fechar</button>
-      <button class="btn-danger" onclick="excluirVenda('${id}')">🗑 Excluir</button>
+      <button class="btn-danger" onclick="excluirVenda('${id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Excluir</button>
     </div>`;
   openModal('modal-detalhe-venda');
 }
@@ -3439,7 +3439,7 @@ async function loadHistorico() {
     let q = sb.from('vendas').select('*').eq('revendedora_id', currentUser.id);
     const { data, error } = await sbQ(q.order('data_venda', { ascending: false }));
     if (error) {
-      document.getElementById('h-list').innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao carregar.</p></div>';
+      document.getElementById('h-list').innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Erro ao carregar.</p></div>';
       return;
     }
     allVendas = data || [];
@@ -3464,8 +3464,8 @@ function filtrarHistorico() {
 
   if (!clientes.length) {
     div.innerHTML = termo
-      ? `<div class="empty-state"><div class="empty-icon">🔍</div><p>Nenhuma cliente encontrada com "${termo}"</p></div>`
-      : '<div class="empty-state"><div class="empty-icon">📚</div><p>Nenhuma venda ainda. As compras das suas clientes aparecerão aqui.</p></div>';
+      ? `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhuma cliente encontrada com "${termo}"</p></div>`
+      : '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg></div><p>Nenhuma venda ainda. As compras das suas clientes aparecerão aqui.</p></div>';
     return;
   }
 
@@ -3507,7 +3507,7 @@ function renderHistoricoDetalhes(vendas) {
     return `<div class="hist-venda-bloco">
       <div class="hist-venda-head">
         <b>${formatDate(v.data_venda)} · ${v.forma_pagamento}</b>
-        <span>R$ ${Number(v.valor_total).toFixed(2)} ${pend>0?`<span style="color:var(--danger)">(pendente R$ ${pend.toFixed(2)})</span>`:'<span style="color:var(--success)">✓ quitado</span>'}</span>
+        <span>R$ ${Number(v.valor_total).toFixed(2)} ${pend>0?`<span style="color:var(--danger)">(pendente R$ ${pend.toFixed(2)})</span>`:'<span style="color:var(--success)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> quitado</span>'}</span>
       </div>
       ${itensHtml}
     </div>`;
@@ -3541,13 +3541,13 @@ async function loadAdmin() {
   ]);
   if (e1 || e2) {
     const msg = (e1||e2).message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar revendedoras.';
-    document.getElementById('rev-list').innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>${msg}</p></div>`;
+    document.getElementById('rev-list').innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
     return;
   }
 
   const pendDiv = document.getElementById('pendentes-list');
   if (pendentes && pendentes.length) {
-    pendDiv.innerHTML = `<div class="alert alert-warning">⏳ ${pendentes.length} cadastro${pendentes.length>1?'s':''} aguardando aprovação</div>` +
+    pendDiv.innerHTML = `<div class="alert alert-warning"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg> ${pendentes.length} cadastro${pendentes.length>1?'s':''} aguardando aprovação</div>` +
       pendentes.map(r => renderRevCard(r, true)).join('');
   } else pendDiv.innerHTML = '';
 
@@ -3559,7 +3559,7 @@ async function renderAprovadas() {
   const revDiv = document.getElementById('rev-list');
   if (!revDiv) return;
   if (!aprovadasCache.length) {
-    revDiv.innerHTML = '<div class="empty-state"><div class="empty-icon">👥</div><p>Nenhuma revendedora aprovada</p></div>';
+    revDiv.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><p>Nenhuma revendedora aprovada</p></div>';
     return;
   }
   if (ordemTrocaProxima && !proximaTrocaCarregado) {
@@ -3567,7 +3567,7 @@ async function renderAprovadas() {
     await carregarProximasTrocas();
   }
   const lista = ordemTrocaProxima ? [...aprovadasCache].sort(compararPorTroca) : aprovadasCache;
-  const btnLabel = ordemTrocaProxima ? '🔤 Ordem alfabética' : '📅 Trocas próximas';
+  const btnLabel = ordemTrocaProxima ? '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M20 8h-5"/><path d="M15 10V6.5a2.5 2.5 0 0 1 5 0V10"/><path d="M15 14h5l-5 6h5"/></svg> Ordem alfabética' : '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg> Trocas próximas';
   revDiv.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap">
       <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">
@@ -3591,9 +3591,9 @@ let trocasFiltroAtivo = 'todas';
 
 const TROCAS_FILTROS = [
   { id: 'todas', label: 'Todas' },
-  { id: 'vencidas', label: '🔴 Vencidas' },
-  { id: 'proximos-7', label: '🟠 Próximos 7 dias' },
-  { id: 'proximos-30', label: '🟢 Próximos 30 dias' },
+  { id: 'vencidas', label: '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--danger);margin-right:5px;vertical-align:middle"></span>Vencidas' },
+  { id: 'proximos-7', label: '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#e8932f;margin-right:5px;vertical-align:middle"></span>Próximos 7 dias' },
+  { id: 'proximos-30', label: '<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--success);margin-right:5px;vertical-align:middle"></span>Próximos 30 dias' },
   { id: 'sem-data', label: 'Sem data' },
   { id: 'sem-vinculo', label: 'Sem vínculo' }
 ];
@@ -3648,7 +3648,7 @@ async function loadTrocasDashboard() {
   }
   const ok = await carregarProximasTrocas();
   if (!ok) {
-    lista.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao consultar Bling.</p></div>';
+    lista.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Erro ao consultar Bling.</p></div>';
     return;
   }
   renderTrocas();
@@ -3670,10 +3670,10 @@ function renderTrocas() {
     if (info.status === 'sem-vinculo') semVinculo++;
   }
   stats.innerHTML = `
-    <div class="stat-card"><div class="stat-num" style="color:var(--danger)">${vencidas}</div><div class="stat-label">🔴 Vencidas</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--warning)">${prox7}</div><div class="stat-label">🟠 Próx. 7 dias</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--success)">${noMes}</div><div class="stat-label">🟢 No mês</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--muted)">${semVinculo}</div><div class="stat-label">⚪ Sem vínculo</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--danger)">${vencidas}</div><div class="stat-label"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--danger);margin-right:5px;vertical-align:middle"></span>Vencidas</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--warning)">${prox7}</div><div class="stat-label"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#e8932f;margin-right:5px;vertical-align:middle"></span>Próx. 7 dias</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--success)">${noMes}</div><div class="stat-label"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--success);margin-right:5px;vertical-align:middle"></span>No mês</div></div>
+    <div class="stat-card"><div class="stat-num" style="color:var(--muted)">${semVinculo}</div><div class="stat-label"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-right:5px;vertical-align:middle"></span>Sem vínculo</div></div>
   `;
 
   // Chips
@@ -3687,7 +3687,7 @@ function renderTrocas() {
   filtradas.sort(compararPorTroca);
 
   if (!filtradas.length) {
-    lista.innerHTML = '<div class="empty-state"><div class="empty-icon">📭</div><p>Nenhuma revendedora neste filtro.</p></div>';
+    lista.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div><p>Nenhuma revendedora neste filtro.</p></div>';
     return;
   }
   lista.innerHTML = filtradas.map(renderTrocaRow).join('');
@@ -3734,17 +3734,17 @@ function renderTrocaRow(r) {
     : 'Sem troca anterior';
 
   const aviso = info.abertos > 1
-    ? `<div style="font-size:11px;color:var(--warning);font-weight:600;margin-top:4px">⚠️ ${info.abertos} pedidos em aberto</div>`
+    ? `<div style="font-size:11px;color:var(--warning);font-weight:600;margin-top:4px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> ${info.abertos} pedidos em aberto</div>`
     : '';
 
   const telLink = telLimpo
-    ? `<a href="${whatsappLink(tel, mensagemTroca(r.nome, info.dataPrevista))}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" onclick="event.stopPropagation()">📞 ${esc(tel)}</a>`
-    : '<span>📞 sem telefone</span>';
+    ? `<a href="${whatsappLink(tel, mensagemTroca(r.nome, info.dataPrevista))}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" onclick="event.stopPropagation()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> ${esc(tel)}</a>`
+    : '<span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> sem telefone</span>';
 
   const waMsg = mensagemTroca(r.nome, info.dataPrevista);
   const waUrl = whatsappLink(tel, waMsg);
   const botaoWa = waUrl
-    ? `<a href="${waUrl}" target="_blank" rel="noopener" class="troca-wa" onclick="event.stopPropagation()">💬 Avisar pelo WhatsApp</a>`
+    ? `<a href="${waUrl}" target="_blank" rel="noopener" class="troca-wa" onclick="event.stopPropagation()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Avisar pelo WhatsApp</a>`
     : `<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:10px">Cadastre o telefone para usar o WhatsApp</div>`;
 
   return `<div class="card troca-row" onclick="verRevendedora('${r.id}')" style="cursor:pointer">
@@ -3775,7 +3775,7 @@ function renderRevCard(r, pendente) {
         <div class="rev-cidade">${esc(r.cidade || 'Cidade não informada')} · ${esc(r.telefone || '—')}</div>
       </div>
       <div class="rev-status">
-        ${pendente ? '<span class="badge badge-pendente"><span class="pending-dot"></span>Pendente</span>' : '<span class="badge badge-ativo">✅ Ativa</span>'}
+        ${pendente ? '<span class="badge badge-pendente"><span class="pending-dot"></span>Pendente</span>' : '<span class="badge badge-ativo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Ativa</span>'}
       </div>
     </div>
     ${trocaSlot}
@@ -3804,14 +3804,14 @@ async function verRevendedora(id) {
     ${ehGestor() ? `
     <div class="divider"></div>
     <div class="form-group">
-      <label class="form-label">🔗 ID do contato no Bling</label>
+      <label class="form-label"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> ID do contato no Bling</label>
       <div style="display:flex;gap:8px">
         <input type="text" id="rev-bling-id" class="form-control" placeholder="Ex: 12587268646" value="${r.bling_contato_id || ''}">
         <button class="btn-secondary btn-sm" style="white-space:nowrap" onclick="salvarBlingId('${r.id}')">Salvar</button>
       </div>
       <div style="display:flex;justify-content:space-between;align-items:center;margin-top:5px;gap:8px">
         <div style="font-size:11px;color:var(--muted)">Cole o ID que aparece ao lado do nome dela na lista de pedidos do Bling</div>
-        <button class="btn-secondary btn-sm" style="white-space:nowrap;font-size:11px" data-rev-nome="${esc(r.nome || '')}" onclick="detectarBlingId('${r.id}', this.dataset.revNome)">🔍 Detectar pelo Bling</button>
+        <button class="btn-secondary btn-sm" style="white-space:nowrap;font-size:11px" data-rev-nome="${esc(r.nome || '')}" onclick="detectarBlingId('${r.id}', this.dataset.revNome)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Detectar pelo Bling</button>
       </div>
       <div id="bling-candidatos" style="margin-top:10px"></div>
     </div>` : ''}
@@ -3825,10 +3825,10 @@ async function verRevendedora(id) {
     </div>` : ''}
     <div class="detail-actions" id="rev-actions" style="margin-top:12px">
       ${ehGestor() ? (!r.aprovada
-        ? `<button class="btn-primary" onclick="aprovarRev('${r.id}')">✅ Aprovar acesso</button>`
-        : `<button class="btn-danger" onclick="revogarRev('${r.id}')">🚫 Revogar acesso</button>`) : ''}
+        ? `<button class="btn-primary" onclick="aprovarRev('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Aprovar acesso</button>`
+        : `<button class="btn-danger" onclick="revogarRev('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg> Revogar acesso</button>`) : ''}
       <button class="btn-secondary" onclick="closeModal('modal-detalhe-rev')">Fechar</button>
-      ${ehAdmin() ? `<button class="btn-danger" data-rev-nome="${esc(r.nome || '')}" onclick="confirmarExclusaoRev('${r.id}', this)">🗑️ Excluir revendedora</button>` : ''}
+      ${ehAdmin() ? `<button class="btn-danger" data-rev-nome="${esc(r.nome || '')}" onclick="confirmarExclusaoRev('${r.id}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Excluir revendedora</button>` : ''}
     </div>
   `;
   openModal('modal-detalhe-rev');
@@ -3937,7 +3937,7 @@ async function atualizarMaleta(revId, btn) {
   const hoje = new Date().toISOString().split('T')[0];
   const inicio = new Date(); inicio.setMonth(inicio.getMonth() - 12);
   const todos = await fetchTodosBling(inicio.toISOString().split('T')[0], hoje);
-  if (!todos) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao conectar com o Bling. Tente de novo.</p></div>'; return; }
+  if (!todos) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Erro ao conectar com o Bling. Tente de novo.</p></div>'; return; }
 
   // Candidatos = UNIÃO de:
   //  (1) pedidos JÁ vinculados à maleta (por número carimbado) — cobre o modelo
@@ -3968,8 +3968,8 @@ async function atualizarMaleta(revId, btn) {
   if (!candidatos.length) {
     const dica = pedidoNums.length
       ? `Pedido(s) vinculado(s): ${pedidoNums.map(n => '#' + n).join(', ')} — não retornaram na busca (mais de 12 meses atrás?).`
-      : 'Importe a relação uma vez (📥 Baixar Relação de Peças) para vincular o pedido, ou confira o ID do contato Bling.';
-    cont.innerHTML = `<div class="empty-state"><div class="empty-icon">📭</div>
+      : 'Importe a relação uma vez (<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Baixar Relação de Peças) para vincular o pedido, ou confira o ID do contato Bling.';
+    cont.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div>
       <p>Nenhum pedido encontrado no Bling para <strong>${esc(nome)}</strong>.</p>
       <p style="font-size:12px;color:var(--muted);margin-top:6px">${dica}</p></div>`;
     return;
@@ -3994,12 +3994,12 @@ async function previewMaleta(revId, nome, pedido) {
   cont.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Comparando com a maleta...</div>';
 
   const resp = await fetch(`${BLING_ITENS_FN}?id=${pedido.id}`, { headers: BLING_HEADERS });
-  if (!resp.ok) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao buscar os itens do pedido.</p></div>'; return; }
+  if (!resp.ok) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Erro ao buscar os itens do pedido.</p></div>'; return; }
   const json = await resp.json();
   const itensBling = json.data?.itens || json.itens || json.data || [];
 
   const { data: ativos, error } = await sbQ(sb.from('consignados').select('referencia,quantidade_enviada').eq('revendedora_id', revId).eq('status', 'ativo'));
-  if (error) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Erro ao ler a maleta atual.</p></div>'; return; }
+  if (error) { cont.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Erro ao ler a maleta atual.</p></div>'; return; }
 
   // Soma por SKU na maleta (inclui vendidas, pois quantidade_enviada as conta).
   const appPorRef = {};
@@ -4028,7 +4028,7 @@ async function previewMaleta(revId, nome, pedido) {
 
   let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:12px">Maleta de <strong>${esc(nome)}</strong> · Pedido #${pedido.numero}</div>`;
   if (!novos.length) {
-    html += `<div class="empty-state"><div class="empty-icon">✅</div><p>Maleta já está atualizada.</p></div>`;
+    html += `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></div><p>Maleta já está atualizada.</p></div>`;
   } else {
     html += `<div style="font-weight:600;color:var(--plum);margin-bottom:8px">${totalNovas} ite${totalNovas!==1?'ns':'m'} novo${totalNovas!==1?'s':''} serão adicionados ao final:</div>`;
     html += novos.map(n => `<div style="display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
@@ -4037,16 +4037,16 @@ async function previewMaleta(revId, nome, pedido) {
   }
   if (avisosNeg.length) {
     html += `<div style="margin-top:12px;background:rgba(212,168,75,0.12);border:1px solid var(--gold);border-radius:10px;padding:10px;font-size:12px;color:var(--text)">
-      ⚠️ <strong>Conferir manualmente</strong> — no Bling estes SKUs têm MENOS unidades que a maleta (nada é removido):
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> <strong>Conferir manualmente</strong> — no Bling estes SKUs têm MENOS unidades que a maleta (nada é removido):
       ${avisosNeg.map(a => `<div>• ${esc(a.descricao)} — Bling ${Math.floor(a.quantidade)} / maleta ${a.app}</div>`).join('')}</div>`;
   }
   if (semCodigo.length) {
     html += `<div style="margin-top:12px;background:rgba(224,85,85,0.10);border:1px solid var(--danger);border-radius:10px;padding:10px;font-size:12px;color:var(--text)">
-      ⚠️ <strong>${semCodigo.length} item(ns) sem código no Bling</strong> — NÃO sincronizados, conferir manualmente:
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> <strong>${semCodigo.length} item(ns) sem código no Bling</strong> — NÃO sincronizados, conferir manualmente:
       ${semCodigo.map(s => `<div>• ${esc(s.descricao || '(sem descrição)')} — qtd ${Number(s.quantidade) || 0}</div>`).join('')}</div>`;
   }
   if (novos.length) {
-    html += `<button class="btn-primary" style="width:100%;margin-top:14px" onclick="confirmarMaleta(this)">⬇️ Adicionar ${totalNovas} ite${totalNovas!==1?'ns':'m'} à maleta</button>`;
+    html += `<button class="btn-primary" style="width:100%;margin-top:14px" onclick="confirmarMaleta(this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Adicionar ${totalNovas} ite${totalNovas!==1?'ns':'m'} à maleta</button>`;
   }
   cont.innerHTML = html;
 }
@@ -4067,7 +4067,7 @@ async function confirmarMaleta(btn) {
     toast(msg); btn.disabled = false; btn.textContent = 'Tentar de novo'; return;
   }
   const n = Number(data) || 0;
-  toast(n > 0 ? `✅ ${n} ite${n!==1?'ns':'m'} adicionado${n!==1?'s':''} à maleta!` : 'Maleta já estava atualizada');
+  toast(n > 0 ? `${n} ite${n!==1?'ns':'m'} adicionado${n!==1?'s':''} à maleta!` : 'Maleta já estava atualizada');
   closeModal('modal-maleta');
   allConsignados = [];
   if (document.getElementById('panel-consignados').style.display !== 'none') loadConsignados();
@@ -4085,7 +4085,7 @@ async function salvarBlingId(revId) {
     toast('Erro: ' + (error.message || 'tente novamente'));
     return;
   }
-  toast(val ? '🔗 ID Bling vinculado!' : 'Vínculo Bling removido');
+  toast(val ? 'ID Bling vinculado!' : 'Vínculo Bling removido');
   blingRevs = [];
   proximaTrocaCarregado = false;
   closeModal('modal-detalhe-rev');
@@ -4100,7 +4100,7 @@ async function detectarBlingId(revId, nomeRev) {
   console.log('[detectarBling] tokens alvo:', tAlvo);
   if (!tAlvo.length) { toast('Nome da revendedora vazio'); return; }
 
-  toast('🔍 Buscando no Bling...');
+  toast('Buscando no Bling...');
   const hoje = new Date().toISOString().split('T')[0];
   const inicio = new Date(); inicio.setMonth(inicio.getMonth() - 6);
   const todos = await fetchTodosBling(inicio.toISOString().split('T')[0], hoje);
@@ -4149,7 +4149,7 @@ async function detectarBlingId(revId, nomeRev) {
 
   if (unicos.length === 1) {
     input.value = unicos[0].id;
-    toast(`✅ ID encontrado: ${unicos[0].id} — clique em Salvar`);
+    toast(`ID encontrado: ${unicos[0].id} — clique em Salvar`);
     return;
   }
 
@@ -4400,20 +4400,20 @@ init();
       const el = document.getElementById('install-instrucoes');
       if (isIOS) {
         el.innerHTML = `No iPhone/iPad, use o <b>Safari</b>:<br><br>
-          1️⃣ Toque no botão <b>Compartilhar</b> (quadradinho com a seta ↑, na barra de baixo)<br>
-          2️⃣ Role e toque em <b>Adicionar à Tela de Início</b><br>
-          3️⃣ Toque em <b>Adicionar</b><br><br>
+          1. Toque no botão <b>Compartilhar</b> (quadradinho com a seta ↑, na barra de baixo)<br>
+          2. Role e toque em <b>Adicionar à Tela de Início</b><br>
+          3. Toque em <b>Adicionar</b><br><br>
           <span style="color:var(--muted);font-size:12px">Pelo Chrome do iPhone não dá — tem que ser o Safari.</span>`;
       } else if (isAndroid) {
         el.innerHTML = `No Android, use o <b>Chrome</b>:<br><br>
-          1️⃣ Toque no menu <b>⋮</b> (três pontinhos, canto superior direito)<br>
-          2️⃣ Toque em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b><br>
-          3️⃣ Confirme em <b>Instalar</b><br><br>
+          1. Toque no menu <b>⋮</b> (três pontinhos, canto superior direito)<br>
+          2. Toque em <b>Instalar app</b> ou <b>Adicionar à tela inicial</b><br>
+          3. Confirme em <b>Instalar</b><br><br>
           <span style="color:var(--muted);font-size:12px">Se você abriu pelo Instagram/WhatsApp, toque em ⋮ → "Abrir no Chrome" antes.</span>`;
       } else {
         el.innerHTML = `No computador, use o <b>Chrome</b> ou <b>Edge</b>:<br><br>
-          1️⃣ Clique no ícone de <b>instalar</b> (⊕ / monitor) no fim da barra de endereço<br>
-          2️⃣ Confirme em <b>Instalar</b>`;
+          1. Clique no ícone de <b>instalar</b> (⊕ / monitor) no fim da barra de endereço<br>
+          2. Confirme em <b>Instalar</b>`;
       }
       openModal('modal-install');
     }
