@@ -1269,6 +1269,19 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   </div>
 </div>
 
+<!-- MODAL DE CONFIRMAÇÃO (embutido, funciona no PWA — substitui confirm()/prompt()) -->
+<div class="modal-overlay" id="modal-confirma" data-lock-outside>
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="confirma-titulo"></div>
+    <p id="confirma-msg" style="font-size:14px;color:var(--text);line-height:1.6;white-space:pre-line;margin:-4px 0 18px"></p>
+    <div style="display:flex;gap:10px">
+      <button class="btn-secondary" style="flex:1" onclick="fecharConfirma(false)">Cancelar</button>
+      <button class="btn-danger" style="flex:1" id="confirma-ok" onclick="fecharConfirma(true)">Confirmar</button>
+    </div>
+  </div>
+</div>
+
 <!-- PWA install UI -->
 <button id="install-btn" type="button" aria-label="Instalar app">
   <span style="font-size:16px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></span><span>Instalar app</span>
@@ -2135,16 +2148,17 @@ async function excluirGarantia(id) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
   const g = allGarantias.find(x => x.id === id);
   const desc = g ? g.descricao_item : 'esta garantia';
-  if (!confirm(`Excluir a garantia "${desc}"?\n\nEssa ação não pode ser desfeita.`)) return;
-  let error;
-  try {
-    ({ error } = await sb.from('garantias').delete().eq('id', id));
-  } catch (e) { error = e; }
-  if (await handleSupabaseError(error, 'Erro ao excluir garantia')) return;
-  closeModal('modal-detalhe-g');
-  toast('Garantia excluída');
-  loadGarantias();
-  loadDashboard();
+  confirmarAcao('Excluir garantia', `Excluir a garantia "${desc}"?\n\nEssa ação não pode ser desfeita.`, 'Excluir', async () => {
+    let error;
+    try {
+      ({ error } = await sb.from('garantias').delete().eq('id', id));
+    } catch (e) { error = e; }
+    if (await handleSupabaseError(error, 'Erro ao excluir garantia')) return;
+    closeModal('modal-detalhe-g');
+    toast('Garantia excluída');
+    loadGarantias();
+    loadDashboard();
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -2496,18 +2510,18 @@ async function finalizarCicloRev(revId) {
   const nome = revNameMap[revId] || 'esta revendedora';
   const ativos = allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
   if (!ativos.length) { toast('Nenhum catálogo ativo para finalizar'); return; }
-  if (!confirm(`Finalizar catálogo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} passarão para "encerrado". Essa ação não pode ser desfeita.`)) return;
-
-  let error;
-  try {
-    ({ error } = await sb.from('consignados')
-      .update({ status: 'encerrado' })
-      .eq('revendedora_id', revId)
-      .eq('status', 'ativo'));
-  } catch (e) { error = e; }
-  if (await handleSupabaseError(error, 'Erro ao finalizar catálogo')) return;
-  toast(`Catálogo de ${nome} encerrado`);
-  loadConsignados();
+  confirmarAcao('Finalizar catálogo', `Finalizar catálogo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} passarão para "encerrado". Essa ação não pode ser desfeita.`, 'Finalizar', async () => {
+    let error;
+    try {
+      ({ error } = await sb.from('consignados')
+        .update({ status: 'encerrado' })
+        .eq('revendedora_id', revId)
+        .eq('status', 'ativo'));
+    } catch (e) { error = e; }
+    if (await handleSupabaseError(error, 'Erro ao finalizar catálogo')) return;
+    toast(`Catálogo de ${nome} encerrado`);
+    loadConsignados();
+  });
 }
 
 async function deletarCicloRev(revId) {
@@ -2515,23 +2529,19 @@ async function deletarCicloRev(revId) {
   const nome = revNameMap[revId] || 'esta revendedora';
   const ativos = allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
   if (!ativos.length) { toast('Nenhum catálogo ativo para deletar'); return; }
-  if (!confirm(`DELETAR catálogo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} ativa${ativos.length>1?'s':''} serão apagadas PERMANENTEMENTE. Catálogos já encerrados NÃO serão tocados.\n\nEssa ação não pode ser desfeita. Continuar?`)) return;
-  // Confirmação dupla por ser destrutivo
-  if (!confirm(`Tem certeza absoluta? Digite OK no próximo prompt para confirmar.`)) return;
-  const verif = prompt(`Para confirmar, digite OK:`);
-  if ((verif || '').trim().toUpperCase() !== 'OK') { toast('Cancelado'); return; }
-
-  // SEGURANÇA: o .eq('status','ativo') garante que ciclos encerrados são preservados
-  let error;
-  try {
-    ({ error } = await sb.from('consignados')
-      .delete()
-      .eq('revendedora_id', revId)
-      .eq('status', 'ativo'));
-  } catch (e) { error = e; }
-  if (await handleSupabaseError(error, 'Erro ao deletar catálogo')) return;
-  toast(`Catálogo ativo de ${nome} deletado`);
-  loadConsignados();
+  confirmarAcao('⚠ Deletar catálogo', `DELETAR o catálogo ativo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} ativa${ativos.length>1?'s':''} serão APAGADAS PERMANENTEMENTE (catálogos já encerrados NÃO são tocados).\n\nEssa ação não pode ser desfeita.`, 'Sim, deletar tudo', async () => {
+    // SEGURANÇA: o .eq('status','ativo') garante que ciclos encerrados são preservados
+    let error;
+    try {
+      ({ error } = await sb.from('consignados')
+        .delete()
+        .eq('revendedora_id', revId)
+        .eq('status', 'ativo'));
+    } catch (e) { error = e; }
+    if (await handleSupabaseError(error, 'Erro ao deletar catálogo')) return;
+    toast(`Catálogo ativo de ${nome} deletado`);
+    loadConsignados();
+  });
 }
 
 // ═══════════════════════════════════════════════
@@ -3380,34 +3390,34 @@ async function verVenda(id) {
 }
 
 async function excluirVenda(id) {
-  if (!confirm('Excluir esta venda? As peças vão voltar para o seu Catálogo. Essa ação não pode ser desfeita.')) return;
-
-  let itens = vendaItensCache[id];
-  if (!itens) {
-    const { data, error } = await sbQ(sb.from('venda_itens').select('*').eq('venda_id', id));
-    if (error) { toast('Erro ao buscar itens'); return; }
-    itens = data || [];
-  }
-
-  for (const it of itens) {
-    if (!it.consignado_id) continue;
-    const { data: c } = await sbQ(sb.from('consignados').select('quantidade_vendida').eq('id', it.consignado_id).single());
-    if (c) {
-      const nova = Math.max(0, (c.quantidade_vendida || 0) - it.quantidade);
-      await sbQ(sb.from('consignados').update({ quantidade_vendida: nova }).eq('id', it.consignado_id));
+  confirmarAcao('Excluir venda', 'Excluir esta venda? As peças vão voltar para o seu Catálogo. Essa ação não pode ser desfeita.', 'Excluir', async () => {
+    let itens = vendaItensCache[id];
+    if (!itens) {
+      const { data, error } = await sbQ(sb.from('venda_itens').select('*').eq('venda_id', id));
+      if (error) { toast('Erro ao buscar itens'); return; }
+      itens = data || [];
     }
-  }
 
-  // Remove itens e recebimentos antes da venda — nao depende de ON DELETE
-  // CASCADE nas FKs (se o cascade existir, esses deletes sao inofensivos).
-  await sbQ(sb.from('venda_itens').delete().eq('venda_id', id));
-  await sbQ(sb.from('recebimentos').delete().eq('venda_id', id));
+    for (const it of itens) {
+      if (!it.consignado_id) continue;
+      const { data: c } = await sbQ(sb.from('consignados').select('quantidade_vendida').eq('id', it.consignado_id).single());
+      if (c) {
+        const nova = Math.max(0, (c.quantidade_vendida || 0) - it.quantidade);
+        await sbQ(sb.from('consignados').update({ quantidade_vendida: nova }).eq('id', it.consignado_id));
+      }
+    }
 
-  const { error } = await sb.from('vendas').delete().eq('id', id);
-  if (error) { toast('Erro ao excluir'); return; }
-  toast('Venda excluída — peças devolvidas ao Catálogo');
-  closeModal('modal-detalhe-venda');
-  loadVendas();
+    // Remove itens e recebimentos antes da venda — nao depende de ON DELETE
+    // CASCADE nas FKs (se o cascade existir, esses deletes sao inofensivos).
+    await sbQ(sb.from('venda_itens').delete().eq('venda_id', id));
+    await sbQ(sb.from('recebimentos').delete().eq('venda_id', id));
+
+    const { error } = await sb.from('vendas').delete().eq('id', id);
+    if (error) { toast('Erro ao excluir'); return; }
+    toast('Venda excluída — peças devolvidas ao Catálogo');
+    closeModal('modal-detalhe-venda');
+    loadVendas();
+  });
 }
 
 async function registrarPagamento(id) {
@@ -4300,6 +4310,21 @@ function fecharPrint() {
 // ═══════════════════════════════════════════════
 function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// Confirmação embutida (PWA-safe) — substitui confirm()/prompt() nativos.
+let _confirmaCb = null;
+function confirmarAcao(titulo, msg, textoBotao, onConfirm) {
+  document.getElementById('confirma-titulo').textContent = titulo;
+  document.getElementById('confirma-msg').textContent = msg;
+  document.getElementById('confirma-ok').textContent = textoBotao || 'Confirmar';
+  _confirmaCb = onConfirm;
+  openModal('modal-confirma');
+}
+function fecharConfirma(ok) {
+  closeModal('modal-confirma');
+  const cb = _confirmaCb; _confirmaCb = null;
+  if (ok && cb) cb();
+}
 
 document.querySelectorAll('.modal-overlay').forEach(o => {
   // data-lock-outside: so fecha pelo botao Fechar/Cancelar (ex.: garantia),
