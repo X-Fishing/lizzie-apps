@@ -4521,9 +4521,10 @@ init();
     let deferredPrompt = null;
     const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
     const isAndroid = /Android/.test(navigator.userAgent);
+    const ehMobile = isIOS || isAndroid;
 
-    // Botão sempre disponível enquanto não estiver instalado.
-    installBtn.classList.add('show');
+    // "Instalar app" só faz sentido no celular/tablet — no desktop não aparece.
+    if (ehMobile) installBtn.classList.add('show');
 
     window.addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
