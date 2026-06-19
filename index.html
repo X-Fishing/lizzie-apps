@@ -3940,15 +3940,20 @@ async function atualizarMaleta(revId, btn) {
   // Sem isso, um pedido novo em aberto (ex.: #18526) não aparecia quando a maleta
   // já tinha outros pedidos vinculados.
   const vinculados = pedidoNums.length ? todos.filter(p => pedidoNums.includes(String(p.numero))) : [];
+  // Pedidos EM ABERTO da revendedora: casa por ID de contato OU por NOME (união, NÃO
+  // fallback). A revendedora pode ter MAIS DE UM contato no Bling com o mesmo nome e
+  // ids diferentes (ex.: Bruna #18638 id A e #18526 id B); filtrar só pelo id salvo
+  // deixava o outro pedido de fora.
   const abertos = todos.filter(p => p.situacao?.id === SITUACAO_ABERTO);
-  let abertosRev = blingId ? abertos.filter(p => String(p.contato?.id) === String(blingId)) : [];
-  if (!abertosRev.length && nome) {
-    const alvo = normalizarNome(nome);
-    abertosRev = abertos.filter(p => {
+  const alvoNome = nome ? normalizarNome(nome) : '';
+  const abertosRev = abertos.filter(p => {
+    if (blingId && String(p.contato?.id) === String(blingId)) return true;
+    if (alvoNome) {
       const cn = normalizarNome(p.contato?.nome);
-      return cn && (cn === alvo || cn.includes(alvo) || alvo.includes(cn));
-    });
-  }
+      return cn && (cn === alvoNome || cn.includes(alvoNome) || alvoNome.includes(cn));
+    }
+    return false;
+  });
   const porNumero = new Map();
   [...vinculados, ...abertosRev].forEach(p => porNumero.set(String(p.numero), p));
   const candidatos = [...porNumero.values()].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
