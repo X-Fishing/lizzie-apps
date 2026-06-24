@@ -1393,6 +1393,7 @@ let gSort = { col: 'prazo_maximo', dir: 'asc' };   // ordenação da tabela de g
 let pFilter = 'todos';
 let cSort = { col: 'descricao', dir: 'asc' };
 let cicloRevSelecionada = null;
+let historicoCicloSel = null; // chave 'YYYY-MM-DD' do ciclo encerrado aberto, ou null
 
 // ═══════════════════════════════════════════════
 // INIT
@@ -2333,6 +2334,12 @@ function detectarCategoria(descricao) {
 
 function renderCicloGrid() {
   const div = document.getElementById('c-list');
+  if (historicoCicloSel) {
+    const sb = document.getElementById('c-search-bar');
+    if (sb) sb.style.display = 'none';
+    div.innerHTML = renderHistoricoCicloDetalhe(historicoCicloSel);
+    return;
+  }
   const isAdmin = ehStaff();
   const searchBar = document.getElementById('c-search-bar');
   // Revendedora: sempre. Admin: só dentro do detalhe de uma revendedora (na tela de cards usa o pop-up "Buscar peça").
@@ -2368,14 +2375,27 @@ function cicloTh(col, label) {
   return `<th class="ciclo-th${cSort.col === col ? ' sorted' : ''}" onclick="sortConsignados('${col}')">${label} ${cicloArrow(col)}</th>`;
 }
 
-function cicloRowHtml(c, isAdmin) {
+function cicloRowHtml(c, isAdmin, historico = false) {
   const disp = qtdDisp(c);
   const esgotado = disp <= 0;
   const cat = c.categoria || detectarCategoria(c.descricao);
-  const acao = isAdmin
-    ? `<span style="font-size:11px;color:var(--muted)">${c.status === 'encerrado' ? 'Encerrado' : (esgotado ? 'Vendido' : '—')}</span>`
-    : (!esgotado ? `<button class="btn-vender" onclick="openVenda('${c.id}')">Vender</button>` : '<span style="font-size:11px;color:var(--muted)">Vendido</span>');
-  return `<tr class="ciclo-row${esgotado ? ' esgotado' : ''}">
+  const vendida = c.quantidade_vendida || 0;
+  let acao, extraClass = '', extraStyle = '';
+  if (historico) {
+    // Status por VENDA real (não por estoque). Peça vendida fica em destaque (sem fade).
+    if (vendida > 0) {
+      acao = `<span style="font-size:11px;color:var(--success);font-weight:600">Vendido${vendida>1?` (${vendida})`:''}</span>`;
+    } else {
+      acao = `<span style="font-size:11px;color:var(--muted)">Não vendido</span>`;
+      extraStyle = ' style="opacity:.55"'; // esmaece só a NÃO vendida
+    }
+  } else {
+    acao = isAdmin
+      ? `<span style="font-size:11px;color:var(--muted)">${c.status === 'encerrado' ? 'Encerrado' : (esgotado ? 'Vendido' : '—')}</span>`
+      : (!esgotado ? `<button class="btn-vender" onclick="openVenda('${c.id}')">Vender</button>` : '<span style="font-size:11px;color:var(--muted)">Vendido</span>');
+    extraClass = esgotado ? ' esgotado' : '';
+  }
+  return `<tr class="ciclo-row${extraClass}"${extraStyle}>
     <td class="ciclo-td">
       <div class="ciclo-desc">${esc(c.descricao)}</div>
       ${c.referencia ? `<div class="ciclo-ref">${esc(c.referencia)}</div>` : ''}
@@ -2387,8 +2407,8 @@ function cicloRowHtml(c, isAdmin) {
   </tr>`;
 }
 
-function cicloTableHtml(list, isAdmin) {
-  const rows = cicloSortRows(list).map(c => cicloRowHtml(c, isAdmin)).join('');
+function cicloTableHtml(list, isAdmin, historico = false) {
+  const rows = cicloSortRows(list).map(c => cicloRowHtml(c, isAdmin, historico)).join('');
   return `<div class="ciclo-wrap">
     <table class="ciclo-table">
       <thead>
@@ -2480,18 +2500,61 @@ function historicoCatalogosHtml(list) {
     const vend = pecas.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
     const recv = pecas.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
     const dataFmt = data ? data.split('-').reverse().join('/') : 'sem data';
-    return `<details class="hist-ciclo" style="border:1px solid var(--line,#eee);border-radius:10px;margin-bottom:8px;padding:10px 12px">
-      <summary style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+    return `<div class="hist-ciclo-card" onclick="abrirHistoricoCiclo('${data}')"
+      style="cursor:pointer;border:1px solid var(--line,#eee);border-radius:10px;margin-bottom:8px;padding:12px 14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;transition:background .15s"
+      onmouseover="this.style.background='rgba(0,0,0,0.02)'" onmouseout="this.style.background=''">
         <span style="font-weight:600;color:var(--plum)">Fechado em ${dataFmt}</span>
-        <span style="font-size:12px;color:var(--muted)">${pecas.length} peça${pecas.length!==1?'s':''} · ${vend}/${env} vendidas · <span style="color:var(--rose)">${fmtBRL(recv)}</span></span>
-      </summary>
-      <div style="margin-top:8px">${pedidoLabelHtml(pecas, 12)}${cicloTableHtml(pecas, true)}</div>
-    </details>`;
+        <span style="font-size:12px;color:var(--muted)">${pecas.length} peça${pecas.length!==1?'s':''} · ${vend}/${env} vendidas · <span style="color:var(--rose)">${fmtBRL(recv)}</span> <span style="color:var(--muted);margin-left:6px">›</span></span>
+      </div>`;
   }).join('');
   return `<div style="margin-top:18px">
     <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Histórico de catálogos</div>
     ${itens}
   </div>`;
+}
+
+// Resolve as peças de um ciclo encerrado, respeitando o escopo da tela:
+// admin dentro de uma revendedora vê só as dela; revendedora já recebe allConsignados filtrado.
+function pecasDoCiclo(chave) {
+  let base = allConsignados;
+  if (ehStaff() && cicloRevSelecionada) base = base.filter(c => c.revendedora_id === cicloRevSelecionada);
+  return soEncerrados(base).filter(c => (c.encerrado_em || c.created_at || '').slice(0, 10) === chave);
+}
+
+// Tela própria de um ciclo encerrado (somente leitura).
+function renderHistoricoCicloDetalhe(chave) {
+  const pecas = pecasDoCiclo(chave);
+  const dataFmt = chave ? chave.split('-').reverse().join('/') : 'sem data';
+  const env  = pecas.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
+  const vend = pecas.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+  const recv = pecas.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
+  return `<button class="btn-voltar-ciclo" onclick="voltarHistoricoCiclo()">← Voltar para o catálogo</button>
+    <div class="card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+        <div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">Catálogo fechado em ${dataFmt}</div>
+          ${pedidoLabelHtml(pecas, 12)}
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${pecas.length} peça${pecas.length!==1?'s':''} · ${vend}/${env} vendidas</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Vendido</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--rose)">${fmtBRL(recv)}</div>
+        </div>
+      </div>
+      ${cicloTableHtml(pecas, true, true)}
+    </div>`;
+}
+
+function abrirHistoricoCiclo(chave) {
+  historicoCicloSel = chave;
+  const cs = document.getElementById('c-search');
+  if (cs) cs.value = '';
+  renderCicloGrid();
+}
+
+function voltarHistoricoCiclo() {
+  historicoCicloSel = null;
+  renderCicloGrid();
 }
 
 function statsRevendedora(list) {
@@ -2601,6 +2664,7 @@ function renderCicloAdminDetalhe(revId, list) {
 
 function abrirCicloRev(revId) {
   cicloRevSelecionada = revId;
+  historicoCicloSel = null;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
   renderCicloGrid();
@@ -2608,6 +2672,7 @@ function abrirCicloRev(revId) {
 
 function voltarCardsCiclo() {
   cicloRevSelecionada = null;
+  historicoCicloSel = null;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
   renderCicloGrid();
