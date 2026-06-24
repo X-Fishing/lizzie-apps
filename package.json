@@ -1,0 +1,23 @@
+{
+  "name": "lizzie-apps",
+  "version": "1.0.0",
+  "description": "App de gestao Lizzie Semijoias",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/X-Fishing/lizzie-apps.git"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "vite": "7.3.5",
+    "vite-plugin-pwa": "1.3.0"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.108.2"
+  }
+}

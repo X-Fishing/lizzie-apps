@@ -10,21 +10,10 @@
 // todas as policies das 6 tabelas e recria so as corretas: revendedora ve so
 // o proprio, admin ve tudo). Re-teste anonimo: as 6 tabelas retornam 0 linhas.
 // Se criar tabela nova, lembrar de habilitar RLS + policies antes de publicar.
-const SUPABASE_URL = 'https://qoouzjntyfzcxnwjksiu.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFvb3V6am50eWZ6Y3hud2prc2l1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg1MDgzMjksImV4cCI6MjA5NDA4NDMyOX0.eOXGwJJshAtRrO_g4aldYau6qeU25Usy7PydvEfN1a4';
-// Le os dados do link de recuperacao na URL ANTES de criar o cliente
-// (o supabase-js consome e limpa o hash ao inicializar).
-const _hashParams  = new URLSearchParams((location.hash || '').replace(/^#/, ''));
-const _queryParams = new URLSearchParams(location.search || '');
-const RECOVERY_IN_URL = _hashParams.get('type') === 'recovery' || _queryParams.get('type') === 'recovery';
-const URL_AUTH_ERROR  = _hashParams.get('error_description') || _queryParams.get('error_description') || null;
-let recoveryAtiva = false;
+import './styles.css';
+import { sb, SUPABASE_URL, SUPABASE_KEY, RECOVERY_IN_URL, URL_AUTH_ERROR } from './supabase.js';
 
-// flowType 'implicit': o link de recuperacao volta com #...&type=recovery no
-// hash (deterministico e detectavel), em vez do formato PKCE (?code=...).
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
-  auth: { flowType: 'implicit', detectSessionInUrl: true, persistSession: true, autoRefreshToken: true }
-});
+let recoveryAtiva = false;
 
 // Escapa dados do banco/Bling antes de interpolar em innerHTML (anti-XSS).
 // Use SEMPRE que jogar texto vindo de usuario/Bling dentro de template string.
@@ -1687,8 +1676,8 @@ async function salvarConsignado() {
 // ═══════════════════════════════════════════════
 // BLING
 // ═══════════════════════════════════════════════
-const BLING_FN       = 'https://qoouzjntyfzcxnwjksiu.supabase.co/functions/v1/bling-pedidos';
-const BLING_ITENS_FN = 'https://qoouzjntyfzcxnwjksiu.supabase.co/functions/v1/bling-pedido-itens';
+const BLING_FN       = `${SUPABASE_URL}/functions/v1/bling-pedidos`;
+const BLING_ITENS_FN = `${SUPABASE_URL}/functions/v1/bling-pedido-itens`;
 const BLING_HEADERS  = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` };
 let blingRevs = [];
 let blingItensAtual = [];
@@ -3312,6 +3301,10 @@ function toast(msg) {
   setTimeout(() => t.classList.remove('show'), 2800);
 }
 
+// Expoe no window TODAS as funcoes chamadas via on* no HTML (estatico e gerado),
+// pois main.js agora e um ES module (escopo proprio). Lista derivada dos handlers on*.
+Object.assign(window, { sb, abrirCicloRev, abrirFinalizarVenda, abrirHistoricoCiclo, adicionarAoCarrinho, ajustarValorPago, aprovarRev, atualizarMaleta, atualizarStatusCard, atualizarTotalVenda, buscarBling, calcPrazoGarantia, closeModal, confirmarExclusaoRev, confirmarMaleta, confirmarVendaCarrinho, definirPapel, deletarCicloRev, detectarBlingId, editarGarantia, enviarLinkRecuperacao, escolherBlingCandidato, excluirGarantia, excluirRevendedora, excluirVenda, fazerCadastro, fazerLogin, fecharConfirma, fecharPrint, filtrarBling, filtrarGarantias, filtrarHistorico, finalizarCicloRev, gerarPdfFechamento, importarItensBling, loginGoogle, maskDateBR, maskMoneyBR, maskTelBR, mostrarRecuperar, mudarStatus, openBlingSync, openBuscaPeca, openFechamento, openNovaGarantia, openNovoConsignado, openVenda, previewFoto, previewMaletaPorId, registrarPagamento, removerDoCarrinho, renderBuscaPeca, renderCicloGrid, revogarRev, salvarBlingId, salvarComplemento, salvarConsignado, salvarGarantia, salvarNovaSenha, setGFilter, setPFilter, setTrocaFiltro, showPanel, sortConsignados, sortGarantiasStaff, switchTab, toggleCadastros, toggleHistorico, toggleOrdemTroca, verGarantia, verItensBling, verRevendedora, verVenda, voltarCardsCiclo, voltarHistoricoCiclo, voltarListaBling, voltarLogin });
+
 // START
 init();
 
@@ -3387,11 +3380,5 @@ init();
     }
   }
 
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('sw.js').catch((err) => {
-        console.warn('SW registration failed:', err);
-      });
-    });
-  }
+  // Registro do service worker e feito pelo vite-plugin-pwa (registerType: 'autoUpdate').
 })();
