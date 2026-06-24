@@ -1,0 +1,9 @@
+# Projeto estático — sem build/deps. Ignora resíduos de ferramentas.
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
