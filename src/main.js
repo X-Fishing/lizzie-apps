@@ -1,36 +1,25 @@
 // ═══════════════════════════════════════════════
-// CONFIG
+// BOOTSTRAP — main.js fino
 // ═══════════════════════════════════════════════
-// AUDITORIA RLS — 11/06/2026 — <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> RESOLVIDO
-// Toda a autorizacao do app e client-side; a seguranca REAL depende de
-// Row Level Security no Postgres. O teste anonimo (anon key publica) inicial
-// mostrou profiles (7 linhas, telefones = PII/LGPD) e consignados (100 linhas)
-// LEGIVEIS sem login — vazamento causado por policy template permissiva
-// (using(true)) somada por OU. Corrigido aplicando RLS-policies.sql (dropa
-// todas as policies das 6 tabelas e recria so as corretas: revendedora ve so
-// o proprio, admin ve tudo). Re-teste anonimo: as 6 tabelas retornam 0 linhas.
-// Se criar tabela nova, lembrar de habilitar RLS + policies antes de publicar.
+// Ponto de entrada (ES module). A logica vive nos modulos src/*.js; aqui so:
+//  1) imports;  2) init() (sessao/auth);  3) exposicao no window das funcoes
+//     chamadas via on* no HTML;  4) registro de UI base e PWA.
+// Seguranca: toda autorizacao e client-side; a real depende de RLS no Postgres
+// (RLS-policies.sql). Ao criar tabela nova, habilitar RLS + policies antes de publicar.
 import './styles.css';
-import { sb, SUPABASE_URL, SUPABASE_KEY, RECOVERY_IN_URL, URL_AUTH_ERROR } from './supabase.js';
+import { sb, RECOVERY_IN_URL, URL_AUTH_ERROR } from './supabase.js';
 import { state } from './state.js';
-import { CAT_LABEL, brToISO, closeModal, confirmarAcao, detectarCategoria, esc, fecharConfirma, fetchPaginado, fmtBRL, formatDate, handleSupabaseError, hojeBR, isAuthError, isoToBR, maskDateBR, maskMoneyBR, moneyToInput, openModal, parseMoneyBR, previewFoto, qtdDisp, sbQ, showMsg, toast } from './utils.js';
+import { closeModal, openModal, fecharConfirma, hojeBR, maskDateBR, maskMoneyBR, previewFoto, showMsg } from './utils.js';
 import { showPanel, toggleCadastros } from './nav.js';
-import { mostrarRecovery, ROLE_LABELS, ehAdmin, ehGestor, ehStaff, loadUser, maskTelBR, salvarComplemento, showSplash, switchTab, fazerLogin, mostrarRecuperar, voltarLogin, loginGoogle, enviarLinkRecuperacao, salvarNovaSenha, fazerCadastro } from './auth.js';
+import { mostrarRecovery, ehAdmin, ehGestor, ehStaff, loadUser, maskTelBR, salvarComplemento, showSplash, switchTab, fazerLogin, mostrarRecuperar, voltarLogin, loginGoogle, enviarLinkRecuperacao, salvarNovaSenha, fazerCadastro } from './auth.js';
 import { loadDashboard, loadFinanceiro, loadCalculadora, loadClientes, loadMarketing, loadFuncionarios, loadFormasPagamento, loadCategoriasFinanceiras } from './dashboard.js';
 import { calcPrazoGarantia, loadGarantias, filtrarGarantias, sortGarantiasStaff, setGFilter, renderGarantiaCard, verGarantia, openNovaGarantia, editarGarantia, salvarGarantia, mudarStatus, atualizarStatusCard, excluirGarantia } from './garantias.js';
-import { openBlingSync, buscarBling, filtrarBling, verItensBling, voltarListaBling, importarItensBling, atualizarMaleta, previewMaletaPorId, confirmarMaleta, salvarBlingId, detectarBlingId, escolherBlingCandidato, normalizarNome, fetchTodosBling, SITUACAO_ABERTO, BLING_ITENS_FN, BLING_HEADERS } from './bling.js';
+import { openBlingSync, buscarBling, filtrarBling, verItensBling, voltarListaBling, importarItensBling, atualizarMaleta, previewMaletaPorId, confirmarMaleta, salvarBlingId, detectarBlingId, escolherBlingCandidato } from './bling.js';
 import { loadVendas, setPFilter, verVenda, excluirVenda, registrarPagamento } from './pagamentos.js';
 import { loadHistorico, filtrarHistorico, toggleHistorico } from './historico.js';
-import { loadTrocasDashboard, setTrocaFiltro, toggleOrdemTroca, carregarProximasTrocas, compararPorTroca, atualizarBadgesTroca } from './trocas.js';
+import { loadTrocasDashboard, setTrocaFiltro, toggleOrdemTroca } from './trocas.js';
 import { loadAdmin, renderAprovadas, verRevendedora, aprovarRev, revogarRev, definirPapel, confirmarExclusaoRev, excluirRevendedora } from './admin.js';
 import { loadConsignados, sortConsignados, renderCicloGrid, abrirHistoricoCiclo, voltarHistoricoCiclo, abrirCicloRev, voltarCardsCiclo, openBuscaPeca, renderBuscaPeca, finalizarCicloRev, deletarCicloRev, openVenda, atualizarTotalVenda, adicionarAoCarrinho, removerDoCarrinho, abrirFinalizarVenda, ajustarValorPago, confirmarVendaCarrinho, openNovoConsignado, salvarConsignado, openFechamento, gerarPdfFechamento, fecharPrint } from './consignados.js';
-
-
-
-
-
-
-
 
 // ═══════════════════════════════════════════════
 // INIT
@@ -71,215 +60,22 @@ async function init() {
   calcPrazoGarantia();
 }
 
-
-
-                                  // gestão de acesso (papéis, excluir)
-          // Bling, catálogo, aprovar
- // vê tudo (não-revendedora)
-
-
-
-
-
-
-// ═══════════════════════════════════════════════
-// AUTH
-// ═══════════════════════════════════════════════
-
-
-
-
-
-
-
-
-
-// ═══════════════════════════════════════════════
-// NAVIGATION
-// ═══════════════════════════════════════════════
-
-
-
-
-// ═══════════════════════════════════════════════
-// DASHBOARD
-// ═══════════════════════════════════════════════
-
-
-// ═══════════════════════════════════════════════
-// GARANTIAS
-// ═══════════════════════════════════════════════
-
-
-
-
-
-
-
-
-
-
-
-
-// ═══════════════════════════════════════════════
-// CICLO (CONSIGNADOS)
-// ═══════════════════════════════════════════════
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ═══════════════════════════════════════════════
-// CARRINHO DE VENDA
-// ═══════════════════════════════════════════════
-
-
-
-
-
-
-
-
-
-
-
-// ═══════════════════════════════════════════════
-// BLING
-// ═══════════════════════════════════════════════
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ═══════════════════════════════════════════════
-// PAGAMENTOS (vendas)
-// ═══════════════════════════════════════════════
-
-
-
-
-
-
-// ═══════════════════════════════════════════════
-// HISTÓRICO
-// ═══════════════════════════════════════════════
-
-
-
-
-
-
-// ═══════════════════════════════════════════════
-// ADMIN
-// ═══════════════════════════════════════════════
-
-
-
-// ═══════════════════════════════════════════════
-// DASHBOARD DE TROCAS (admin)
-// ═══════════════════════════════════════════════
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// ── Atualizar itens da maleta (Bling -> app, append-only, gestor) ──────
-
-
-
-
-
-
-
-
-// ═══════════════════════════════════════════════
-// FECHAMENTO DO CICLO
-// ═══════════════════════════════════════════════
-
-
-
-// ═══════════════════════════════════════════════
-// UTILS
-// ═══════════════════════════════════════════════
-
-
+// Fecha pop-ups ao clicar fora (exceto os com data-lock-outside, ex.: garantia).
 document.querySelectorAll('.modal-overlay').forEach(o => {
-  // data-lock-outside: so fecha pelo botao Fechar/Cancelar (ex.: garantia),
-  // evitando perder dados por um clique acidental fora do pop-up.
   o.addEventListener('click', e => {
     if (e.target === o && !o.hasAttribute('data-lock-outside')) o.classList.remove('show');
   });
 });
 
-
-
-
-
-
 // Expoe no window TODAS as funcoes chamadas via on* no HTML (estatico e gerado),
-// pois main.js agora e um ES module (escopo proprio). Lista derivada dos handlers on*.
+// pois cada modulo tem escopo proprio (ES modules). Lista derivada dos handlers on*.
 Object.assign(window, { renderAprovadas, renderGarantiaCard, ehAdmin, ehStaff, ehGestor, loadDashboard, loadGarantias, loadConsignados, loadVendas, loadHistorico, loadTrocasDashboard, loadAdmin, loadFinanceiro, loadCalculadora, loadClientes, loadMarketing, loadFuncionarios, loadFormasPagamento, loadCategoriasFinanceiras, sb, abrirCicloRev, abrirFinalizarVenda, abrirHistoricoCiclo, adicionarAoCarrinho, ajustarValorPago, aprovarRev, atualizarMaleta, atualizarStatusCard, atualizarTotalVenda, buscarBling, calcPrazoGarantia, closeModal, confirmarExclusaoRev, confirmarMaleta, confirmarVendaCarrinho, definirPapel, deletarCicloRev, detectarBlingId, editarGarantia, enviarLinkRecuperacao, escolherBlingCandidato, excluirGarantia, excluirRevendedora, excluirVenda, fazerCadastro, fazerLogin, fecharConfirma, fecharPrint, filtrarBling, filtrarGarantias, filtrarHistorico, finalizarCicloRev, gerarPdfFechamento, importarItensBling, loginGoogle, maskDateBR, maskMoneyBR, maskTelBR, mostrarRecuperar, mudarStatus, openBlingSync, openBuscaPeca, openFechamento, openNovaGarantia, openNovoConsignado, openVenda, previewFoto, previewMaletaPorId, registrarPagamento, removerDoCarrinho, renderBuscaPeca, renderCicloGrid, revogarRev, salvarBlingId, salvarComplemento, salvarConsignado, salvarGarantia, salvarNovaSenha, setGFilter, setPFilter, setTrocaFiltro, showPanel, sortConsignados, sortGarantiasStaff, switchTab, toggleCadastros, toggleHistorico, toggleOrdemTroca, verGarantia, verItensBling, verRevendedora, verVenda, voltarCardsCiclo, voltarHistoricoCiclo, voltarListaBling, voltarLogin });
 
 // START
 init();
 
-// PWA — install prompt + iOS banner + service worker
+// PWA — botao "Instalar app" + banner iOS. O registro do service worker e feito
+// pelo vite-plugin-pwa (registerType: 'autoUpdate').
 (function () {
   const installBtn = document.getElementById('install-btn');
   const iosBanner = document.getElementById('ios-install-banner');
@@ -350,6 +146,4 @@ init();
       });
     }
   }
-
-  // Registro do service worker e feito pelo vite-plugin-pwa (registerType: 'autoUpdate').
 })();
