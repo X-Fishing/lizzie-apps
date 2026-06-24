@@ -12,8 +12,8 @@
 // Se criar tabela nova, lembrar de habilitar RLS + policies antes de publicar.
 import './styles.css';
 import { sb, SUPABASE_URL, SUPABASE_KEY, RECOVERY_IN_URL, URL_AUTH_ERROR } from './supabase.js';
+import { state } from './state.js';
 
-let recoveryAtiva = false;
 
 // Escapa dados do banco/Bling antes de interpolar em innerHTML (anti-XSS).
 // Use SEMPRE que jogar texto vindo de usuario/Bling dentro de template string.
@@ -64,20 +64,6 @@ async function handleSupabaseError(error, fallbackMsg = 'Erro inesperado') {
   return true;
 }
 
-let currentUser = null;
-let currentProfile = null;
-let allGarantias = [];
-let allConsignados = [];
-let allVendas = [];
-let vendaItensCache = {};
-let revNameMap = {};
-let revBlingMap = {};
-let gFilter = 'todas';
-let gSort = { col: 'prazo_maximo', dir: 'asc' };   // ordenação da tabela de garantias (staff)
-let pFilter = 'todos';
-let cSort = { col: 'descricao', dir: 'asc' };
-let cicloRevSelecionada = null;
-let historicoCicloSel = null; // chave 'YYYY-MM-DD' do ciclo encerrado aberto, ou null
 
 // ═══════════════════════════════════════════════
 // INIT
@@ -86,17 +72,17 @@ async function init() {
   // Listener ANTES do getSession para nao perder o evento PASSWORD_RECOVERY.
   sb.auth.onAuthStateChange((event, session) => {
     if (event === 'PASSWORD_RECOVERY') { mostrarRecovery(); return; }
-    if (recoveryAtiva) return; // durante a redefinicao, ignora SIGNED_IN/OUT
+    if (state.recoveryAtiva) return; // durante a redefinicao, ignora SIGNED_IN/OUT
     // IMPORTANTE: nao usar await/chamadas Supabase direto aqui — isso causa
     // deadlock do lock de auth (login novo travava em "carregando"). Adia com
     // setTimeout(0) para o callback liberar o lock antes de loadUser consultar.
     if (event === 'SIGNED_IN' && session) {
       // O supabase re-dispara SIGNED_IN ao voltar o foco da aba / refresh de token.
       // Se já é o mesmo usuário carregado, NÃO recarrega (senão pula pro dashboard).
-      if (currentUser && currentUser.id === session.user.id) return;
+      if (state.currentUser && state.currentUser.id === session.user.id) return;
       setTimeout(() => loadUser(session.user), 0);
     }
-    if (event === 'SIGNED_OUT') { currentUser = null; currentProfile = null; showSplash(); }
+    if (event === 'SIGNED_OUT') { state.currentUser = null; state.currentProfile = null; showSplash(); }
   });
 
   const { data: { session } } = await sb.auth.getSession();
@@ -119,7 +105,7 @@ async function init() {
 }
 
 function mostrarRecovery() {
-  recoveryAtiva = true;
+  state.recoveryAtiva = true;
   document.getElementById('splash').style.display = 'none';
   document.getElementById('pending-screen').style.display = 'none';
   document.getElementById('app').style.display = 'none';
@@ -144,16 +130,16 @@ const ROLE_LABELS = {
   func_completo: 'Funcionário – completo',
   admin:         'Admin total'
 };
-function ehAdmin()  { return currentProfile?.role === 'admin'; }                                  // gestão de acesso (papéis, excluir)
-function ehGestor() { return ['admin','func_completo'].includes(currentProfile?.role); }          // Bling, catálogo, aprovar
-function ehStaff()  { return ['admin','func_completo','func_basico'].includes(currentProfile?.role); } // vê tudo (não-revendedora)
+function ehAdmin()  { return state.currentProfile?.role === 'admin'; }                                  // gestão de acesso (papéis, excluir)
+function ehGestor() { return ['admin','func_completo'].includes(state.currentProfile?.role); }          // Bling, catálogo, aprovar
+function ehStaff()  { return ['admin','func_completo','func_basico'].includes(state.currentProfile?.role); } // vê tudo (não-revendedora)
 
 async function loadUser(user) {
-  currentUser = user;
+  state.currentUser = user;
   const { data: profile } = await sbQ(sb.from('profiles').select('*').eq('id', user.id).single());
 
   if (!profile) { showSplash(); return; }
-  currentProfile = profile;
+  state.currentProfile = profile;
 
   if (profile.role === 'revendedora' && !profile.aprovada) {
     document.getElementById('splash').style.display = 'none';
@@ -198,8 +184,8 @@ function maskTelBR(el) {
 }
 
 function abrirComplementoCadastro() {
-  document.getElementById('comp-tel').value = currentProfile.telefone || '';
-  document.getElementById('comp-cidade').value = currentProfile.cidade || '';
+  document.getElementById('comp-tel').value = state.currentProfile.telefone || '';
+  document.getElementById('comp-cidade').value = state.currentProfile.cidade || '';
   openModal('modal-complemento');
 }
 
@@ -208,11 +194,11 @@ async function salvarComplemento(btn) {
   const cidade = document.getElementById('comp-cidade').value.trim();
   if (tel.replace(/\D/g, '').length < 10) { toast('Informe um WhatsApp válido com DDD'); return; }
   btn.disabled = true; btn.textContent = 'Salvando...';
-  const { error } = await sbQ(sb.from('profiles').update({ telefone: tel, cidade: cidade || null }).eq('id', currentUser.id));
+  const { error } = await sbQ(sb.from('profiles').update({ telefone: tel, cidade: cidade || null }).eq('id', state.currentUser.id));
   btn.disabled = false; btn.textContent = 'Salvar e continuar';
   if (await handleSupabaseError(error, 'Erro ao salvar')) return;
-  currentProfile.telefone = tel;
-  currentProfile.cidade = cidade || null;
+  state.currentProfile.telefone = tel;
+  state.currentProfile.cidade = cidade || null;
   closeModal('modal-complemento');
   toast('Tudo certo!');
 }
@@ -294,7 +280,7 @@ async function salvarNovaSenha(btn) {
   }
   // Limpa o hash de recuperacao da URL e entra no app com a nova senha.
   history.replaceState(null, '', location.pathname);
-  recoveryAtiva = false;
+  state.recoveryAtiva = false;
   document.getElementById('recovery-screen').style.display = 'none';
   const { data: { session } } = await sb.auth.getSession();
   if (session) { await loadUser(session.user); }
@@ -424,7 +410,7 @@ async function loadDashboard() {
   // Sem .limit(): os contadores (abertas/conserto/prontas/vencendo) precisam
   // de TODAS as garantias. Seleciona so os campos usados nos cards/contadores.
   let q = sb.from('garantias').select('id,status,prazo_maximo,created_at,descricao_item,nome_cliente,foto_url,data_entrada');
-  if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
+  if (!isAdmin) q = q.eq('revendedora_id', state.currentUser.id);
   const { data, error } = await sbQ(q.order('created_at', { ascending: false }));
 
   if (error) {
@@ -449,7 +435,7 @@ async function loadDashboard() {
   document.getElementById('s-prontas').textContent = prontas;
   document.getElementById('s-vencendo').textContent = vencendo;
 
-  const sub = isAdmin ? 'Todas as revendedoras' : currentProfile.nome.split(' ')[0];
+  const sub = isAdmin ? 'Todas as revendedoras' : state.currentProfile.nome.split(' ')[0];
   document.getElementById('dash-subtitle').textContent = sub;
 
   const alertDiv = document.getElementById('dash-alertas');
@@ -575,7 +561,7 @@ async function loadGarantias() {
   const isAdmin = ehStaff();
   const queries = [fetchPaginado(() => {
     let q = sb.from('garantias').select('*');
-    if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
+    if (!isAdmin) q = q.eq('revendedora_id', state.currentUser.id);
     return q.order('created_at', { ascending: false });
   })];
   if (isAdmin) queries.push(sbQ(sb.from('profiles').select('id,nome').eq('role', 'revendedora')));
@@ -586,15 +572,15 @@ async function loadGarantias() {
     document.getElementById('g-list').innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
     return;
   }
-  allGarantias = data || [];
-  if (isAdmin && results[1] && results[1].data) results[1].data.forEach(r => { revNameMap[r.id] = r.nome; });
+  state.allGarantias = data || [];
+  if (isAdmin && results[1] && results[1].data) results[1].data.forEach(r => { state.revNameMap[r.id] = r.nome; });
   filtrarGarantias();
 }
 
 function filtrarGarantias() {
   const search = document.getElementById('g-search').value.toLowerCase();
-  let list = allGarantias;
-  if (gFilter !== 'todas') list = list.filter(g => g.status === gFilter);
+  let list = state.allGarantias;
+  if (state.gFilter !== 'todas') list = list.filter(g => g.status === state.gFilter);
   if (search) list = list.filter(g =>
     (g.descricao_item || '').toLowerCase().includes(search) ||
     (g.nome_cliente || '').toLowerCase().includes(search) ||
@@ -616,13 +602,13 @@ const GSTATUS = {
 function gDot(cor) { return `<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:${cor};margin-right:6px;vertical-align:middle"></span>`; }
 function gDias(g) { const h = new Date(); h.setHours(0,0,0,0); return Math.ceil((new Date(g.prazo_maximo + 'T00:00:00') - h) / 86400000); }
 function sortGarantiasStaff(col) {
-  if (gSort.col === col) gSort.dir = gSort.dir === 'asc' ? 'desc' : 'asc';
-  else { gSort.col = col; gSort.dir = 'asc'; }
+  if (state.gSort.col === col) state.gSort.dir = state.gSort.dir === 'asc' ? 'desc' : 'asc';
+  else { state.gSort.col = col; state.gSort.dir = 'asc'; }
   filtrarGarantias();
 }
 function renderGarantiasStaff(list) {
   const div = document.getElementById('g-list');
-  const todas = allGarantias, total = todas.length;
+  const todas = state.allGarantias, total = todas.length;
   const cont = { aberta: 0, em_conserto: 0, pronta: 0, entregue: 0 };
   todas.forEach(g => { if (cont[g.status] != null) cont[g.status]++; });
   const naoEntreg = todas.filter(g => g.status !== 'entregue');
@@ -630,16 +616,16 @@ function renderGarantiasStaff(list) {
   const venc = naoEntreg.filter(g => { const d = gDias(g); return d >= 0 && d <= 7; }).length;
   const porRev = {};
   todas.forEach(g => { porRev[g.revendedora_id] = (porRev[g.revendedora_id] || 0) + 1; });
-  const ranking = Object.entries(porRev).map(([id, n]) => ({ nome: revNameMap[id] || '—', n }))
+  const ranking = Object.entries(porRev).map(([id, n]) => ({ nome: state.revNameMap[id] || '—', n }))
     .sort((a, b) => b.n - a.n).slice(0, 6);
 
   const sorted = [...list].sort((a, b) => {
     let va, vb;
-    if (gSort.col === 'dias') { va = gDias(a); vb = gDias(b); }
-    else if (gSort.col === 'revendedora') { va = (revNameMap[a.revendedora_id] || '').toLowerCase(); vb = (revNameMap[b.revendedora_id] || '').toLowerCase(); }
-    else { va = a[gSort.col] ?? ''; vb = b[gSort.col] ?? ''; if (typeof va === 'string') { va = va.toLowerCase(); vb = (vb || '').toLowerCase(); } }
-    if (va < vb) return gSort.dir === 'asc' ? -1 : 1;
-    if (va > vb) return gSort.dir === 'asc' ? 1 : -1;
+    if (state.gSort.col === 'dias') { va = gDias(a); vb = gDias(b); }
+    else if (state.gSort.col === 'revendedora') { va = (state.revNameMap[a.revendedora_id] || '').toLowerCase(); vb = (state.revNameMap[b.revendedora_id] || '').toLowerCase(); }
+    else { va = a[state.gSort.col] ?? ''; vb = b[state.gSort.col] ?? ''; if (typeof va === 'string') { va = va.toLowerCase(); vb = (vb || '').toLowerCase(); } }
+    if (va < vb) return state.gSort.dir === 'asc' ? -1 : 1;
+    if (va > vb) return state.gSort.dir === 'asc' ? 1 : -1;
     return 0;
   });
 
@@ -648,7 +634,7 @@ function renderGarantiasStaff(list) {
     <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>${gDot(cor)}${label}</span><span style="color:var(--muted)">${n} · ${pct(n)}%</span></div>
     <div style="height:7px;background:var(--border);border-radius:4px;overflow:hidden"><div style="width:${pct(n)}%;height:100%;background:${cor}"></div></div></div>`;
   const th = (col, label) => {
-    const arrow = gSort.col !== col ? '<span style="opacity:.3">⇅</span>' : (gSort.dir === 'asc' ? '▲' : '▼');
+    const arrow = state.gSort.col !== col ? '<span style="opacity:.3">⇅</span>' : (state.gSort.dir === 'asc' ? '▲' : '▼');
     return `<th class="ciclo-th" onclick="sortGarantiasStaff('${col}')">${label} ${arrow}</th>`;
   };
   const linha = g => {
@@ -662,7 +648,7 @@ function renderGarantiasStaff(list) {
     }
     return `<tr class="ciclo-row" onclick="verGarantia('${g.id}')" style="cursor:pointer">
       <td class="ciclo-td"><div class="ciclo-desc">${esc(g.nome_cliente)}</div><div class="ciclo-ref">${esc(g.descricao_item)}</div></td>
-      <td class="ciclo-td">${esc(revNameMap[g.revendedora_id] || '—')}</td>
+      <td class="ciclo-td">${esc(state.revNameMap[g.revendedora_id] || '—')}</td>
       <td class="ciclo-td" style="white-space:nowrap">${gDot(si.cor)}${si.label}</td>
       <td class="ciclo-td">${formatDate(g.data_entrada)}</td>
       <td class="ciclo-td">${formatDate(g.prazo_maximo)}</td>
@@ -706,7 +692,7 @@ function renderGarantiasStaff(list) {
 }
 
 function setGFilter(el, f) {
-  gFilter = f;
+  state.gFilter = f;
   document.querySelectorAll('#g-chips .chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   filtrarGarantias();
@@ -763,7 +749,7 @@ function renderGarantiaCard(g) {
 }
 
 async function verGarantia(id) {
-  let g = allGarantias.find(x => x.id === id);
+  let g = state.allGarantias.find(x => x.id === id);
   if (!g) {
     const { data, error } = await sb.from('garantias').select('*').eq('id', id).single();
     if (error || !data) { toast('Erro ao carregar garantia'); return; }
@@ -777,7 +763,7 @@ async function verGarantia(id) {
   let fotoHtml = g.foto_url ? `<img src="${g.foto_url}" class="detail-foto">` : '';
 
   let adminActions = '';
-  if (isAdmin || currentProfile.role === 'revendedora') {
+  if (isAdmin || state.currentProfile.role === 'revendedora') {
     adminActions = `
       <button class="btn-secondary btn-sm" onclick="editarGarantia('${g.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> Editar</button>
       ${isAdmin ? `<button class="btn-secondary btn-sm" onclick="mudarStatus('${g.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Status</button>` : ''}
@@ -819,7 +805,7 @@ function openNovaGarantia() {
 }
 
 async function editarGarantia(id) {
-  const g = allGarantias.find(x => x.id === id) || (await sb.from('garantias').select('*').eq('id', id).single()).data;
+  const g = state.allGarantias.find(x => x.id === id) || (await sb.from('garantias').select('*').eq('id', id).single()).data;
   closeModal('modal-detalhe-g');
   document.getElementById('g-edit-id').value = g.id;
   document.getElementById('modal-gTitle').textContent = 'Editar Garantia';
@@ -858,13 +844,13 @@ async function salvarGarantia(btn) {
   }
 
   const editId = document.getElementById('g-edit-id').value;
-  let foto_url = editId ? (allGarantias.find(g => g.id === editId) || {}).foto_url : null;
+  let foto_url = editId ? (state.allGarantias.find(g => g.id === editId) || {}).foto_url : null;
 
   const fileInput = document.getElementById('g-foto-input');
   if (fileInput.files[0]) {
     const file = fileInput.files[0];
     const ext = file.name.split('.').pop();
-    const fname = `${currentUser.id}/${Date.now()}.${ext}`;
+    const fname = `${state.currentUser.id}/${Date.now()}.${ext}`;
     const { data: upData, error: upErr } = await sb.storage.from('lizzie-fotos').upload(fname, file, { upsert: true });
     if (!upErr) {
       const { data: { publicUrl } } = sb.storage.from('lizzie-fotos').getPublicUrl(fname);
@@ -897,7 +883,7 @@ async function salvarGarantia(btn) {
     ({ error } = await sb.from('garantias').update(payload).eq('id', editId));
   } else {
     payload.status = 'aberta';
-    payload.revendedora_id = currentUser.id;
+    payload.revendedora_id = state.currentUser.id;
     payload.destino = document.getElementById('g-destino').value || 'outro';
     payload.destino_detalhe = document.getElementById('g-destino-det').value.trim() || null;
     ({ error } = await sb.from('garantias').insert(payload));
@@ -913,7 +899,7 @@ async function salvarGarantia(btn) {
 }
 
 async function mudarStatus(id) {
-  const g = allGarantias.find(x => x.id === id);
+  const g = state.allGarantias.find(x => x.id === id);
   const steps = ['aberta', 'em_conserto', 'pronta', 'entregue'];
   const cur = steps.indexOf(g.status);
   const next = steps[Math.min(cur + 1, steps.length - 1)];
@@ -936,7 +922,7 @@ async function atualizarStatusCard(id, novoStatus, event) {
 
 async function excluirGarantia(id) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
-  const g = allGarantias.find(x => x.id === id);
+  const g = state.allGarantias.find(x => x.id === id);
   const desc = g ? g.descricao_item : 'esta garantia';
   confirmarAcao('Excluir garantia', `Excluir a garantia "${desc}"?\n\nEssa ação não pode ser desfeita.`, 'Excluir', async () => {
     let error;
@@ -973,7 +959,7 @@ async function loadConsignados() {
   const isAdmin = ehStaff();
   const makeQ = () => {
     let q = sb.from('consignados').select('*');
-    if (!isAdmin) q = q.eq('revendedora_id', currentUser.id);
+    if (!isAdmin) q = q.eq('revendedora_id', state.currentUser.id);
     return q.order('created_at', { ascending: false });
   };
   const queries = [fetchPaginado(makeQ)];
@@ -988,20 +974,20 @@ async function loadConsignados() {
     div.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
     return;
   }
-  allConsignados = data || [];
+  state.allConsignados = data || [];
   if (isAdmin) {
     const revs = results[1].data || [];
-    revNameMap = {};
-    revBlingMap = {};
-    revs.forEach(r => { revNameMap[r.id] = r.nome; revBlingMap[r.id] = r.bling_contato_id || ''; });
+    state.revNameMap = {};
+    state.revBlingMap = {};
+    revs.forEach(r => { state.revNameMap[r.id] = r.nome; state.revBlingMap[r.id] = r.bling_contato_id || ''; });
   }
   renderCicloGrid();
   renderCartBar();
 }
 
 function sortConsignados(col) {
-  if (cSort.col === col) cSort.dir = cSort.dir === 'asc' ? 'desc' : 'asc';
-  else { cSort.col = col; cSort.dir = 'asc'; }
+  if (state.cSort.col === col) state.cSort.dir = state.cSort.dir === 'asc' ? 'desc' : 'asc';
+  else { state.cSort.col = col; state.cSort.dir = 'asc'; }
   renderCicloGrid();
 }
 
@@ -1018,18 +1004,18 @@ function detectarCategoria(descricao) {
 
 function renderCicloGrid() {
   const div = document.getElementById('c-list');
-  if (historicoCicloSel) {
+  if (state.historicoCicloSel) {
     const sb = document.getElementById('c-search-bar');
     if (sb) sb.style.display = 'none';
-    div.innerHTML = renderHistoricoCicloDetalhe(historicoCicloSel);
+    div.innerHTML = renderHistoricoCicloDetalhe(state.historicoCicloSel);
     return;
   }
   const isAdmin = ehStaff();
   const searchBar = document.getElementById('c-search-bar');
   // Revendedora: sempre. Admin: só dentro do detalhe de uma revendedora (na tela de cards usa o pop-up "Buscar peça").
-  const mostrarBusca = allConsignados.length && (!isAdmin || cicloRevSelecionada);
+  const mostrarBusca = state.allConsignados.length && (!isAdmin || state.cicloRevSelecionada);
   if (searchBar) searchBar.style.display = mostrarBusca ? '' : 'none';
-  if (!allConsignados.length) {
+  if (!state.allConsignados.length) {
     div.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></div><p>Nenhuma peça no catálogo</p></div>';
     return;
   }
@@ -1042,21 +1028,21 @@ function renderCicloGrid() {
 
 function cicloSortRows(list) {
   return [...list].sort((a, b) => {
-    let va = a[cSort.col] ?? '', vb = b[cSort.col] ?? '';
+    let va = a[state.cSort.col] ?? '', vb = b[state.cSort.col] ?? '';
     if (typeof va === 'string') va = va.toLowerCase();
     if (typeof vb === 'string') vb = vb.toLowerCase();
-    if (va < vb) return cSort.dir === 'asc' ? -1 : 1;
-    if (va > vb) return cSort.dir === 'asc' ? 1 : -1;
+    if (va < vb) return state.cSort.dir === 'asc' ? -1 : 1;
+    if (va > vb) return state.cSort.dir === 'asc' ? 1 : -1;
     return 0;
   });
 }
 
 function cicloArrow(col) {
-  return cSort.col !== col ? '<span style="opacity:0.3">⇅</span>' : (cSort.dir === 'asc' ? '▲' : '▼');
+  return state.cSort.col !== col ? '<span style="opacity:0.3">⇅</span>' : (state.cSort.dir === 'asc' ? '▲' : '▼');
 }
 
 function cicloTh(col, label) {
-  return `<th class="ciclo-th${cSort.col === col ? ' sorted' : ''}" onclick="sortConsignados('${col}')">${label} ${cicloArrow(col)}</th>`;
+  return `<th class="ciclo-th${state.cSort.col === col ? ' sorted' : ''}" onclick="sortConsignados('${col}')">${label} ${cicloArrow(col)}</th>`;
 }
 
 function cicloRowHtml(c, isAdmin, historico = false) {
@@ -1110,13 +1096,13 @@ function cicloTableHtml(list, isAdmin, historico = false) {
 }
 
 function renderCicloRevendedora() {
-  const ativos = soAtivos(allConsignados);
+  const ativos = soAtivos(state.allConsignados);
   const temAtivos = ativos.some(c => qtdDisp(c) > 0);
   const btnFechamento = temAtivos
     ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</button>`
     : '';
 
-  const historico = historicoCatalogosHtml(allConsignados);
+  const historico = historicoCatalogosHtml(state.allConsignados);
   const cabecalho = pedidoLabelHtml(ativos, 12);
 
   const termo = (document.getElementById('c-search')?.value || '').toLowerCase().trim();
@@ -1141,7 +1127,7 @@ function renderCicloRevendedora() {
 
 function agruparPorRevendedora() {
   const groups = {};
-  allConsignados.forEach(c => {
+  state.allConsignados.forEach(c => {
     const id = c.revendedora_id || '__sem__';
     if (!groups[id]) groups[id] = [];
     groups[id].push(c);
@@ -1198,10 +1184,10 @@ function historicoCatalogosHtml(list) {
 }
 
 // Resolve as peças de um ciclo encerrado, respeitando o escopo da tela:
-// admin dentro de uma revendedora vê só as dela; revendedora já recebe allConsignados filtrado.
+// admin dentro de uma revendedora vê só as dela; revendedora já recebe state.allConsignados filtrado.
 function pecasDoCiclo(chave) {
-  let base = allConsignados;
-  if (ehStaff() && cicloRevSelecionada) base = base.filter(c => c.revendedora_id === cicloRevSelecionada);
+  let base = state.allConsignados;
+  if (ehStaff() && state.cicloRevSelecionada) base = base.filter(c => c.revendedora_id === state.cicloRevSelecionada);
   return soEncerrados(base).filter(c => (c.encerrado_em || c.created_at || '').slice(0, 10) === chave);
 }
 
@@ -1230,14 +1216,14 @@ function renderHistoricoCicloDetalhe(chave) {
 }
 
 function abrirHistoricoCiclo(chave) {
-  historicoCicloSel = chave;
+  state.historicoCicloSel = chave;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
   renderCicloGrid();
 }
 
 function voltarHistoricoCiclo() {
-  historicoCicloSel = null;
+  state.historicoCicloSel = null;
   renderCicloGrid();
 }
 
@@ -1257,18 +1243,18 @@ function fmtBRL(n) {
 function renderCicloAdmin() {
   const groups = agruparPorRevendedora();
 
-  if (cicloRevSelecionada && groups[cicloRevSelecionada]) {
-    return renderCicloAdminDetalhe(cicloRevSelecionada, groups[cicloRevSelecionada]);
+  if (state.cicloRevSelecionada && groups[state.cicloRevSelecionada]) {
+    return renderCicloAdminDetalhe(state.cicloRevSelecionada, groups[state.cicloRevSelecionada]);
   }
 
   const ordered = Object.entries(groups).sort((a, b) => {
-    const na = (revNameMap[a[0]] || 'zzz').toLowerCase();
-    const nb = (revNameMap[b[0]] || 'zzz').toLowerCase();
+    const na = (state.revNameMap[a[0]] || 'zzz').toLowerCase();
+    const nb = (state.revNameMap[b[0]] || 'zzz').toLowerCase();
     return na < nb ? -1 : na > nb ? 1 : 0;
   });
 
   const cards = ordered.map(([revId, list]) => {
-    const nome = revNameMap[revId] || 'Revendedora desconhecida';
+    const nome = state.revNameMap[revId] || 'Revendedora desconhecida';
     const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
     return `<div class="rev-card${temAtivos ? '' : ' inativo'}" onclick="abrirCicloRev('${revId}')">
       <div class="rev-card-nome">${esc(nome)}</div>
@@ -1284,7 +1270,7 @@ function renderCicloAdmin() {
     </div>`;
   }).join('');
 
-  const ativosGlobal = soAtivos(allConsignados);
+  const ativosGlobal = soAtivos(state.allConsignados);
   const grandTotal = ativosGlobal.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
   const totalPecasVend = ativosGlobal.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
   const totalRevsAtivas = Object.values(groups).filter(l => l.some(c => c.status === 'ativo')).length;
@@ -1301,11 +1287,11 @@ function renderCicloAdmin() {
 }
 
 function renderCicloAdminDetalhe(revId, list) {
-  const nome = revNameMap[revId] || 'Revendedora desconhecida';
+  const nome = state.revNameMap[revId] || 'Revendedora desconhecida';
   const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
 
   const btnMaleta = ehGestor()
-    ? `<button class="btn-secondary btn-sm" style="border-color:var(--rose);color:var(--rose)" data-bling-id="${revBlingMap[revId] || ''}" data-rev-nome="${esc(nome)}" onclick="atualizarMaleta('${revId}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Atualizar itens da maleta</button>`
+    ? `<button class="btn-secondary btn-sm" style="border-color:var(--rose);color:var(--rose)" data-bling-id="${state.revBlingMap[revId] || ''}" data-rev-nome="${esc(nome)}" onclick="atualizarMaleta('${revId}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Atualizar itens da maleta</button>`
     : '';
   const acoes = ehGestor()
     ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
@@ -1347,16 +1333,16 @@ function renderCicloAdminDetalhe(revId, list) {
 }
 
 function abrirCicloRev(revId) {
-  cicloRevSelecionada = revId;
-  historicoCicloSel = null;
+  state.cicloRevSelecionada = revId;
+  state.historicoCicloSel = null;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
   renderCicloGrid();
 }
 
 function voltarCardsCiclo() {
-  cicloRevSelecionada = null;
-  historicoCicloSel = null;
+  state.cicloRevSelecionada = null;
+  state.historicoCicloSel = null;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
   renderCicloGrid();
@@ -1378,7 +1364,7 @@ function renderBuscaPeca() {
     return;
   }
   // Busca serve para saber onde a peça está AGORA: só catálogo ativo.
-  const matches = soAtivos(allConsignados).filter(c =>
+  const matches = soAtivos(state.allConsignados).filter(c =>
     (c.descricao || '').toLowerCase().includes(termo) ||
     (c.referencia || '').toLowerCase().includes(termo)
   ).sort((a, b) => (a.descricao || '').localeCompare(b.descricao || ''));
@@ -1391,7 +1377,7 @@ function renderBuscaPeca() {
   div.innerHTML = matches.map(c => {
     const vendida = c.quantidade_vendida || 0;
     const disp = qtdDisp(c);
-    const nomeRev = revNameMap[c.revendedora_id] || 'Revendedora desconhecida';
+    const nomeRev = state.revNameMap[c.revendedora_id] || 'Revendedora desconhecida';
     const segs = [];
     if (disp > 0) segs.push(`<span style="color:var(--success);font-weight:600">● ${disp} disponíve${disp !== 1 ? 'is' : 'l'}</span>`);
     if (vendida > 0) segs.push(`<span style="color:var(--rose);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> ${vendida} vendida${vendida !== 1 ? 's' : ''}</span>`);
@@ -1407,8 +1393,8 @@ function renderBuscaPeca() {
 
 async function finalizarCicloRev(revId) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
-  const nome = revNameMap[revId] || 'esta revendedora';
-  const ativos = allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
+  const nome = state.revNameMap[revId] || 'esta revendedora';
+  const ativos = state.allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
   if (!ativos.length) { toast('Nenhum catálogo ativo para finalizar'); return; }
   confirmarAcao('Finalizar catálogo', `Finalizar catálogo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} passarão para "encerrado". Essa ação não pode ser desfeita.`, 'Finalizar', async () => {
     let error;
@@ -1426,8 +1412,8 @@ async function finalizarCicloRev(revId) {
 
 async function deletarCicloRev(revId) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
-  const nome = revNameMap[revId] || 'esta revendedora';
-  const ativos = allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
+  const nome = state.revNameMap[revId] || 'esta revendedora';
+  const ativos = state.allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
   if (!ativos.length) { toast('Nenhum catálogo ativo para deletar'); return; }
   confirmarAcao('⚠ Deletar catálogo', `DELETAR o catálogo ativo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} ativa${ativos.length>1?'s':''} serão APAGADAS PERMANENTEMENTE (catálogos já encerrados NÃO são tocados).\n\nEssa ação não pode ser desfeita.`, 'Sim, deletar tudo', async () => {
     // SEGURANÇA: o .eq('status','ativo') garante que ciclos encerrados são preservados
@@ -1447,12 +1433,11 @@ async function deletarCicloRev(revId) {
 // ═══════════════════════════════════════════════
 // CARRINHO DE VENDA
 // ═══════════════════════════════════════════════
-let carrinhoVenda = [];
 
 function openVenda(id) {
-  const c = allConsignados.find(x => x.id === id);
+  const c = state.allConsignados.find(x => x.id === id);
   const dispOrig = qtdDisp(c);
-  const noCarrinho = carrinhoVenda.filter(i => i.consignado_id === id).reduce((s, i) => s + i.quantidade, 0);
+  const noCarrinho = state.carrinhoVenda.filter(i => i.consignado_id === id).reduce((s, i) => s + i.quantidade, 0);
   const disp = dispOrig - noCarrinho;
   if (disp <= 0) { toast('Todas as unidades dessa peça já estão no carrinho'); return; }
 
@@ -1482,12 +1467,12 @@ function adicionarAoCarrinho() {
   const precoUnit = parseFloat(document.getElementById('v-preco-unit').value) || 0;
   if (!qtd || qtd < 1 || qtd > disp) { toast('Quantidade inválida'); return; }
 
-  const c = allConsignados.find(x => x.id === id);
-  const existente = carrinhoVenda.find(i => i.consignado_id === id);
+  const c = state.allConsignados.find(x => x.id === id);
+  const existente = state.carrinhoVenda.find(i => i.consignado_id === id);
   if (existente) {
     existente.quantidade += qtd;
   } else {
-    carrinhoVenda.push({
+    state.carrinhoVenda.push({
       consignado_id: id,
       descricao: c.descricao,
       referencia: c.referencia,
@@ -1502,10 +1487,10 @@ function adicionarAoCarrinho() {
 }
 
 function removerDoCarrinho(idx) {
-  carrinhoVenda.splice(idx, 1);
+  state.carrinhoVenda.splice(idx, 1);
   renderCartBar();
   if (document.getElementById('modal-finalizar').classList.contains('show')) {
-    if (!carrinhoVenda.length) { closeModal('modal-finalizar'); return; }
+    if (!state.carrinhoVenda.length) { closeModal('modal-finalizar'); return; }
     abrirFinalizarVenda();
   }
 }
@@ -1514,13 +1499,13 @@ function renderCartBar() {
   const bar = document.getElementById('cart-bar');
   if (!bar) return;
   const cl = document.getElementById('c-list');
-  if (!carrinhoVenda.length) {
+  if (!state.carrinhoVenda.length) {
     bar.style.display = 'none'; bar.innerHTML = '';
     if (cl) cl.style.paddingBottom = '';
     return;
   }
-  const totalItens = carrinhoVenda.reduce((s, i) => s + i.quantidade, 0);
-  const totalValor = carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
+  const totalItens = state.carrinhoVenda.reduce((s, i) => s + i.quantidade, 0);
+  const totalValor = state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
   bar.style.display = 'flex';
   bar.innerHTML = `
     <div class="cart-info">
@@ -1533,10 +1518,10 @@ function renderCartBar() {
 }
 
 function abrirFinalizarVenda() {
-  if (!carrinhoVenda.length) { toast('Carrinho vazio'); return; }
+  if (!state.carrinhoVenda.length) { toast('Carrinho vazio'); return; }
   const lista = document.getElementById('f-cart-list');
-  const total = carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
-  lista.innerHTML = carrinhoVenda.map((it, idx) => `
+  const total = state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
+  lista.innerHTML = state.carrinhoVenda.map((it, idx) => `
     <div class="cart-item-row">
       <div style="flex:1">
         <div class="cart-item-desc">${esc(it.descricao)}</div>
@@ -1556,7 +1541,7 @@ function abrirFinalizarVenda() {
 }
 
 function ajustarValorPago() {
-  const total = carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
+  const total = state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
   const forma = document.getElementById('f-forma').value;
   const aVista = ['Dinheiro', 'Pix', 'Cartão débito', 'Cartão crédito'].includes(forma);
   document.getElementById('f-pago').value = aVista ? moneyToInput(total) : '';
@@ -1571,9 +1556,9 @@ async function confirmarVendaCarrinho(btn) {
 
   if (!cliente) { toast('Informe o nome da cliente'); return; }
   if (!data) { toast('Data inválida (use dd/mm/aaaa)'); return; }
-  if (!carrinhoVenda.length) { toast('Carrinho vazio'); return; }
+  if (!state.carrinhoVenda.length) { toast('Carrinho vazio'); return; }
 
-  const total = carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
+  const total = state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
   const status = pago >= total ? 'quitado' : pago > 0 ? 'parcial' : 'pendente';
 
   btn.disabled = true;
@@ -1593,7 +1578,7 @@ async function confirmarVendaCarrinho(btn) {
         p_pago: pago,
         p_status: status,
         p_obs: obs || null,
-        p_itens: carrinhoVenda.map(it => ({
+        p_itens: state.carrinhoVenda.map(it => ({
           consignado_id: it.consignado_id,
           descricao: it.descricao,
           referencia: it.referencia || null,
@@ -1613,12 +1598,12 @@ async function confirmarVendaCarrinho(btn) {
       return;
     }
 
-    carrinhoVenda = [];
+    state.carrinhoVenda = [];
     resetBtn();
     toast('Venda registrada!');
     closeModal('modal-finalizar');
     renderCartBar();
-    allVendas = [];
+    state.allVendas = [];
     await loadConsignados();
   } catch (e) {
     console.error('Falha inesperada na venda:', e);
@@ -1679,15 +1664,6 @@ async function salvarConsignado() {
 const BLING_FN       = `${SUPABASE_URL}/functions/v1/bling-pedidos`;
 const BLING_ITENS_FN = `${SUPABASE_URL}/functions/v1/bling-pedido-itens`;
 const BLING_HEADERS  = { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` };
-let blingRevs = [];
-let blingItensAtual = [];
-let blingPedidosCache = [];
-let blingFiltro = '';
-let proximaTrocaMap = {};
-let proximaTrocaCarregado = false;
-let proximaTrocaPromessa = null;
-let ordemTrocaProxima = false;
-let aprovadasCache = [];
 
 function normalizarNome(s) {
   return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036F]/g,'').trim();
@@ -1739,11 +1715,11 @@ async function fetchTodosBling(ini, fim) {
 const SITUACAO_ABERTO = 6;
 
 async function carregarProximasTrocas(forcar = false) {
-  if (proximaTrocaCarregado && !forcar) return true;
-  if (proximaTrocaPromessa && !forcar) return proximaTrocaPromessa;
-  proximaTrocaPromessa = _carregarProximasTrocasImpl();
-  try { return await proximaTrocaPromessa; }
-  finally { proximaTrocaPromessa = null; }
+  if (state.proximaTrocaCarregado && !forcar) return true;
+  if (state.proximaTrocaPromessa && !forcar) return state.proximaTrocaPromessa;
+  state.proximaTrocaPromessa = _carregarProximasTrocasImpl();
+  try { return await state.proximaTrocaPromessa; }
+  finally { state.proximaTrocaPromessa = null; }
 }
 
 async function _carregarProximasTrocasImpl() {
@@ -1765,7 +1741,7 @@ async function _carregarProximasTrocasImpl() {
     }
   }
 
-  proximaTrocaMap = {};
+  state.proximaTrocaMap = {};
   // Para cada contato: escolhe o pedido que representa a próxima troca
   // (entre os abertos, prioriza os COM dataPrevista válida — clones de
   // fechamento normalmente vêm sem dataPrevista).
@@ -1784,7 +1760,7 @@ async function _carregarProximasTrocasImpl() {
       }
     }
     const dp = escolhido?.dataPrevista && escolhido.dataPrevista !== '0000-00-00' ? escolhido.dataPrevista : null;
-    proximaTrocaMap[cid] = {
+    state.proximaTrocaMap[cid] = {
       dataPrevista: dp,
       dataPedido: escolhido?.data || todasDoContato[0].data,
       nome: todasDoContato[0].contato?.nome || '',
@@ -1794,13 +1770,13 @@ async function _carregarProximasTrocasImpl() {
     };
   }
 
-  proximaTrocaCarregado = true;
+  state.proximaTrocaCarregado = true;
 
   // Diagnóstico — ajuda quando algum ID aprovado não aparece
-  const idsAprovados = new Set((aprovadasCache || []).map(r => String(r.bling_contato_id || '')).filter(Boolean));
+  const idsAprovados = new Set((state.aprovadasCache || []).map(r => String(r.bling_contato_id || '')).filter(Boolean));
   const semPedido = [...idsAprovados].filter(id => !todosPorContato[id]);
   if (semPedido.length) {
-    const aprovadasPorId = Object.fromEntries((aprovadasCache || []).map(r => [String(r.bling_contato_id || ''), r.nome]));
+    const aprovadasPorId = Object.fromEntries((state.aprovadasCache || []).map(r => [String(r.bling_contato_id || ''), r.nome]));
     const desaparecidas = semPedido.map(id => `${id}=${aprovadasPorId[id] || '?'}`);
     const idsNoBling = Object.entries(todosPorContato)
       .map(([id, lista]) => `${id}=${lista[0].contato?.nome || '?'}`);
@@ -1814,7 +1790,7 @@ async function _carregarProximasTrocasImpl() {
 
 function infoProximaTroca(blingId) {
   if (!blingId) return { status: 'sem-vinculo' };
-  const e = proximaTrocaMap[String(blingId)];
+  const e = state.proximaTrocaMap[String(blingId)];
   if (!e) return { status: 'sem-pedido' };
   if (!e.temAberto) return { status: 'sem-aberto', dataPedido: e.dataPedido, abertos: 0 };
   if (!e.dataPrevista) return { status: 'sem-data', dataPedido: e.dataPedido, abertos: e.abertos };
@@ -1870,7 +1846,7 @@ async function atualizarBadgesTroca() {
   });
   const ct = document.getElementById('troca-count');
   if (ct) {
-    const n = aprovadasCache.filter(r => {
+    const n = state.aprovadasCache.filter(r => {
       const i = infoProximaTroca(r.bling_contato_id);
       return i.status === 'vencida' || i.status === 'proximo';
     }).length;
@@ -1882,7 +1858,7 @@ async function atualizarBadgesTroca() {
 async function buscarUltimoPedidoRev() {
   const res = document.getElementById('bling-resultado');
 
-  const blingId = currentProfile.bling_contato_id;
+  const blingId = state.currentProfile.bling_contato_id;
   if (!blingId) {
     res.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></div>
       <p>Seu perfil ainda não está vinculado ao Bling.<br>
@@ -1894,7 +1870,7 @@ async function buscarUltimoPedidoRev() {
   // Bloquear se já há ciclo ativo
   const { data: cicloAtivo } = await sb.from('consignados')
     .select('id, quantidade_enviada, quantidade_vendida, quantidade_devolvida')
-    .eq('revendedora_id', currentUser.id)
+    .eq('revendedora_id', state.currentUser.id)
     .eq('status', 'ativo');
   const temPecasAtivas = (cicloAtivo || []).some(c =>
     qtdDisp(c) > 0
@@ -1926,7 +1902,7 @@ async function buscarUltimoPedidoRev() {
   let meusPedidos = todos.filter(p => String(p.contato?.id) === String(blingId));
 
   if (!meusPedidos.length) {
-    const alvo = normalizarNome(currentProfile.nome);
+    const alvo = normalizarNome(state.currentProfile.nome);
     meusPedidos = todos.filter(p => {
       const nome = normalizarNome(p.contato?.nome);
       return nome && (nome === alvo || nome.includes(alvo) || alvo.includes(nome));
@@ -1944,7 +1920,7 @@ async function buscarUltimoPedidoRev() {
   meusPedidos.sort((a, b) => b.data.localeCompare(a.data));
   const pedido = meusPedidos[0];
   res.innerHTML = `<div style="font-size:13px;color:var(--muted);margin-bottom:12px">Último pedido — <strong>${formatDate(pedido.data)}</strong></div>`;
-  await renderItensBling(pedido.id, pedido.numero, currentUser.id, false);
+  await renderItensBling(pedido.id, pedido.numero, state.currentUser.id, false);
 }
 
 // ── ADMIN: busca com filtro de data, todos os pedidos ──
@@ -1958,18 +1934,18 @@ async function buscarBling() {
 
   const todos = await fetchTodosBling(ini, fim);
   if (!todos) {
-    blingPedidosCache = [];
+    state.blingPedidosCache = [];
     res.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Erro ao conectar com o Bling.</p></div>';
     return;
   }
   if (!todos.length) {
-    blingPedidosCache = [];
+    state.blingPedidosCache = [];
     res.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg></div><p>Nenhum pedido nesse período.</p></div>';
     return;
   }
 
-  blingPedidosCache = todos;
-  blingFiltro = '';
+  state.blingPedidosCache = todos;
+  state.blingFiltro = '';
   renderListaBling();
 }
 
@@ -1990,18 +1966,18 @@ function renderBlingRow(p) {
 function renderListaBling() {
   const res = document.getElementById('bling-resultado');
   res.innerHTML =
-    `<input type="text" id="bling-filtro" class="form-control" style="margin-bottom:12px" placeholder="Buscar por nome da revendedora..." oninput="filtrarBling(this.value)" value="${blingFiltro.replace(/"/g,'&quot;')}">
+    `<input type="text" id="bling-filtro" class="form-control" style="margin-bottom:12px" placeholder="Buscar por nome da revendedora..." oninput="filtrarBling(this.value)" value="${state.blingFiltro.replace(/"/g,'&quot;')}">
      <div id="bling-lista-info" style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>
      <div id="bling-lista"></div>`;
   aplicarFiltroBling();
 }
 
 function aplicarFiltroBling() {
-  const total = blingPedidosCache.length;
-  const filtro = normalizarNome(blingFiltro);
+  const total = state.blingPedidosCache.length;
+  const filtro = normalizarNome(state.blingFiltro);
   const filtrados = filtro
-    ? blingPedidosCache.filter(p => normalizarNome(p.contato?.nome).includes(filtro))
-    : blingPedidosCache;
+    ? state.blingPedidosCache.filter(p => normalizarNome(p.contato?.nome).includes(filtro))
+    : state.blingPedidosCache;
 
   const info = document.getElementById('bling-lista-info');
   const lista = document.getElementById('bling-lista');
@@ -2017,23 +1993,23 @@ function aplicarFiltroBling() {
 }
 
 function filtrarBling(val) {
-  blingFiltro = val;
+  state.blingFiltro = val;
   aplicarFiltroBling();
 }
 
 async function verItensBling(pedidoId, numero, btn) {
   btn.textContent = '⟳'; btn.disabled = true;
 
-  if (!blingRevs.length) {
+  if (!state.blingRevs.length) {
     const { data, error } = await sb.from('profiles').select('id,nome').eq('role','revendedora').eq('aprovada',true).order('nome');
     if (error) { console.error('Erro ao buscar revendedoras:', error); }
-    blingRevs = data || [];
+    state.blingRevs = data || [];
   }
 
   document.getElementById('bling-header').style.display = 'none';
   const res = document.getElementById('bling-resultado');
 
-  if (!blingRevs.length) {
+  if (!state.blingRevs.length) {
     res.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Nenhuma revendedora aprovada encontrada. Verifique o painel Admin.</p></div>';
     return;
   }
@@ -2056,7 +2032,7 @@ async function renderItensBling(pedidoId, numero, fixedRevId, mostrarSeletor) {
     return;
   }
 
-  blingItensAtual = itens;
+  state.blingItensAtual = itens;
   if (fixedRevId) {
     window._blingFixedRevId = fixedRevId;
   } else {
@@ -2068,7 +2044,7 @@ async function renderItensBling(pedidoId, numero, fixedRevId, mostrarSeletor) {
         <label class="form-label">Atribuir ao catálogo de *</label>
         <select id="bling-rev-sel" class="form-control">
           <option value="">Selecione a revendedora...</option>
-          ${blingRevs.map(r => `<option value="${r.id}">${esc(r.nome)}</option>`).join('')}
+          ${state.blingRevs.map(r => `<option value="${r.id}">${esc(r.nome)}</option>`).join('')}
         </select>
        </div>`
     : `<div style="margin-bottom:12px;font-size:13px;color:var(--muted)">Será importado para o seu catálogo</div>`;
@@ -2108,7 +2084,7 @@ async function renderItensBling(pedidoId, numero, fixedRevId, mostrarSeletor) {
 
 function voltarListaBling() {
   document.getElementById('bling-header').style.display = 'block';
-  if (blingPedidosCache.length) {
+  if (state.blingPedidosCache.length) {
     renderListaBling();
   } else {
     document.getElementById('bling-resultado').innerHTML = '';
@@ -2117,7 +2093,7 @@ function voltarListaBling() {
 }
 
 async function importarItensBling(numero, btn) {
-  const itens = blingItensAtual;
+  const itens = state.blingItensAtual;
   if (!itens.length) { toast('Nenhum item para importar'); return; }
 
   const revId = window._blingFixedRevId
@@ -2159,24 +2135,24 @@ async function importarItensBling(numero, btn) {
 // ═══════════════════════════════════════════════
 async function loadVendas() {
   document.getElementById('p-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
-  let q = sb.from('vendas').select('*').eq('revendedora_id', currentUser.id);
+  let q = sb.from('vendas').select('*').eq('revendedora_id', state.currentUser.id);
   const { data, error } = await sbQ(q.order('data_venda', { ascending: false }));
   if (error) {
     const msg = error.message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar.';
     document.getElementById('p-list').innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
     return;
   }
-  allVendas = data || [];
-  vendaItensCache = {};
+  state.allVendas = data || [];
+  state.vendaItensCache = {};
   filtrarPagamentos();
 }
 
 function filtrarPagamentos() {
-  const list = pFilter === 'todos' ? allVendas : allVendas.filter(v => v.status === pFilter);
+  const list = state.pFilter === 'todos' ? state.allVendas : state.allVendas.filter(v => v.status === state.pFilter);
   const div = document.getElementById('p-list');
 
-  const totalGeral = allVendas.reduce((s, v) => s + Number(v.valor_total || 0), 0);
-  const totalPago = allVendas.reduce((s, v) => s + Number(v.valor_pago || 0), 0);
+  const totalGeral = state.allVendas.reduce((s, v) => s + Number(v.valor_total || 0), 0);
+  const totalPago = state.allVendas.reduce((s, v) => s + Number(v.valor_pago || 0), 0);
   const totalPendente = totalGeral - totalPago;
   const resumo = `<div class="pag-resumo">
     <div class="pag-resumo-card"><div class="pag-resumo-label">Total vendas</div><div class="pag-resumo-valor">R$ ${totalGeral.toFixed(2)}</div></div>
@@ -2218,25 +2194,25 @@ function filtrarPagamentos() {
 }
 
 function setPFilter(el, f) {
-  pFilter = f;
+  state.pFilter = f;
   document.querySelectorAll('[data-pfilter]').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   filtrarPagamentos();
 }
 
 async function verVenda(id) {
-  const v = allVendas.find(x => x.id === id);
+  const v = state.allVendas.find(x => x.id === id);
   if (!v) return;
 
   const [itensRes, recebsRes] = await Promise.all([
-    vendaItensCache[id]
-      ? Promise.resolve({ data: vendaItensCache[id] })
+    state.vendaItensCache[id]
+      ? Promise.resolve({ data: state.vendaItensCache[id] })
       : sbQ(sb.from('venda_itens').select('*').eq('venda_id', id).order('created_at')),
     sbQ(sb.from('recebimentos').select('*').eq('venda_id', id).order('data_recebimento'))
   ]);
   if (itensRes.error) { toast('Erro ao carregar itens'); return; }
   const itens = itensRes.data || [];
-  vendaItensCache[id] = itens;
+  state.vendaItensCache[id] = itens;
   const recebimentos = (recebsRes.data) || [];
 
   const restante = Number(v.valor_total) - Number(v.valor_pago);
@@ -2291,7 +2267,7 @@ async function verVenda(id) {
 
 async function excluirVenda(id) {
   confirmarAcao('Excluir venda', 'Excluir esta venda? As peças vão voltar para o seu Catálogo. Essa ação não pode ser desfeita.', 'Excluir', async () => {
-    let itens = vendaItensCache[id];
+    let itens = state.vendaItensCache[id];
     if (!itens) {
       const { data, error } = await sbQ(sb.from('venda_itens').select('*').eq('venda_id', id));
       if (error) { toast('Erro ao buscar itens'); return; }
@@ -2321,7 +2297,7 @@ async function excluirVenda(id) {
 }
 
 async function registrarPagamento(id) {
-  const v = allVendas.find(x => x.id === id);
+  const v = state.allVendas.find(x => x.id === id);
   const val = parseMoneyBR(document.getElementById('p-reg-val').value);
   const dataBR = document.getElementById('p-reg-data').value;
   const data = brToISO(dataBR);
@@ -2345,19 +2321,18 @@ async function registrarPagamento(id) {
 // ═══════════════════════════════════════════════
 // HISTÓRICO
 // ═══════════════════════════════════════════════
-let historicoExpandido = null;
 
 async function loadHistorico() {
-  if (!allVendas.length) {
+  if (!state.allVendas.length) {
     document.getElementById('h-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
-    let q = sb.from('vendas').select('*').eq('revendedora_id', currentUser.id);
+    let q = sb.from('vendas').select('*').eq('revendedora_id', state.currentUser.id);
     const { data, error } = await sbQ(q.order('data_venda', { ascending: false }));
     if (error) {
       document.getElementById('h-list').innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Erro ao carregar.</p></div>';
       return;
     }
-    allVendas = data || [];
-    vendaItensCache = {};
+    state.allVendas = data || [];
+    state.vendaItensCache = {};
   }
   filtrarHistorico();
 }
@@ -2367,7 +2342,7 @@ function filtrarHistorico() {
   const termo = (document.getElementById('h-search').value || '').toLowerCase().trim();
 
   const porCliente = {};
-  for (const v of allVendas) {
+  for (const v of state.allVendas) {
     const key = (v.nome_cliente || '').toLowerCase();
     if (termo && !key.includes(termo)) continue;
     if (!porCliente[key]) porCliente[key] = { nome: v.nome_cliente, vendas: [] };
@@ -2387,7 +2362,7 @@ function filtrarHistorico() {
     const total = c.vendas.reduce((s, v) => s + Number(v.valor_total), 0);
     const pago = c.vendas.reduce((s, v) => s + Number(v.valor_pago), 0);
     const pendente = total - pago;
-    const aberto = historicoExpandido === c.nome.toLowerCase();
+    const aberto = state.historicoExpandido === c.nome.toLowerCase();
     return `<div class="hist-card${aberto?' open':''}" data-hist-key="${esc(c.nome.toLowerCase())}" onclick="toggleHistorico(this.dataset.histKey)">
       <div class="hist-nome">${esc(c.nome)}</div>
       <div class="hist-stats">
@@ -2400,20 +2375,20 @@ function filtrarHistorico() {
     </div>`;
   }).join('');
 
-  if (historicoExpandido) {
-    const aberta = clientes.find(c => c.nome.toLowerCase() === historicoExpandido);
+  if (state.historicoExpandido) {
+    const aberta = clientes.find(c => c.nome.toLowerCase() === state.historicoExpandido);
     if (aberta) carregarItensDasVendas(aberta.vendas);
   }
 }
 
 function toggleHistorico(nomeKey) {
-  historicoExpandido = historicoExpandido === nomeKey ? null : nomeKey;
+  state.historicoExpandido = state.historicoExpandido === nomeKey ? null : nomeKey;
   filtrarHistorico();
 }
 
 function renderHistoricoDetalhes(vendas) {
   return vendas.map(v => {
-    const itens = vendaItensCache[v.id];
+    const itens = state.vendaItensCache[v.id];
     const itensHtml = itens
       ? itens.map(it => `<div class="hist-item-row"><span>${it.quantidade}× ${esc(it.descricao)}</span><span>R$ ${(it.quantidade*Number(it.preco_unit)).toFixed(2)}</span></div>`).join('')
       : `<div class="hist-item-row" id="v-load-${v.id}" style="color:var(--muted);font-style:italic">Carregando itens…</div>`;
@@ -2429,16 +2404,16 @@ function renderHistoricoDetalhes(vendas) {
 }
 
 async function carregarItensDasVendas(vendas) {
-  const faltam = vendas.filter(v => !vendaItensCache[v.id]).map(v => v.id);
+  const faltam = vendas.filter(v => !state.vendaItensCache[v.id]).map(v => v.id);
   if (!faltam.length) return;
   const { data, error } = await sbQ(sb.from('venda_itens').select('*').in('venda_id', faltam).order('created_at'));
   if (error) return;
   for (const v of vendas) {
-    if (!vendaItensCache[v.id]) vendaItensCache[v.id] = [];
+    if (!state.vendaItensCache[v.id]) state.vendaItensCache[v.id] = [];
   }
   (data || []).forEach(it => {
-    if (!vendaItensCache[it.venda_id]) vendaItensCache[it.venda_id] = [];
-    vendaItensCache[it.venda_id].push(it);
+    if (!state.vendaItensCache[it.venda_id]) state.vendaItensCache[it.venda_id] = [];
+    state.vendaItensCache[it.venda_id].push(it);
   });
   filtrarHistorico();
 }
@@ -2465,27 +2440,27 @@ async function loadAdmin() {
       pendentes.map(r => renderRevCard(r, true)).join('');
   } else pendDiv.innerHTML = '';
 
-  aprovadasCache = aprovadas || [];
+  state.aprovadasCache = aprovadas || [];
   await renderAprovadas();
 }
 
 async function renderAprovadas() {
   const revDiv = document.getElementById('rev-list');
   if (!revDiv) return;
-  if (!aprovadasCache.length) {
+  if (!state.aprovadasCache.length) {
     revDiv.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><p>Nenhuma revendedora aprovada</p></div>';
     return;
   }
-  if (ordemTrocaProxima && !proximaTrocaCarregado) {
+  if (state.ordemTrocaProxima && !state.proximaTrocaCarregado) {
     revDiv.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando próximas trocas...</div>';
     await carregarProximasTrocas();
   }
-  const lista = ordemTrocaProxima ? [...aprovadasCache].sort(compararPorTroca) : aprovadasCache;
-  const btnLabel = ordemTrocaProxima ? '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M20 8h-5"/><path d="M15 10V6.5a2.5 2.5 0 0 1 5 0V10"/><path d="M15 14h5l-5 6h5"/></svg> Ordem alfabética' : '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg> Trocas próximas';
+  const lista = state.ordemTrocaProxima ? [...state.aprovadasCache].sort(compararPorTroca) : state.aprovadasCache;
+  const btnLabel = state.ordemTrocaProxima ? '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M20 8h-5"/><path d="M15 10V6.5a2.5 2.5 0 0 1 5 0V10"/><path d="M15 14h5l-5 6h5"/></svg> Ordem alfabética' : '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg> Trocas próximas';
   revDiv.innerHTML = `
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap">
       <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">
-        ${aprovadasCache.length} revendedora${aprovadasCache.length!==1?'s':''} ativas<span id="troca-count"></span>
+        ${state.aprovadasCache.length} revendedora${state.aprovadasCache.length!==1?'s':''} ativas<span id="troca-count"></span>
       </div>
       <button class="btn-secondary btn-sm" style="font-size:11px;white-space:nowrap" onclick="toggleOrdemTroca()">${btnLabel}</button>
     </div>` +
@@ -2494,14 +2469,13 @@ async function renderAprovadas() {
 }
 
 function toggleOrdemTroca() {
-  ordemTrocaProxima = !ordemTrocaProxima;
+  state.ordemTrocaProxima = !state.ordemTrocaProxima;
   renderAprovadas();
 }
 
 // ═══════════════════════════════════════════════
 // DASHBOARD DE TROCAS (admin)
 // ═══════════════════════════════════════════════
-let trocasFiltroAtivo = 'todas';
 
 const TROCAS_FILTROS = [
   { id: 'todas', label: 'Todas' },
@@ -2556,9 +2530,9 @@ async function loadTrocasDashboard() {
   stats.innerHTML = '';
   filtros.innerHTML = '';
 
-  if (!aprovadasCache.length) {
+  if (!state.aprovadasCache.length) {
     const { data } = await sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',true).order('nome');
-    aprovadasCache = data || [];
+    state.aprovadasCache = data || [];
   }
   const ok = await carregarProximasTrocas();
   if (!ok) {
@@ -2576,7 +2550,7 @@ function renderTrocas() {
 
   // Stats
   let vencidas = 0, prox7 = 0, noMes = 0, semVinculo = 0;
-  for (const r of aprovadasCache) {
+  for (const r of state.aprovadasCache) {
     const info = infoProximaTroca(r.bling_contato_id);
     if (info.status === 'vencida') vencidas++;
     if (info.status === 'proximo') prox7++;
@@ -2592,12 +2566,12 @@ function renderTrocas() {
 
   // Chips
   filtros.innerHTML = TROCAS_FILTROS.map(f => {
-    const ativo = trocasFiltroAtivo === f.id;
+    const ativo = state.trocasFiltroAtivo === f.id;
     return `<button type="button" class="chip-filter${ativo?' active':''}" onclick="setTrocaFiltro('${f.id}')">${f.label}</button>`;
   }).join('');
 
   // Lista filtrada e ordenada por urgência
-  const filtradas = aprovadasCache.filter(r => trocaMatchFiltro(r, trocasFiltroAtivo));
+  const filtradas = state.aprovadasCache.filter(r => trocaMatchFiltro(r, state.trocasFiltroAtivo));
   filtradas.sort(compararPorTroca);
 
   if (!filtradas.length) {
@@ -2608,7 +2582,7 @@ function renderTrocas() {
 }
 
 function setTrocaFiltro(id) {
-  trocasFiltroAtivo = id;
+  state.trocasFiltroAtivo = id;
   renderTrocas();
 }
 
@@ -2778,7 +2752,7 @@ async function definirPapel(id, novoPapel) {
   const { error } = await sbQ(sb.from('profiles').update({ role: novoPapel }).eq('id', id));
   if (await handleSupabaseError(error, 'Erro ao definir papel')) return;
   toast('Nível atualizado: ' + (ROLE_LABELS[novoPapel] || novoPapel));
-  blingRevs = []; aprovadasCache = [];
+  state.blingRevs = []; state.aprovadasCache = [];
   loadAdmin();
 }
 
@@ -2825,13 +2799,12 @@ async function excluirRevendedora(id, btn) {
     return;
   }
   toast('Revendedora excluída');
-  blingRevs = []; aprovadasCache = []; proximaTrocaCarregado = false;
+  state.blingRevs = []; state.aprovadasCache = []; state.proximaTrocaCarregado = false;
   closeModal('modal-detalhe-rev');
   loadAdmin();
 }
 
 // ── Atualizar itens da maleta (Bling -> app, append-only, gestor) ──────
-let maletaCtx = { revId: null, nome: '', pedidoNumero: null, pedidos: {}, itensRpc: [] };
 
 async function atualizarMaleta(revId, btn) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
@@ -2892,15 +2865,15 @@ async function atualizarMaleta(revId, btn) {
   if (candidatos.length === 1) { previewMaleta(revId, nome, candidatos[0]); return; }
 
   // Mais de um pedido: o admin escolhe (não assume nada).
-  maletaCtx = { revId, nome, pedidos: {} };
-  candidatos.forEach(p => { maletaCtx.pedidos[p.id] = p; });
+  state.maletaCtx = { revId, nome, pedidos: {} };
+  candidatos.forEach(p => { state.maletaCtx.pedidos[p.id] = p; });
   cont.innerHTML = `<p style="font-size:13px;color:var(--muted);margin-bottom:10px"><strong>${esc(nome)}</strong> tem ${candidatos.length} pedidos no Bling. Escolha qual atualizar:</p>` +
     candidatos.map(p => `<button class="btn-secondary" style="width:100%;text-align:left;margin-bottom:8px" onclick="previewMaletaPorId('${p.id}')">Pedido #${p.numero} — ${formatDate(p.data)} ${p.situacao?.id === SITUACAO_ABERTO ? '<span style="color:var(--success);font-size:11px">• em aberto</span>' : '<span style="color:var(--muted);font-size:11px">• atendido</span>'}</button>`).join('');
 }
 
 function previewMaletaPorId(pedidoId) {
-  const p = maletaCtx.pedidos[pedidoId];
-  if (p) previewMaleta(maletaCtx.revId, maletaCtx.nome, p);
+  const p = state.maletaCtx.pedidos[pedidoId];
+  if (p) previewMaleta(state.maletaCtx.revId, state.maletaCtx.nome, p);
 }
 
 async function previewMaleta(revId, nome, pedido) {
@@ -2936,9 +2909,9 @@ async function previewMaleta(revId, nome, pedido) {
   });
   const totalNovas = novos.reduce((s, n) => s + n.delta, 0);
 
-  maletaCtx.revId = revId;
-  maletaCtx.pedidoNumero = pedido.numero;
-  maletaCtx.itensRpc = Object.values(blingPorRef).map(b => ({ referencia: b.referencia, descricao: b.descricao, quantidade: b.quantidade, preco: b.preco }));
+  state.maletaCtx.revId = revId;
+  state.maletaCtx.pedidoNumero = pedido.numero;
+  state.maletaCtx.itensRpc = Object.values(blingPorRef).map(b => ({ referencia: b.referencia, descricao: b.descricao, quantidade: b.quantidade, preco: b.preco }));
 
   let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:12px">Maleta de <strong>${esc(nome)}</strong> · Pedido #${pedido.numero}</div>`;
   if (!novos.length) {
@@ -2969,9 +2942,9 @@ async function confirmarMaleta(btn) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
   btn.disabled = true; btn.textContent = '⟳ Adicionando...';
   const { data, error } = await sbQ(sb.rpc('sincronizar_maleta', {
-    p_revendedora_id: maletaCtx.revId,
-    p_pedido_numero: String(maletaCtx.pedidoNumero || ''),
-    p_itens: maletaCtx.itensRpc || []
+    p_revendedora_id: state.maletaCtx.revId,
+    p_pedido_numero: String(state.maletaCtx.pedidoNumero || ''),
+    p_itens: state.maletaCtx.itensRpc || []
   }));
   if (error) {
     console.error('Erro sincronizar_maleta:', error);
@@ -2983,7 +2956,7 @@ async function confirmarMaleta(btn) {
   const n = Number(data) || 0;
   toast(n > 0 ? `${n} ite${n!==1?'ns':'m'} adicionado${n!==1?'s':''} à maleta!` : 'Maleta já estava atualizada');
   closeModal('modal-maleta');
-  allConsignados = [];
+  state.allConsignados = [];
   if (document.getElementById('panel-consignados').style.display !== 'none') loadConsignados();
 }
 
@@ -3000,8 +2973,8 @@ async function salvarBlingId(revId) {
     return;
   }
   toast(val ? 'ID Bling vinculado!' : 'Vínculo Bling removido');
-  blingRevs = [];
-  proximaTrocaCarregado = false;
+  state.blingRevs = [];
+  state.proximaTrocaCarregado = false;
   closeModal('modal-detalhe-rev');
   loadAdmin();
 }
@@ -3102,7 +3075,7 @@ function escolherBlingCandidato(id) {
 // FECHAMENTO DO CICLO
 // ═══════════════════════════════════════════════
 function openFechamento() {
-  const restantes = allConsignados.filter(c =>
+  const restantes = state.allConsignados.filter(c =>
     qtdDisp(c) > 0
   );
 
@@ -3150,11 +3123,11 @@ function openFechamento() {
 }
 
 function gerarPdfFechamento() {
-  const restantes = allConsignados.filter(c =>
+  const restantes = state.allConsignados.filter(c =>
     qtdDisp(c) > 0
   );
   const hoje = new Date().toLocaleDateString('pt-BR');
-  const nomeRev = currentProfile.nome;
+  const nomeRev = state.currentProfile.nome;
   const total = restantes.reduce((s, c) => s + qtdDisp(c), 0);
   const valorTotal = restantes.reduce((s, c) => {
     const qtd = qtdDisp(c);
@@ -3212,17 +3185,16 @@ function openModal(id) { document.getElementById(id).classList.add('show'); }
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
 // Confirmação embutida (PWA-safe) — substitui confirm()/prompt() nativos.
-let _confirmaCb = null;
 function confirmarAcao(titulo, msg, textoBotao, onConfirm) {
   document.getElementById('confirma-titulo').textContent = titulo;
   document.getElementById('confirma-msg').textContent = msg;
   document.getElementById('confirma-ok').textContent = textoBotao || 'Confirmar';
-  _confirmaCb = onConfirm;
+  state._confirmaCb = onConfirm;
   openModal('modal-confirma');
 }
 function fecharConfirma(ok) {
   closeModal('modal-confirma');
-  const cb = _confirmaCb; _confirmaCb = null;
+  const cb = state._confirmaCb; state._confirmaCb = null;
   if (ok && cb) cb();
 }
 
