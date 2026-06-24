@@ -1,4 +1,4 @@
-const CACHE = 'lizzie-shell-v5';
+const CACHE = 'lizzie-shell-v6';
 const SHELL = [
   './',
   './index.html',
@@ -42,6 +42,21 @@ self.addEventListener('fetch', (event) => {
         caches.open(CACHE).then((c) => c.put(req, clone));
         return resp;
       }).catch(() => caches.match(req).then((c) => c || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Network-first para JS/CSS próprios — antes eram inline no HTML (network-first);
+  // agora externos, precisam continuar atualizando sozinhos a cada deploy.
+  if (req.destination === 'script' || req.destination === 'style') {
+    event.respondWith(
+      fetch(req).then((resp) => {
+        if (resp.ok) {
+          const clone = resp.clone();
+          caches.open(CACHE).then((c) => c.put(req, clone));
+        }
+        return resp;
+      }).catch(() => caches.match(req))
     );
     return;
   }
