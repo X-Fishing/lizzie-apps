@@ -2406,28 +2406,33 @@ function cicloTableHtml(list, isAdmin) {
 }
 
 function renderCicloRevendedora() {
-  const temAtivos = allConsignados.some(c =>
-    qtdDisp(c) > 0
-  );
+  const ativos = soAtivos(allConsignados);
+  const temAtivos = ativos.some(c => qtdDisp(c) > 0);
   const btnFechamento = temAtivos
     ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</button>`
     : '';
 
-  const cabecalho = pedidoLabelHtml(allConsignados, 12);
+  const historico = historicoCatalogosHtml(allConsignados);
+  const cabecalho = pedidoLabelHtml(ativos, 12);
 
   const termo = (document.getElementById('c-search')?.value || '').toLowerCase().trim();
   if (termo) {
-    const lista = allConsignados.filter(c =>
+    const lista = ativos.filter(c =>
       (c.descricao || '').toLowerCase().includes(termo) ||
       (c.referencia || '').toLowerCase().includes(termo)
     );
     if (!lista.length) {
-      return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhuma peça encontrada com "${termo}"</p></div>`;
+      return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhuma peça encontrada com "${termo}"</p></div>` + historico;
     }
-    return cabecalho + cicloTableHtml(lista, false) + btnFechamento;
+    return cabecalho + cicloTableHtml(lista, false) + btnFechamento + historico;
   }
 
-  return cabecalho + cicloTableHtml(allConsignados, false) + btnFechamento;
+  // Sem catálogo ativo: mostra aviso + histórico (se houver), em vez de tabela vazia.
+  if (!ativos.length) {
+    return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div><p>Nenhum catálogo ativo no momento</p></div>` + historico;
+  }
+
+  return cabecalho + cicloTableHtml(ativos, false) + btnFechamento + historico;
 }
 
 function agruparPorRevendedora() {
@@ -2451,11 +2456,50 @@ function pedidoLabelHtml(list, fontSize) {
   return `<div style="font-size:${fontSize}px;color:var(--rose);font-family:monospace;margin-top:2px">${label} ${peds.map(n => '#' + n).join(', ')}</div>`;
 }
 
+const soAtivos     = list => list.filter(c => c.status === 'ativo');
+const soEncerrados = list => list.filter(c => c.status === 'encerrado');
+
+// Agrupa peças encerradas em ciclos (1 ciclo = 1 fechamento), pela data de encerramento.
+// Retorna [[ 'YYYY-MM-DD', [pecas...] ], ...] — mais recente primeiro.
+function ciclosEncerrados(list) {
+  const map = {};
+  soEncerrados(list).forEach(c => {
+    const chave = (c.encerrado_em || c.created_at || '').slice(0, 10); // YYYY-MM-DD
+    (map[chave] = map[chave] || []).push(c);
+  });
+  return Object.entries(map).sort((a, b) => a[0] < b[0] ? 1 : -1);
+}
+
+// Bloco "Histórico de catálogos" (somente leitura). Retorna '' se não houver ciclos encerrados.
+// Usa cicloTableHtml(..., true): coluna "Status" (sem botão Vender), portanto read-only.
+function historicoCatalogosHtml(list) {
+  const ciclos = ciclosEncerrados(list);
+  if (!ciclos.length) return '';
+  const itens = ciclos.map(([data, pecas]) => {
+    const env  = pecas.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
+    const vend = pecas.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+    const recv = pecas.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
+    const dataFmt = data ? data.split('-').reverse().join('/') : 'sem data';
+    return `<details class="hist-ciclo" style="border:1px solid var(--line,#eee);border-radius:10px;margin-bottom:8px;padding:10px 12px">
+      <summary style="cursor:pointer;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <span style="font-weight:600;color:var(--plum)">Fechado em ${dataFmt}</span>
+        <span style="font-size:12px;color:var(--muted)">${pecas.length} peça${pecas.length!==1?'s':''} · ${vend}/${env} vendidas · <span style="color:var(--rose)">${fmtBRL(recv)}</span></span>
+      </summary>
+      <div style="margin-top:8px">${pedidoLabelHtml(pecas, 12)}${cicloTableHtml(pecas, true)}</div>
+    </details>`;
+  }).join('');
+  return `<div style="margin-top:18px">
+    <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Histórico de catálogos</div>
+    ${itens}
+  </div>`;
+}
+
 function statsRevendedora(list) {
-  const ativos = list.filter(c => c.status === 'ativo');
-  const totalEnv = list.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
-  const totalVend = list.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
-  const totalRecv = list.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
+  const ativos = soAtivos(list);
+  // Totais refletem APENAS o catálogo atual (ativo). A receita histórica fica no bloco de histórico.
+  const totalEnv = ativos.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
+  const totalVend = ativos.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+  const totalRecv = ativos.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
   return { ativos, temAtivos: ativos.length > 0, totalEnv, totalVend, totalRecv };
 }
 
@@ -2486,15 +2530,16 @@ function renderCicloAdmin() {
       <div class="rev-card-valor-label">Vendido até agora</div>
       <div class="rev-card-valor">${fmtBRL(totalRecv)}</div>
       <div class="rev-card-stats">
-        <div><b>${list.length}</b> peça${list.length!==1?'s':''}</div>
+        <div><b>${ativos.length}</b> peça${ativos.length!==1?'s':''}</div>
         <div>·</div>
         <div><b>${totalVend}</b>/${totalEnv} vendida${totalVend!==1?'s':''}</div>
       </div>
     </div>`;
   }).join('');
 
-  const grandTotal = allConsignados.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
-  const totalPecasVend = allConsignados.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+  const ativosGlobal = soAtivos(allConsignados);
+  const grandTotal = ativosGlobal.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
+  const totalPecasVend = ativosGlobal.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
   const totalRevsAtivas = Object.values(groups).filter(l => l.some(c => c.status === 'ativo')).length;
 
   return `<button class="btn-secondary" style="width:100%;margin-bottom:14px;border-color:var(--rose);color:var(--rose)" onclick="openBuscaPeca()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar peça — com quem está</button>
@@ -2524,9 +2569,9 @@ function renderCicloAdminDetalhe(revId, list) {
     : (temAtivos ? '' : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem catálogo ativo</div>`);
 
   const termo = (document.getElementById('c-search')?.value || '').toLowerCase().trim();
-  let listaTabela = list;
+  let listaTabela = ativos;
   if (termo) {
-    listaTabela = list.filter(c =>
+    listaTabela = ativos.filter(c =>
       (c.descricao || '').toLowerCase().includes(termo) ||
       (c.referencia || '').toLowerCase().includes(termo)
     );
@@ -2540,8 +2585,8 @@ function renderCicloAdminDetalhe(revId, list) {
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
         <div>
           <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">${esc(nome)}</div>
-          ${pedidoLabelHtml(list, 12)}
-          <div style="font-size:12px;color:var(--muted);margin-top:2px">${list.length} peça${list.length!==1?'s':''} · ${totalVend}/${totalEnv} vendidas ${temAtivos ? `· <span style="color:var(--success)">${ativos.length} ativa${ativos.length!==1?'s':''}</span>` : ''}</div>
+          ${pedidoLabelHtml(ativos, 12)}
+          <div style="font-size:12px;color:var(--muted);margin-top:2px">${ativos.length} peça${ativos.length!==1?'s':''} · ${totalVend}/${totalEnv} vendidas ${temAtivos ? `· <span style="color:var(--success)">${ativos.length} ativa${ativos.length!==1?'s':''}</span>` : ''}</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Vendido</div>
@@ -2550,7 +2595,8 @@ function renderCicloAdminDetalhe(revId, list) {
       </div>
       ${tabelaHtml}
       ${acoes}
-    </div>`;
+    </div>
+    ${historicoCatalogosHtml(list)}`;
 }
 
 function abrirCicloRev(revId) {
@@ -2582,7 +2628,8 @@ function renderBuscaPeca() {
     div.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></div><p>Digite o nome ou código da peça acima.</p></div>';
     return;
   }
-  const matches = allConsignados.filter(c =>
+  // Busca serve para saber onde a peça está AGORA: só catálogo ativo.
+  const matches = soAtivos(allConsignados).filter(c =>
     (c.descricao || '').toLowerCase().includes(termo) ||
     (c.referencia || '').toLowerCase().includes(termo)
   ).sort((a, b) => (a.descricao || '').localeCompare(b.descricao || ''));
@@ -2600,12 +2647,11 @@ function renderBuscaPeca() {
     if (disp > 0) segs.push(`<span style="color:var(--success);font-weight:600">● ${disp} disponíve${disp !== 1 ? 'is' : 'l'}</span>`);
     if (vendida > 0) segs.push(`<span style="color:var(--rose);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> ${vendida} vendida${vendida !== 1 ? 's' : ''}</span>`);
     if (!segs.length) segs.push('<span style="color:var(--muted)">Sem unidades</span>');
-    const encerrado = c.status === 'encerrado' ? '<span style="color:var(--muted)">Catálogo encerrado · </span>' : '';
     const ref = c.referencia ? `<span style="color:var(--muted)">REF ${esc(c.referencia)} · </span>` : '';
     return `<div style="padding:12px 14px;border:1px solid var(--line,#eee);border-radius:12px;margin-bottom:8px">
       <div style="font-weight:600;color:var(--plum)">${esc(c.descricao)}</div>
       <div style="font-size:12px;margin-top:3px">${ref}<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/></svg> <b>${esc(nomeRev)}</b></div>
-      <div style="font-size:12px;margin-top:4px">${encerrado}${segs.join(' · ')}${c.preco_venda ? ` <span style="color:var(--muted)">· R$ ${Number(c.preco_venda).toFixed(2)}</span>` : ''}</div>
+      <div style="font-size:12px;margin-top:4px">${segs.join(' · ')}${c.preco_venda ? ` <span style="color:var(--muted)">· R$ ${Number(c.preco_venda).toFixed(2)}</span>` : ''}</div>
     </div>`;
   }).join('');
 }
@@ -2619,7 +2665,7 @@ async function finalizarCicloRev(revId) {
     let error;
     try {
       ({ error } = await sb.from('consignados')
-        .update({ status: 'encerrado' })
+        .update({ status: 'encerrado', encerrado_em: new Date().toISOString() })
         .eq('revendedora_id', revId)
         .eq('status', 'ativo'));
     } catch (e) { error = e; }
