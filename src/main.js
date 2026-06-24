@@ -13,56 +13,13 @@
 import './styles.css';
 import { sb, SUPABASE_URL, SUPABASE_KEY, RECOVERY_IN_URL, URL_AUTH_ERROR } from './supabase.js';
 import { state } from './state.js';
+import { CAT_LABEL, closeModal, confirmarAcao, detectarCategoria, esc, fecharConfirma, fetchPaginado, fmtBRL, formatDate, handleSupabaseError, isAuthError, openModal, qtdDisp, sbQ, showMsg, toast } from './utils.js';
 
 
-// Escapa dados do banco/Bling antes de interpolar em innerHTML (anti-XSS).
-// Use SEMPRE que jogar texto vindo de usuario/Bling dentro de template string.
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c =>
-    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
-}
 
-// Quantidade disponivel de uma peca (trata campos null para nao gerar NaN).
-function qtdDisp(c) {
-  return (c.quantidade_enviada || 0) - (c.quantidade_vendida || 0) - (c.quantidade_devolvida || 0);
-}
 
-// Wrapper com timeout para queries Supabase (evita travar indefinidamente)
-function sbQ(query, ms = 12000) {
-  return Promise.race([
-    query,
-    new Promise((_, reject) =>
-      setTimeout(() => reject({ timeout: true }), ms)
-    )
-  ]).catch(e => {
-    if (e && e.timeout) return { data: null, error: { message: 'timeout' } };
-    return { data: null, error: e };
-  });
-}
 
-function isAuthError(error) {
-  if (!error) return false;
-  const msg = (error.message || '').toLowerCase();
-  return msg.includes('jwt') ||
-         msg.includes('refresh token') ||
-         msg.includes('not authenticated') ||
-         msg.includes('invalid') && msg.includes('token') ||
-         error.status === 401 ||
-         error.code === 'PGRST301';
-}
 
-// Returns true if an error was handled (caller should bail out).
-async function handleSupabaseError(error, fallbackMsg = 'Erro inesperado') {
-  if (!error) return false;
-  if (isAuthError(error)) {
-    toast('Sessão expirada. Faça login novamente.');
-    await sb.auth.signOut().catch(() => {});
-    setTimeout(() => location.reload(), 1500);
-    return true;
-  }
-  toast(fallbackMsg);
-  return true;
-}
 
 
 // ═══════════════════════════════════════════════
@@ -325,9 +282,6 @@ async function fazerCadastro() {
   showMsg(msg, 'Cadastro enviado! Aguarde aprovação da Lizzie.', 'success');
 }
 
-function showMsg(el, text, type) {
-  el.textContent = text; el.className = 'auth-msg ' + type; el.style.display = 'block';
-}
 
 // ═══════════════════════════════════════════════
 // NAVIGATION
@@ -940,19 +894,6 @@ async function excluirGarantia(id) {
 // ═══════════════════════════════════════════════
 // CICLO (CONSIGNADOS)
 // ═══════════════════════════════════════════════
-// Busca TODAS as linhas paginando de 1000 em 1000 (o Supabase/PostgREST corta
-// em 1000 por requisição; sem isso, catálogos grandes "somem" peças antigas).
-async function fetchPaginado(makeQuery, pageSize = 1000) {
-  let from = 0; const todas = [];
-  while (true) {
-    const { data, error } = await sbQ(makeQuery().range(from, from + pageSize - 1));
-    if (error) return { data: null, error };
-    todas.push(...(data || []));
-    if (!data || data.length < pageSize) break;
-    from += pageSize;
-  }
-  return { data: todas, error: null };
-}
 
 async function loadConsignados() {
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
@@ -991,16 +932,7 @@ function sortConsignados(col) {
   renderCicloGrid();
 }
 
-const CAT_LABEL = { anel:'Anel', colar:'Colar', brinco:'Brinco', pulseira:'Pulseira', outro:'Outro' };
 
-function detectarCategoria(descricao) {
-  const d = (descricao || '').toLowerCase();
-  if (d.includes('brinco')) return 'brinco';
-  if (d.includes('colar') || d.includes('corrente') || d.includes('escapulario') || d.includes('escapulário') || d.includes('gargantilha')) return 'colar';
-  if (d.includes('anel')) return 'anel';
-  if (d.includes('pulseira') || d.includes('bracelete')) return 'pulseira';
-  return 'outro';
-}
 
 function renderCicloGrid() {
   const div = document.getElementById('c-list');
@@ -1236,9 +1168,6 @@ function statsRevendedora(list) {
   return { ativos, temAtivos: ativos.length > 0, totalEnv, totalVend, totalRecv };
 }
 
-function fmtBRL(n) {
-  return 'R$ ' + Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 function renderCicloAdmin() {
   const groups = agruparPorRevendedora();
@@ -3181,22 +3110,7 @@ function fecharPrint() {
 // ═══════════════════════════════════════════════
 // UTILS
 // ═══════════════════════════════════════════════
-function openModal(id) { document.getElementById(id).classList.add('show'); }
-function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
-// Confirmação embutida (PWA-safe) — substitui confirm()/prompt() nativos.
-function confirmarAcao(titulo, msg, textoBotao, onConfirm) {
-  document.getElementById('confirma-titulo').textContent = titulo;
-  document.getElementById('confirma-msg').textContent = msg;
-  document.getElementById('confirma-ok').textContent = textoBotao || 'Confirmar';
-  state._confirmaCb = onConfirm;
-  openModal('modal-confirma');
-}
-function fecharConfirma(ok) {
-  closeModal('modal-confirma');
-  const cb = state._confirmaCb; state._confirmaCb = null;
-  if (ok && cb) cb();
-}
 
 document.querySelectorAll('.modal-overlay').forEach(o => {
   // data-lock-outside: so fecha pelo botao Fechar/Cancelar (ex.: garantia),
@@ -3206,11 +3120,6 @@ document.querySelectorAll('.modal-overlay').forEach(o => {
   });
 });
 
-function formatDate(d) {
-  if (!d) return '—';
-  const [y, m, day] = d.split('T')[0].split('-');
-  return `${day}/${m}/${y}`;
-}
 
 // Date BR helpers: input mask dd/mm/aaaa <-> ISO yyyy-mm-dd
 function maskDateBR(input) {
@@ -3267,11 +3176,6 @@ function previewFoto(input, previewId, placeholderId) {
   reader.readAsDataURL(file);
 }
 
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
-  setTimeout(() => t.classList.remove('show'), 2800);
-}
 
 // Expoe no window TODAS as funcoes chamadas via on* no HTML (estatico e gerado),
 // pois main.js agora e um ES module (escopo proprio). Lista derivada dos handlers on*.
