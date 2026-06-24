@@ -13,7 +13,7 @@
 import './styles.css';
 import { sb, SUPABASE_URL, SUPABASE_KEY, RECOVERY_IN_URL, URL_AUTH_ERROR } from './supabase.js';
 import { state } from './state.js';
-import { CAT_LABEL, closeModal, confirmarAcao, detectarCategoria, esc, fecharConfirma, fetchPaginado, fmtBRL, formatDate, handleSupabaseError, isAuthError, openModal, qtdDisp, sbQ, showMsg, toast } from './utils.js';
+import { CAT_LABEL, brToISO, closeModal, confirmarAcao, detectarCategoria, esc, fecharConfirma, fetchPaginado, fmtBRL, formatDate, handleSupabaseError, hojeBR, isAuthError, isoToBR, maskDateBR, maskMoneyBR, moneyToInput, openModal, parseMoneyBR, previewFoto, qtdDisp, sbQ, showMsg, toast } from './utils.js';
 import { showPanel, toggleCadastros } from './nav.js';
 import { mostrarRecovery, ROLE_LABELS, ehAdmin, ehGestor, ehStaff, loadUser, maskTelBR, salvarComplemento, showSplash, switchTab, fazerLogin, mostrarRecuperar, voltarLogin, loginGoogle, enviarLinkRecuperacao, salvarNovaSenha, fazerCadastro } from './auth.js';
 import { loadDashboard, loadFinanceiro, loadCalculadora, loadClientes, loadMarketing, loadFuncionarios, loadFormasPagamento, loadCategoriasFinanceiras } from './dashboard.js';
@@ -2721,60 +2721,8 @@ document.querySelectorAll('.modal-overlay').forEach(o => {
 });
 
 
-// Date BR helpers: input mask dd/mm/aaaa <-> ISO yyyy-mm-dd
-function maskDateBR(input) {
-  let v = input.value.replace(/\D/g, '').slice(0, 8);
-  if (v.length >= 5) v = v.slice(0,2) + '/' + v.slice(2,4) + '/' + v.slice(4);
-  else if (v.length >= 3) v = v.slice(0,2) + '/' + v.slice(2);
-  input.value = v;
-}
-function brToISO(s) {
-  if (!s) return null;
-  const m = s.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!m) return null;
-  const dd = m[1].padStart(2,'0'), mm = m[2].padStart(2,'0'), yy = m[3];
-  return `${yy}-${mm}-${dd}`;
-}
-function isoToBR(iso) {
-  if (!iso) return '';
-  const [y,m,d] = iso.split('T')[0].split('-');
-  return `${d}/${m}/${y}`;
-}
-function hojeBR() {
-  const d = new Date();
-  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-}
 
-// Máscara monetária: dígitos vão andando, sempre 2 casas decimais
-function maskMoneyBR(input) {
-  let v = (input.value || '').replace(/\D/g, '');
-  if (!v) { input.value = ''; return; }
-  v = v.replace(/^0+/, '') || '0';
-  while (v.length < 3) v = '0' + v;
-  const inteiro = v.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  input.value = inteiro + ',' + v.slice(-2);
-}
-function parseMoneyBR(s) {
-  if (!s) return 0;
-  const t = String(s).replace(/\./g, '').replace(',', '.');
-  return parseFloat(t) || 0;
-}
-function moneyToInput(n) {
-  return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
-function previewFoto(input, previewId, placeholderId) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const prev = document.getElementById(previewId);
-    prev.src = e.target.result;
-    prev.style.display = 'block';
-    document.getElementById(placeholderId).style.display = 'none';
-  };
-  reader.readAsDataURL(file);
-}
 
 
 // Expoe no window TODAS as funcoes chamadas via on* no HTML (estatico e gerado),

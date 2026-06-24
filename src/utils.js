@@ -114,3 +114,64 @@ export function toast(msg) {
   t.textContent = msg; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
 }
+
+// Helpers de data (BR<->ISO), dinheiro e foto (puros).
+// Date BR helpers: input mask dd/mm/aaaa <-> ISO yyyy-mm-dd
+export function maskDateBR(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 8);
+  if (v.length >= 5) v = v.slice(0,2) + '/' + v.slice(2,4) + '/' + v.slice(4);
+  else if (v.length >= 3) v = v.slice(0,2) + '/' + v.slice(2);
+  input.value = v;
+}
+
+export function brToISO(s) {
+  if (!s) return null;
+  const m = s.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!m) return null;
+  const dd = m[1].padStart(2,'0'), mm = m[2].padStart(2,'0'), yy = m[3];
+  return `${yy}-${mm}-${dd}`;
+}
+
+export function isoToBR(iso) {
+  if (!iso) return '';
+  const [y,m,d] = iso.split('T')[0].split('-');
+  return `${d}/${m}/${y}`;
+}
+
+export function hojeBR() {
+  const d = new Date();
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+
+// Máscara monetária: dígitos vão andando, sempre 2 casas decimais
+export function maskMoneyBR(input) {
+  let v = (input.value || '').replace(/\D/g, '');
+  if (!v) { input.value = ''; return; }
+  v = v.replace(/^0+/, '') || '0';
+  while (v.length < 3) v = '0' + v;
+  const inteiro = v.slice(0, -2).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  input.value = inteiro + ',' + v.slice(-2);
+}
+
+export function parseMoneyBR(s) {
+  if (!s) return 0;
+  const t = String(s).replace(/\./g, '').replace(',', '.');
+  return parseFloat(t) || 0;
+}
+
+export function moneyToInput(n) {
+  return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export function previewFoto(input, previewId, placeholderId) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const prev = document.getElementById(previewId);
+    prev.src = e.target.result;
+    prev.style.display = 'block';
+    document.getElementById(placeholderId).style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
