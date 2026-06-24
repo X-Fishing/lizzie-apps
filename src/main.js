@@ -14,6 +14,7 @@ import './styles.css';
 import { sb, SUPABASE_URL, SUPABASE_KEY, RECOVERY_IN_URL, URL_AUTH_ERROR } from './supabase.js';
 import { state } from './state.js';
 import { CAT_LABEL, closeModal, confirmarAcao, detectarCategoria, esc, fecharConfirma, fetchPaginado, fmtBRL, formatDate, handleSupabaseError, isAuthError, openModal, qtdDisp, sbQ, showMsg, toast } from './utils.js';
+import { showPanel, toggleCadastros } from './nav.js';
 
 
 
@@ -286,40 +287,8 @@ async function fazerCadastro() {
 // ═══════════════════════════════════════════════
 // NAVIGATION
 // ═══════════════════════════════════════════════
-const PANEIS_STAFF = ['financeiro','calculadora','clientes','marketing','funcionarios','formas-pagamento','categorias-financeiras'];
 
-function showPanel(name) {
-  if (name === 'trocas' && !ehStaff()) name = 'dashboard';
-  if (name === 'admin' && !ehGestor()) name = 'dashboard';
-  if (PANEIS_STAFF.includes(name) && !ehStaff()) name = 'dashboard';
-  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin', ...PANEIS_STAFF].forEach(p => {
-    document.getElementById('panel-' + p).style.display = p === name ? 'block' : 'none';
-    const nav = document.getElementById('nav-' + p);
-    if (nav) nav.classList.toggle('active', p === name);
-  });
-  // Sincroniza o estado ativo na barra lateral do dashboard PC.
-  document.querySelectorAll('.staff-nav [data-panel]').forEach(b =>
-    b.classList.toggle('active', b.dataset.panel === name));
 
-  if (name === 'dashboard') loadDashboard();
-  if (name === 'garantias') loadGarantias();
-  if (name === 'consignados') loadConsignados();
-  if (name === 'pagamentos') loadVendas();
-  if (name === 'historico') loadHistorico();
-  if (name === 'trocas') loadTrocasDashboard();
-  if (name === 'admin') loadAdmin();
-  if (name === 'financeiro') loadFinanceiro();
-  if (name === 'calculadora') loadCalculadora();
-  if (name === 'clientes') loadClientes();
-  if (name === 'marketing') loadMarketing();
-  if (name === 'funcionarios') loadFuncionarios();
-  if (name === 'formas-pagamento') loadFormasPagamento();
-  if (name === 'categorias-financeiras') loadCategoriasFinanceiras();
-}
-
-function toggleCadastros() {
-  document.getElementById('snav-cadastros').classList.toggle('collapsed');
-}
 
 // ── Seções do dashboard PC (stubs "Em breve" — implementadas por etapa) ──
 function emBreveHtml(titulo, descricao, icone) {
@@ -3179,7 +3148,7 @@ function previewFoto(input, previewId, placeholderId) {
 
 // Expoe no window TODAS as funcoes chamadas via on* no HTML (estatico e gerado),
 // pois main.js agora e um ES module (escopo proprio). Lista derivada dos handlers on*.
-Object.assign(window, { sb, abrirCicloRev, abrirFinalizarVenda, abrirHistoricoCiclo, adicionarAoCarrinho, ajustarValorPago, aprovarRev, atualizarMaleta, atualizarStatusCard, atualizarTotalVenda, buscarBling, calcPrazoGarantia, closeModal, confirmarExclusaoRev, confirmarMaleta, confirmarVendaCarrinho, definirPapel, deletarCicloRev, detectarBlingId, editarGarantia, enviarLinkRecuperacao, escolherBlingCandidato, excluirGarantia, excluirRevendedora, excluirVenda, fazerCadastro, fazerLogin, fecharConfirma, fecharPrint, filtrarBling, filtrarGarantias, filtrarHistorico, finalizarCicloRev, gerarPdfFechamento, importarItensBling, loginGoogle, maskDateBR, maskMoneyBR, maskTelBR, mostrarRecuperar, mudarStatus, openBlingSync, openBuscaPeca, openFechamento, openNovaGarantia, openNovoConsignado, openVenda, previewFoto, previewMaletaPorId, registrarPagamento, removerDoCarrinho, renderBuscaPeca, renderCicloGrid, revogarRev, salvarBlingId, salvarComplemento, salvarConsignado, salvarGarantia, salvarNovaSenha, setGFilter, setPFilter, setTrocaFiltro, showPanel, sortConsignados, sortGarantiasStaff, switchTab, toggleCadastros, toggleHistorico, toggleOrdemTroca, verGarantia, verItensBling, verRevendedora, verVenda, voltarCardsCiclo, voltarHistoricoCiclo, voltarListaBling, voltarLogin });
+Object.assign(window, { ehStaff, ehGestor, loadDashboard, loadGarantias, loadConsignados, loadVendas, loadHistorico, loadTrocasDashboard, loadAdmin, loadFinanceiro, loadCalculadora, loadClientes, loadMarketing, loadFuncionarios, loadFormasPagamento, loadCategoriasFinanceiras, sb, abrirCicloRev, abrirFinalizarVenda, abrirHistoricoCiclo, adicionarAoCarrinho, ajustarValorPago, aprovarRev, atualizarMaleta, atualizarStatusCard, atualizarTotalVenda, buscarBling, calcPrazoGarantia, closeModal, confirmarExclusaoRev, confirmarMaleta, confirmarVendaCarrinho, definirPapel, deletarCicloRev, detectarBlingId, editarGarantia, enviarLinkRecuperacao, escolherBlingCandidato, excluirGarantia, excluirRevendedora, excluirVenda, fazerCadastro, fazerLogin, fecharConfirma, fecharPrint, filtrarBling, filtrarGarantias, filtrarHistorico, finalizarCicloRev, gerarPdfFechamento, importarItensBling, loginGoogle, maskDateBR, maskMoneyBR, maskTelBR, mostrarRecuperar, mudarStatus, openBlingSync, openBuscaPeca, openFechamento, openNovaGarantia, openNovoConsignado, openVenda, previewFoto, previewMaletaPorId, registrarPagamento, removerDoCarrinho, renderBuscaPeca, renderCicloGrid, revogarRev, salvarBlingId, salvarComplemento, salvarConsignado, salvarGarantia, salvarNovaSenha, setGFilter, setPFilter, setTrocaFiltro, showPanel, sortConsignados, sortGarantiasStaff, switchTab, toggleCadastros, toggleHistorico, toggleOrdemTroca, verGarantia, verItensBling, verRevendedora, verVenda, voltarCardsCiclo, voltarHistoricoCiclo, voltarListaBling, voltarLogin });
 
 // START
 init();
