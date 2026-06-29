@@ -166,6 +166,10 @@
       </div>
       <div class="search-bar" id="c-search-bar" style="display:none">
         <input class="search-input" id="c-search" placeholder="Buscar por nome ou código..." oninput="renderCicloGrid()">
+        <label class="filtro-vendidos" style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none">
+          <input type="checkbox" id="c-so-vendidos" onchange="toggleCicloSoVendidos(this)" style="accent-color:var(--rose);cursor:pointer">
+          Mostrar apenas vendidos
+        </label>
       </div>
       <div id="c-list"></div>
       <div id="cart-bar" style="display:none"></div>

@@ -143,13 +143,20 @@ export function renderCicloRevendedora() {
   const cabecalho = pedidoLabelHtml(ativos, 12);
 
   const termo = (document.getElementById('c-search')?.value || '').toLowerCase().trim();
-  if (termo) {
-    const lista = ativos.filter(c =>
-      (c.descricao || '').toLowerCase().includes(termo) ||
-      (c.referencia || '').toLowerCase().includes(termo)
-    );
+  if (termo || state.cicloSoVendidos) {
+    let lista = ativos;
+    if (termo) {
+      lista = lista.filter(c =>
+        (c.descricao || '').toLowerCase().includes(termo) ||
+        (c.referencia || '').toLowerCase().includes(termo)
+      );
+    }
+    if (state.cicloSoVendidos) lista = lista.filter(foiVendida);
     if (!lista.length) {
-      return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhuma peça encontrada com "${termo}"</p></div>` + historico;
+      const msgVazio = state.cicloSoVendidos
+        ? (termo ? `Nenhuma peça vendida encontrada com "${termo}"` : 'Nenhuma peça vendida neste catálogo')
+        : `Nenhuma peça encontrada com "${termo}"`;
+      return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>${msgVazio}</p></div>` + historico;
     }
     return cabecalho + cicloTableHtml(lista, false) + btnFechamento + historico;
   }
@@ -181,6 +188,13 @@ export function pedidoLabelHtml(list, fontSize) {
   if (!peds.length) return '';
   const label = peds.length > 1 ? 'Pedidos' : 'Pedido';
   return `<div style="font-size:${fontSize}px;color:var(--rose);font-family:monospace;margin-top:2px">${label} ${peds.map(n => '#' + n).join(', ')}</div>`;
+}
+
+export const foiVendida = c => (c.quantidade_vendida || 0) > 0;
+
+export function toggleCicloSoVendidos(el) {
+  state.cicloSoVendidos = !!el.checked;
+  renderCicloGrid();
 }
 
 export const soAtivos     = list => list.filter(c => c.status === 'ativo');
@@ -257,6 +271,9 @@ export function abrirHistoricoCiclo(chave) {
   state.historicoCicloSel = chave;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
+  state.cicloSoVendidos = false;
+  const cv = document.getElementById('c-so-vendidos');
+  if (cv) cv.checked = false;
   renderCicloGrid();
 }
 
@@ -338,13 +355,17 @@ export function renderCicloAdminDetalhe(revId, list) {
   const termo = (document.getElementById('c-search')?.value || '').toLowerCase().trim();
   let listaTabela = ativos;
   if (termo) {
-    listaTabela = ativos.filter(c =>
+    listaTabela = listaTabela.filter(c =>
       (c.descricao || '').toLowerCase().includes(termo) ||
       (c.referencia || '').toLowerCase().includes(termo)
     );
   }
-  const tabelaHtml = (termo && !listaTabela.length)
-    ? `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhuma peça encontrada com "${termo}"</p></div>`
+  if (state.cicloSoVendidos) listaTabela = listaTabela.filter(foiVendida);
+  const msgVazio = state.cicloSoVendidos
+    ? (termo ? `Nenhuma peça vendida encontrada com "${termo}"` : 'Nenhuma peça vendida neste catálogo')
+    : `Nenhuma peça encontrada com "${termo}"`;
+  const tabelaHtml = (!listaTabela.length && (termo || state.cicloSoVendidos))
+    ? `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>${msgVazio}</p></div>`
     : cicloTableHtml(listaTabela, true);
 
   return `<button class="btn-voltar-ciclo" onclick="voltarCardsCiclo()">← Voltar para revendedoras</button>
@@ -371,6 +392,9 @@ export function abrirCicloRev(revId) {
   state.historicoCicloSel = null;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
+  state.cicloSoVendidos = false;
+  const cv = document.getElementById('c-so-vendidos');
+  if (cv) cv.checked = false;
   renderCicloGrid();
 }
 
@@ -379,6 +403,9 @@ export function voltarCardsCiclo() {
   state.historicoCicloSel = null;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
+  state.cicloSoVendidos = false;
+  const cv = document.getElementById('c-so-vendidos');
+  if (cv) cv.checked = false;
   renderCicloGrid();
 }
 

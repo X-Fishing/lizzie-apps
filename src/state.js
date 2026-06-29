@@ -15,6 +15,7 @@ export const state = {
   pFilter: 'todos',
   cSort: { col: 'descricao', dir: 'asc' },
   cicloRevSelecionada: null,
+  cicloSoVendidos: false,
   historicoCicloSel: null,
   carrinhoVenda: [],
   blingRevs: [],
