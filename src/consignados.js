@@ -356,7 +356,7 @@ export function renderCicloAdminDetalhe(revId, list) {
     ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
         ${btnMaleta}
         ${temAtivos ? `<button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="finalizarCicloRev('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar catálogo</button>
-        <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Deletar catálogo</button>` : ''}
+        <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Excluir maleta aguardando</button>` : ''}
       </div>`
     : (temAtivos ? '' : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem catálogo ativo</div>`);
 
@@ -504,24 +504,32 @@ export async function finalizarCicloRev(revId) {
   });
 }
 
+// Ação destrutiva: exclui SOMENTE a maleta AGUARDANDO (a próxima já montada).
+// A maleta ATIVA (que está com a revendedora) nunca é tocada.
 export async function deletarCicloRev(revId) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
   const nome = state.revNameMap[revId] || 'esta revendedora';
-  const ativos = state.allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
-  if (!ativos.length) { toast('Nenhum catálogo ativo para deletar'); return; }
-  confirmarAcao('⚠ Deletar catálogo', `DELETAR o catálogo ativo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} ativa${ativos.length>1?'s':''} serão APAGADAS PERMANENTEMENTE (catálogos já encerrados NÃO são tocados).\n\nEssa ação não pode ser desfeita.`, 'Sim, deletar tudo', async () => {
-    // SEGURANÇA: o .eq('status','ativo') garante que ciclos encerrados são preservados
-    let error;
-    try {
-      ({ error } = await sb.from('consignados')
-        .delete()
-        .eq('revendedora_id', revId)
-        .eq('status', 'ativo'));
-    } catch (e) { error = e; }
-    if (await handleSupabaseError(error, 'Erro ao deletar catálogo')) return;
-    toast(`Catálogo ativo de ${nome} deletado`);
-    loadConsignados();
-  });
+
+  const { data: aguardando, error: qErr } = await sbQ(sb.from('maletas')
+    .select('id').eq('revendedora_id', revId).eq('status', 'aguardando'));
+  if (await handleSupabaseError(qErr, 'Erro ao buscar maletas')) return;
+  const ids = (aguardando || []).map(m => m.id);
+  if (!ids.length) { toast('Esta revendedora não tem maleta aguardando para excluir.'); return; }
+
+  confirmarAcao('⚠ Excluir maleta aguardando',
+    `Excluir a maleta AGUARDANDO de ${nome}?\n\nAs peças dessa maleta serão removidas permanentemente. A maleta que está com a revendedora (ativa) NÃO é afetada.`,
+    'Excluir maleta aguardando', async () => {
+      let error;
+      try {
+        // 1) remove as peças da(s) maleta(s) aguardando (escopo por maleta_id — nunca por revendedora solta)
+        ({ error } = await sb.from('consignados').delete().in('maleta_id', ids));
+        // 2) remove a linha da maleta (para não contar no limite de 2)
+        if (!error) ({ error } = await sb.from('maletas').delete().in('id', ids));
+      } catch (e) { error = e; }
+      if (await handleSupabaseError(error, 'Erro ao excluir maleta aguardando')) return;
+      toast(`Maleta aguardando de ${nome} excluída`);
+      loadConsignados();
+    });
 }
 
 export function openVenda(id) {
