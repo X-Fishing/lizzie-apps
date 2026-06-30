@@ -60,7 +60,7 @@ function renderLista() {
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${p.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(p.preco_venda)}</span></td>
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
-        <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')">${IC_EDIT}</button>
+        <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
       </td>
     </tr>`).join('') :

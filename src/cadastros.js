@@ -78,7 +78,7 @@ function render(tabela, linhas) {
         ? `<span class="ciclo-desc">${esc(it[c] ?? '—')}</span>${it.ativo === false ? ' <span class="badge badge-aberta" style="font-size:10px">inativo</span>' : ''}`
         : esc(it[c] ?? '—')}</td>`).join('')}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
-        <button class="btn-icon" title="Editar" onclick="cadEditar('${tabela}','${it.id}')">${IC_EDIT}</button>
+        <button class="btn-icon" title="Editar" onclick="cadEditar('${tabela}','${it.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="cadExcluir('${tabela}','${it.id}')" style="color:var(--danger)">${IC_TRASH}</button>
       </td>
     </tr>`).join('') :
