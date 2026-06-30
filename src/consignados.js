@@ -13,6 +13,9 @@ export async function loadConsignados() {
   const queries = [fetchPaginado(makeQ)];
   if (isAdmin) {
     queries.push(sbQ(sb.from('profiles').select('id,nome,bling_contato_id').eq('role','revendedora')));
+  } else {
+    // revendedora: descobre a maleta ATIVA (o catálogo só mostra peças dela)
+    queries.push(sbQ(sb.from('maletas').select('id').eq('revendedora_id', state.currentUser.id).eq('status', 'ativa').maybeSingle()));
   }
   const results = await Promise.all(queries);
   const { data, error } = results[0];
@@ -28,6 +31,8 @@ export async function loadConsignados() {
     state.revNameMap = {};
     state.revBlingMap = {};
     revs.forEach(r => { state.revNameMap[r.id] = r.nome; state.revBlingMap[r.id] = r.bling_contato_id || ''; });
+  } else {
+    state.maletaAtivaId = results[1].data?.id || null;
   }
   renderCicloGrid();
   renderCartBar();
@@ -133,7 +138,10 @@ export function cicloTableHtml(list, isAdmin, historico = false) {
 }
 
 export function renderCicloRevendedora() {
-  const ativos = soAtivos(state.allConsignados);
+  // catálogo da revendedora = apenas peças da maleta ATIVA dela (aguardando fica oculta).
+  // Se não houver maleta ativa registrada (dados legados), cai no comportamento antigo.
+  let ativos = soAtivos(state.allConsignados);
+  if (state.maletaAtivaId) ativos = ativos.filter(c => c.maleta_id === state.maletaAtivaId);
   const temAtivos = ativos.some(c => qtdDisp(c) > 0);
   const btnFechamento = temAtivos
     ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</button>`
@@ -455,15 +463,40 @@ export function renderBuscaPeca() {
 export async function finalizarCicloRev(revId) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
   const nome = state.revNameMap[revId] || 'esta revendedora';
-  const ativos = state.allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo');
+
+  // Descobre a maleta ATIVA e a AGUARDANDO (a troca) desta revendedora.
+  const { data: maletas } = await sbQ(sb.from('maletas')
+    .select('id,status').eq('revendedora_id', revId).in('status', ['ativa', 'aguardando']));
+  const maletaAtiva = (maletas || []).find(m => m.status === 'ativa');
+  const maletaAguardando = (maletas || []).find(m => m.status === 'aguardando');
+
+  // Peças a encerrar: só as da maleta ativa (fallback legado = todas as ativas da revendedora).
+  const ativos = state.allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo'
+    && (!maletaAtiva || c.maleta_id === maletaAtiva.id));
   if (!ativos.length) { toast('Nenhum catálogo ativo para finalizar'); return; }
-  confirmarAcao('Finalizar catálogo', `Finalizar catálogo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} passarão para "encerrado". Essa ação não pode ser desfeita.`, 'Finalizar', async () => {
+
+  const aviso = maletaAguardando
+    ? `\n\nA maleta em "aguardando" passará a ser a ativa (a troca).`
+    : '';
+  confirmarAcao('Finalizar catálogo', `Finalizar catálogo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} passarão para "encerrado".${aviso}\n\nEssa ação não pode ser desfeita.`, 'Finalizar', async () => {
     let error;
     try {
-      ({ error } = await sb.from('consignados')
+      // 1) encerra as peças (escopo: maleta ativa, ou legado por revendedora)
+      let q = sb.from('consignados')
         .update({ status: 'encerrado', encerrado_em: new Date().toISOString() })
-        .eq('revendedora_id', revId)
-        .eq('status', 'ativo'));
+        .eq('revendedora_id', revId).eq('status', 'ativo');
+      if (maletaAtiva) q = q.eq('maleta_id', maletaAtiva.id);
+      ({ error } = await q);
+      // 2) maleta ativa -> finalizada
+      if (!error && maletaAtiva) {
+        ({ error } = await sb.from('maletas')
+          .update({ status: 'finalizada', finalizada_at: new Date().toISOString() })
+          .eq('id', maletaAtiva.id));
+      }
+      // 3) aguardando -> ativa (só após a anterior sair de 'ativa', respeitando o índice único)
+      if (!error && maletaAguardando) {
+        ({ error } = await sb.from('maletas').update({ status: 'ativa' }).eq('id', maletaAguardando.id));
+      }
     } catch (e) { error = e; }
     if (await handleSupabaseError(error, 'Erro ao finalizar catálogo')) return;
     toast(`Catálogo de ${nome} encerrado`);
@@ -717,7 +750,7 @@ export async function salvarConsignado() {
 
 export function openFechamento() {
   const restantes = state.allConsignados.filter(c =>
-    qtdDisp(c) > 0
+    qtdDisp(c) > 0 && (!state.maletaAtivaId || c.maleta_id === state.maletaAtivaId)
   );
 
   if (!restantes.length) {
@@ -765,7 +798,7 @@ export function openFechamento() {
 
 export function gerarPdfFechamento() {
   const restantes = state.allConsignados.filter(c =>
-    qtdDisp(c) > 0
+    qtdDisp(c) > 0 && (!state.maletaAtivaId || c.maleta_id === state.maletaAtivaId)
   );
   const hoje = new Date().toLocaleDateString('pt-BR');
   const nomeRev = state.currentProfile.nome;

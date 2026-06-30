@@ -10,6 +10,10 @@ const IC_CAM   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path 
 
 let revsAprovadas = [];
 let carrinho = [];          // [{produto_id, descricao, referencia, preco_venda, foto_url, qtd}]
+let maletasAbertas = [];    // maletas em aberto da revendedora selecionada: [{id,status,numero,created_at}]
+let maletaDestino = null;   // destino do envio: { nova:true } ou { id, status, numero }
+
+const STATUS_LABEL = { ativa: 'Ativa', aguardando: 'Aguardando', finalizada: 'Finalizada' };
 
 function panel() { return document.getElementById('panel-lancador'); }
 
@@ -31,8 +35,37 @@ export async function loadLancador() {
   if (error) { if (await handleSupabaseError(error, 'Erro ao carregar revendedoras')) return; }
   revsAprovadas = data || [];
   carrinho = [];
+  maletasAbertas = [];
+  maletaDestino = null;
   render();
 }
+
+// Ao escolher a revendedora: carrega as maletas em aberto e reseta o destino.
+export async function lancadorSelecionarRev(revId) {
+  maletaDestino = null;
+  maletasAbertas = [];
+  if (revId) {
+    const { data, error } = await sbQ(sb.from('maletas')
+      .select('id,status,numero,created_at')
+      .eq('revendedora_id', revId)
+      .in('status', ['ativa', 'aguardando'])
+      .order('created_at'));
+    if (error) { if (await handleSupabaseError(error, 'Erro ao carregar maletas')) return; }
+    maletasAbertas = data || [];
+    // 1 sozinha em aberto: já assume como destino "continuar" (o usuário ainda pode trocar p/ nova).
+    if (maletasAbertas.length === 1) maletaDestino = { ...maletasAbertas[0] };
+  }
+  render();
+}
+
+// Escolha do destino pelos botões da tela.
+export function lancadorDestinoNova() { maletaDestino = { nova: true }; render(); }
+export function lancadorDestinoExistente(id) {
+  const m = maletasAbertas.find(x => String(x.id) === String(id));
+  if (m) maletaDestino = { ...m };
+  render();
+}
+export function lancadorTrocarDestino() { maletaDestino = null; render(); }
 
 function render() {
   // preserva a revendedora escolhida entre renders (cada bipe re-renderiza tudo)
@@ -43,14 +76,18 @@ function render() {
     <tr class="ciclo-row"${idx === carrinho.length - 1 ? ' style="background:rgba(201,116,138,0.06)"' : ''}>
       <td class="ciclo-td"><div style="display:flex;align-items:center;gap:10px">
         <span class="ciclo-emoji">${i.foto_url ? `<img src="${esc(i.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
-        <div><div class="ciclo-desc">${esc(i.descricao)}</div><div style="font-size:11px;color:var(--muted)">${i.referencia ? 'SKU ' + esc(i.referencia) : ''}</div></div>
+        <div class="ciclo-desc">${esc(i.descricao)}</div>
       </div></td>
+      <td class="ciclo-td"><span class="ciclo-ref">${i.referencia ? esc(i.referencia) : '—'}</span></td>
       <td class="ciclo-td" style="text-align:center">
         <input type="number" class="form-control" style="width:64px;text-align:center" value="${i.qtd}" min="1" oninput="lancadorSetQtd(${idx},this.value)"></td>
+      <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(i.preco_venda || 0)}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(i.qtd * (i.preco_venda || 0))}</span></td>
       <td class="ciclo-td" style="text-align:right"><button class="btn-icon" style="color:var(--danger)" onclick="lancadorRemover(${idx})">${IC_TRASH}</button></td>
     </tr>`).join('') :
-    `<tr><td colspan="4"><div class="empty-state" style="padding:24px 0"><div class="empty-icon">${IC_GEM}</div><p>Bipe a primeira peça para começar</p></div></td></tr>`;
+    `<tr><td colspan="6"><div class="empty-state" style="padding:24px 0"><div class="empty-icon">${IC_GEM}</div><p>Bipe a primeira peça para começar</p></div></td></tr>`;
+
+  const podeEnviar = carrinho.length && maletaDestino;
 
   panel().innerHTML = `
     <div class="section-header"><div>
@@ -60,15 +97,18 @@ function render() {
 
     <div class="form-grid">
       <div class="form-group" style="grid-column:1/-1"><label class="form-label">Revendedora *</label>
-        <select id="lan-rev" class="form-control">
+        <select id="lan-rev" class="form-control" onchange="lancadorSelecionarRev(this.value)">
           <option value="">Selecione a revendedora...</option>
           ${revsAprovadas.map(r => `<option value="${r.id}" ${String(r.id) === revSel ? 'selected' : ''}>${esc(r.nome)}</option>`).join('')}
         </select></div>
     </div>
 
+    ${maletaPanelHtml(revSel)}
+
     <div class="pag-wrap"><table class="pag-table"><thead><tr>
-      <th class="pag-th">Peça</th><th class="pag-th" style="text-align:center">Qtd</th>
-      <th class="pag-th">Subtotal</th><th class="pag-th"></th>
+      <th class="pag-th">Descrição</th><th class="pag-th">Código</th>
+      <th class="pag-th" style="text-align:center">Quantidade</th>
+      <th class="pag-th">Preço un</th><th class="pag-th">Preço total</th><th class="pag-th"></th>
     </tr></thead><tbody>${rows}</tbody></table></div>
 
     <div style="display:flex;gap:8px;margin:10px 0 18px">
@@ -79,12 +119,48 @@ function render() {
 
     <div class="cart-total-row"><span>${total} peça${total !== 1 ? 's' : ''}</span><span>${fmtBRL(valor)}</span></div>
 
-    <button class="btn-primary" style="width:100%;margin-top:12px" ${carrinho.length ? '' : 'disabled'} onclick="lancadorEnviar()">
+    <button class="btn-primary" style="width:100%;margin-top:12px" ${podeEnviar ? '' : 'disabled'} onclick="lancadorEnviar()">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
       Enviar ${total} peça${total !== 1 ? 's' : ''} para a maleta</button>`;
 
   const scan = document.getElementById('lan-scan');
   if (scan) scan.focus({ preventScroll: true });
+}
+
+// Painel de escolha de maleta (aparece após selecionar a revendedora).
+function maletaPanelHtml(revSel) {
+  if (!revSel) return '';
+  const temAtiva = maletasAbertas.some(m => m.status === 'ativa');
+  const qtdAberta = maletasAbertas.length;
+  const limite = qtdAberta >= 2;
+
+  // Destino já escolhido: mostra resumo + opção de trocar.
+  if (maletaDestino) {
+    const txt = maletaDestino.nova
+      ? `Nova maleta (será criada como <strong>${temAtiva ? 'Aguardando' : 'Ativa'}</strong>)`
+      : `Continuar <strong>${STATUS_LABEL[maletaDestino.status] || maletaDestino.status}</strong>${maletaDestino.numero ? ` · maleta #${maletaDestino.numero}` : ''}`;
+    return `<div class="card" style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+      <div style="font-size:13px;color:var(--plum)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-3px"><path d="M20 6 9 17l-5-5"/></svg> Destino: ${txt}</div>
+      <button class="btn-secondary btn-sm" onclick="lancadorTrocarDestino()">Trocar</button>
+    </div>`;
+  }
+
+  const resumo = qtdAberta
+    ? `Esta revendedora tem <strong>${qtdAberta}</strong> maleta${qtdAberta > 1 ? 's' : ''} em aberto.`
+    : 'Esta revendedora não tem maletas em aberto.';
+
+  const botoesContinuar = maletasAbertas.map(m =>
+    `<button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="lancadorDestinoExistente('${m.id}')">
+      Continuar ${STATUS_LABEL[m.status] || m.status}${m.numero ? ` #${m.numero}` : ''}</button>`).join('');
+
+  const btnNova = limite
+    ? `<button class="btn-secondary btn-sm" disabled title="Limite de 2 maletas em aberto atingido">Nova maleta (limite atingido)</button>`
+    : `<button class="btn-secondary btn-sm" style="border-color:var(--rose);color:var(--rose)" onclick="lancadorDestinoNova()">+ Nova maleta${qtdAberta && !temAtiva ? ' (será Ativa)' : qtdAberta ? ' (será Aguardando)' : ''}</button>`;
+
+  return `<div class="card" style="margin-bottom:14px">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">${resumo}${limite ? ' <span style="color:var(--danger)">Limite de 2 atingido — finalize uma para abrir outra.</span>' : ''}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">${botoesContinuar}${btnNova}</div>
+  </div>`;
 }
 
 // ── busca o produto pelo código (produtos: cod. barras ou sku; e variações) ──
@@ -145,12 +221,33 @@ export async function lancadorEnviar() {
   const revId = document.getElementById('lan-rev').value;
   if (!revId) { toast('Selecione a revendedora'); return; }
   if (!carrinho.length) { toast('Bipe ao menos uma peça'); return; }
+  if (!maletaDestino) { toast('Escolha continuar uma maleta ou criar uma nova'); return; }
 
   const btn = panel().querySelector('.btn-primary[onclick="lancadorEnviar()"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Enviando...'; }
+  const reabilita = () => { if (btn) { btn.disabled = false; btn.textContent = 'Enviar para a maleta'; } };
 
+  // 1) Resolve a maleta de destino (cria a nova se for o caso).
+  let maletaId = maletaDestino.nova ? null : maletaDestino.id;
+  if (maletaDestino.nova) {
+    const temAtiva = maletasAbertas.some(m => m.status === 'ativa');
+    // número sequencial simples por revendedora
+    const { count } = await sb.from('maletas').select('id', { count: 'exact', head: true }).eq('revendedora_id', revId);
+    const novaMaleta = { revendedora_id: revId, status: temAtiva ? 'aguardando' : 'ativa', numero: (count || 0) + 1 };
+    const { data: mData, error: mErr } = await sb.from('maletas').insert(novaMaleta).select('id').single();
+    if (mErr) {
+      reabilita();
+      if (/limite atingido|2 maletas/i.test(mErr.message || '')) { toast('Limite de 2 maletas em aberto atingido.'); return; }
+      if (await handleSupabaseError(mErr, 'Erro ao criar maleta')) return;
+      toast('Erro ao criar maleta: ' + (mErr.message || '')); return;
+    }
+    maletaId = mData.id;
+  }
+
+  // 2) Insere as peças vinculadas à maleta.
   const linhas = carrinho.map(i => ({
     revendedora_id: revId,
+    maleta_id: maletaId,
     produto_id: i.produto_id,
     descricao: i.descricao,
     referencia: i.referencia,
@@ -163,14 +260,15 @@ export async function lancadorEnviar() {
   }));
   const { error } = await sb.from('consignados').insert(linhas);
   if (error) {
-    if (btn) { btn.disabled = false; }
+    reabilita();
     if (await handleSupabaseError(error, 'Erro ao enviar maleta')) return;
     toast('Erro: ' + (error.message || 'tente novamente')); render(); return;
   }
   const totalPecas = carrinho.reduce((s, i) => s + i.qtd, 0);
   toast(`${totalPecas} peça${totalPecas !== 1 ? 's' : ''} enviada${totalPecas !== 1 ? 's' : ''} para a maleta!`);
   carrinho = [];
-  render();
+  // recarrega as maletas em aberto (a nova já entra) e limpa o destino
+  await lancadorSelecionarRev(revId);
 }
 
 // ════════════════════════════════════════════════════════════════════
