@@ -170,7 +170,7 @@ async function abrirForm(p) {
         <input type="text" id="p-deposito" class="form-control" value="${esc(p.deposito || 'Geral')}"></div>
       <div class="form-group"><label class="form-label">Quantidade em estoque</label>
         <input type="number" id="p-estoque" class="form-control" value="${p.estoque_qtd ?? 0}"></div>
-      <div class="form-group"><label class="form-label">Custo de compra (un.)</label>
+      <div class="form-group"><label class="form-label">Custo de compra (R$)</label>
         <input type="text" id="p-custo" class="form-control" inputmode="numeric" placeholder="0,00"
           value="${p.custo_compra ? moneyToInput(p.custo_compra) : ''}" oninput="maskMoneyProduto(this)"></div>
     </div>

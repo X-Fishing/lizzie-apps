@@ -35,6 +35,8 @@ export async function loadLancador() {
 }
 
 function render() {
+  // preserva a revendedora escolhida entre renders (cada bipe re-renderiza tudo)
+  const revSel = document.getElementById('lan-rev')?.value || '';
   const total = carrinho.reduce((s, i) => s + i.qtd, 0);
   const valor = carrinho.reduce((s, i) => s + i.qtd * (i.preco_venda || 0), 0);
   const rows = carrinho.length ? carrinho.map((i, idx) => `
@@ -60,7 +62,7 @@ function render() {
       <div class="form-group" style="grid-column:1/-1"><label class="form-label">Revendedora *</label>
         <select id="lan-rev" class="form-control">
           <option value="">Selecione a revendedora...</option>
-          ${revsAprovadas.map(r => `<option value="${r.id}">${esc(r.nome)}</option>`).join('')}
+          ${revsAprovadas.map(r => `<option value="${r.id}" ${String(r.id) === revSel ? 'selected' : ''}>${esc(r.nome)}</option>`).join('')}
         </select></div>
     </div>
 
@@ -82,7 +84,7 @@ function render() {
       Enviar ${total} peça${total !== 1 ? 's' : ''} para a maleta</button>`;
 
   const scan = document.getElementById('lan-scan');
-  if (scan) scan.focus();
+  if (scan) scan.focus({ preventScroll: true });
 }
 
 // ── busca o produto pelo código (produtos: cod. barras ou sku; e variações) ──
@@ -113,11 +115,20 @@ export async function lancadorBipar(code) {
   if (!c) return;
   const prod = await lookupProduto(c);
   if (!prod) { beep(false); toast('Código não encontrado: ' + c); return; }
-  const existente = carrinho.find(i => i.produto_id === prod.id && i.referencia === prod.referencia);
-  if (existente) existente.qtd += 1;
-  else carrinho.push({ produto_id: prod.id, descricao: prod.nome, referencia: prod.referencia || null, preco_venda: prod.preco_venda || 0, foto_url: prod.foto_url || null, qtd: 1 });
+  // cada bipe = nova linha, sempre 1 unidade (não soma): cada peça física é 1 do estoque
+  carrinho.push({ produto_id: prod.id, descricao: prod.nome, referencia: prod.referencia || null, preco_venda: prod.preco_venda || 0, foto_url: prod.foto_url || null, qtd: 1 });
   beep(true);
   render();
+  rolarParaUltima();
+}
+
+// Após bipar, acompanha a última linha sem tirar o foco do campo (leitor USB segue ativo).
+function rolarParaUltima() {
+  const scan = document.getElementById('lan-scan');
+  if (scan) scan.focus({ preventScroll: true });   // não pula pro topo ao focar
+  const linhas = panel().querySelectorAll('tbody tr');
+  const ultima = linhas[linhas.length - 1];
+  if (ultima) ultima.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 export function lancadorSetQtd(idx, val) {
