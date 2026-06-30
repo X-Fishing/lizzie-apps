@@ -285,6 +285,8 @@ svg.ico { width: 1em; height: 1em; fill: none; stroke: currentColor;
 .form-control:focus { border-color: var(--rose); }
 textarea.form-control { resize: vertical; min-height: 80px; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-grid { display: grid; grid-template-columns: 1fr; gap: 0 14px; }
+@media (min-width: 640px) { .form-grid { grid-template-columns: 1fr 1fr; } }
 
 /* FOTO UPLOAD */
 .foto-upload {

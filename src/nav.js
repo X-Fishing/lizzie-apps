@@ -1,5 +1,5 @@
 // Navegacao entre paineis. Chama loaders/papeis via window (cross-module).
-export const PANEIS_STAFF = ['financeiro','calculadora','clientes','marketing','funcionarios','formas-pagamento','categorias-financeiras'];
+export const PANEIS_STAFF = ['financeiro','calculadora','clientes','marketing','funcionarios','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','lancador'];
 
 export function showPanel(name) {
   if (name === 'trocas' && !ehStaff()) name = 'dashboard';
@@ -28,6 +28,11 @@ export function showPanel(name) {
   if (name === 'funcionarios') loadFuncionarios();
   if (name === 'formas-pagamento') loadFormasPagamento();
   if (name === 'categorias-financeiras') loadCategoriasFinanceiras();
+  if (name === 'produtos') loadProdutos();
+  if (name === 'categorias') loadCategorias();
+  if (name === 'colecoes') loadColecoes();
+  if (name === 'fornecedores') loadFornecedores();
+  if (name === 'lancador') loadLancador();
 }
 
 export function toggleCadastros() {
