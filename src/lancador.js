@@ -40,7 +40,7 @@ function render() {
   const total = carrinho.reduce((s, i) => s + i.qtd, 0);
   const valor = carrinho.reduce((s, i) => s + i.qtd * (i.preco_venda || 0), 0);
   const rows = carrinho.length ? carrinho.map((i, idx) => `
-    <tr class="ciclo-row">
+    <tr class="ciclo-row"${idx === carrinho.length - 1 ? ' style="background:rgba(201,116,138,0.06)"' : ''}>
       <td class="ciclo-td"><div style="display:flex;align-items:center;gap:10px">
         <span class="ciclo-emoji">${i.foto_url ? `<img src="${esc(i.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
         <div><div class="ciclo-desc">${esc(i.descricao)}</div><div style="font-size:11px;color:var(--muted)">${i.referencia ? 'SKU ' + esc(i.referencia) : ''}</div></div>
@@ -66,16 +66,16 @@ function render() {
         </select></div>
     </div>
 
+    <div class="pag-wrap"><table class="pag-table"><thead><tr>
+      <th class="pag-th">Peça</th><th class="pag-th" style="text-align:center">Qtd</th>
+      <th class="pag-th">Subtotal</th><th class="pag-th"></th>
+    </tr></thead><tbody>${rows}</tbody></table></div>
+
     <div style="display:flex;gap:8px;margin:10px 0 18px">
       <input type="text" id="lan-scan" class="form-control" placeholder="Bipe ou digite o código e tecle Enter" autocomplete="off"
         onkeydown="if(event.key==='Enter'){event.preventDefault();lancadorBipar(this.value);this.value='';}">
       <button class="btn-secondary" title="Bipar com a câmera" onclick="lancadorCamera()">${IC_CAM}</button>
     </div>
-
-    <div class="pag-wrap"><table class="pag-table"><thead><tr>
-      <th class="pag-th">Peça</th><th class="pag-th" style="text-align:center">Qtd</th>
-      <th class="pag-th">Subtotal</th><th class="pag-th"></th>
-    </tr></thead><tbody>${rows}</tbody></table></div>
 
     <div class="cart-total-row"><span>${total} peça${total !== 1 ? 's' : ''}</span><span>${fmtBRL(valor)}</span></div>
 
@@ -119,16 +119,15 @@ export async function lancadorBipar(code) {
   carrinho.push({ produto_id: prod.id, descricao: prod.nome, referencia: prod.referencia || null, preco_venda: prod.preco_venda || 0, foto_url: prod.foto_url || null, qtd: 1 });
   beep(true);
   render();
-  rolarParaUltima();
+  focarCampoBipe();
 }
 
-// Após bipar, acompanha a última linha sem tirar o foco do campo (leitor USB segue ativo).
-function rolarParaUltima() {
+// Mantém o campo de bipe visível e focado após cada leitura (estilo Bling).
+function focarCampoBipe() {
   const scan = document.getElementById('lan-scan');
-  if (scan) scan.focus({ preventScroll: true });   // não pula pro topo ao focar
-  const linhas = panel().querySelectorAll('tbody tr');
-  const ultima = linhas[linhas.length - 1];
-  if (ultima) ultima.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  if (!scan) return;
+  scan.focus({ preventScroll: true });
+  scan.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
 export function lancadorSetQtd(idx, val) {
