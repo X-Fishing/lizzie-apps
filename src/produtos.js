@@ -14,9 +14,16 @@ const IC_CAM   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path 
 
 let produtosCache = [];
 let filtroProdutos = '';
+let filtroColecao = '';   // id da coleção selecionada no filtro ('' = todas)
 let formVariacoes = [];   // variações em edição no formulário (client-side)
 
 function panel() { return document.getElementById('panel-produtos'); }
+
+// Nome da coleção a partir do id (usa o cache de cadastros).
+function nomeColecao(id) {
+  const c = (cadastroCache.colecoes || []).find(x => String(x.id) === String(id));
+  return c ? c.nome : '';
+}
 
 // ════════════════════════════════════════════════════════════════════
 // LISTA
@@ -28,21 +35,25 @@ export async function loadProdutos() {
     .order('nome', { ascending: true }));
   if (error) { if (await handleSupabaseError(error, 'Erro ao carregar produtos')) return; }
   produtosCache = data || [];
+  if (!cadastroCache.colecoes || !cadastroCache.colecoes.length) {
+    await carregarCadastrosParaSelect(); // popula categorias/colecoes/fornecedores p/ nome e filtro
+  }
   renderLista();
 }
 
 function renderLista() {
   const f = filtroProdutos.trim().toLowerCase();
-  const lista = f
-    ? produtosCache.filter(p => [p.nome, p.sku, p.codigo_barras].some(v => (v || '').toLowerCase().includes(f)))
-    : produtosCache;
+  let lista = produtosCache;
+  if (filtroColecao) lista = lista.filter(p => String(p.colecao_id) === String(filtroColecao));
+  if (f) lista = lista.filter(p =>
+    [p.nome, p.sku, p.codigo_barras, nomeColecao(p.colecao_id)].some(v => (v || '').toLowerCase().includes(f)));
 
   const linhas = lista.length ? lista.map(p => `
     <tr class="ciclo-row">
       <td class="ciclo-td">
         <div style="display:flex;align-items:center;gap:10px">
           <span class="ciclo-emoji">${p.foto_url ? `<img src="${esc(p.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
-          <div><div class="ciclo-desc">${esc(p.nome)}</div>
+          <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}</div>
           <div style="font-size:11px;color:var(--muted)">${p.sku ? 'SKU ' + esc(p.sku) : ''}${p.codigo_barras ? ' · ' + esc(p.codigo_barras) : ''}</div></div>
         </div>
       </td>
@@ -53,7 +64,7 @@ function renderLista() {
         <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
       </td>
     </tr>`).join('') :
-    `<tr><td colspan="4"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${f ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
+    `<tr><td colspan="4"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
 
   panel().innerHTML = `
     <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
@@ -61,8 +72,14 @@ function renderLista() {
       <div class="section-subtitle">${produtosCache.length} produto${produtosCache.length !== 1 ? 's' : ''} no catálogo</div></div>
       <button class="btn-primary btn-sm" onclick="produtoNovo()">${IC_PLUS} Novo produto</button>
     </div>
-    <input type="text" class="form-control" style="margin-bottom:14px" placeholder="Buscar por nome, SKU ou código de barras..."
-      value="${esc(filtroProdutos)}" oninput="produtoFiltrar(this.value)">
+    <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+      <input type="text" class="form-control" style="flex:1;min-width:200px" placeholder="Buscar por nome, SKU, código ou coleção..."
+        value="${esc(filtroProdutos)}" oninput="produtoFiltrar(this.value)">
+      <select class="form-control" style="max-width:220px" onchange="produtoFiltrarColecao(this.value)">
+        <option value="">Todas as coleções</option>
+        ${(cadastroCache.colecoes || []).map(c => `<option value="${c.id}" ${String(c.id) === String(filtroColecao) ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}
+      </select>
+    </div>
     <div class="pag-wrap"><table class="pag-table"><thead><tr>
       <th class="pag-th">Produto</th>
       <th class="pag-th" style="text-align:center">Estoque</th>
@@ -72,6 +89,7 @@ function renderLista() {
 }
 
 export function produtoFiltrar(v) { filtroProdutos = v; renderLista(); }
+export function produtoFiltrarColecao(v) { filtroColecao = v; renderLista(); }
 
 // ════════════════════════════════════════════════════════════════════
 // FORMULÁRIO (etapas numa página rolável)
