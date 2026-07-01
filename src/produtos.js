@@ -149,9 +149,14 @@ export async function produtoImportBlingPreview() {
   let resp;
   try { resp = await fetchBlingProdutos(1); }
   catch (e) { area.innerHTML = impErro('Falha ao chamar a função bling-produtos: ' + e.message); return; }
+  console.log('[import-bling] resposta crua da funcao:', resp);
   if (resp?.error) { area.innerHTML = impErro('Bling: ' + resp.error); return; }
-  const arr = resp?.data || [];
-  if (!arr.length) { area.innerHTML = impErro('A página 1 voltou vazia. O Bling tem produtos cadastrados?'); return; }
+  const arr = resp?.data || resp?.retorno?.produtos || [];
+  if (!arr.length) {
+    area.innerHTML = impErro('A página 1 voltou sem produtos no formato esperado. Segue a resposta crua da função — me manda isto:')
+      + `<pre style="font-size:11px;white-space:pre-wrap;word-break:break-all;background:var(--cream);padding:10px;border-radius:8px;max-height:340px;overflow:auto">${esc(JSON.stringify(resp, null, 2))}</pre>`;
+    return;
+  }
   console.log('[import-bling] 1º produto cru do Bling:', arr[0]);
 
   const mapped = arr.slice(0, 12).map(mapProdutoBling);
