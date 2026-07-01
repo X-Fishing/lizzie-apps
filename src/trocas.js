@@ -1,7 +1,7 @@
 // Trocas: proximas trocas por revendedora (a partir de pedidos Bling) + painel.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, confirmarAcao } from './utils.js';
 import { fetchTodosBling, SITUACAO_ABERTO } from './bling.js';
 export async function carregarProximasTrocas(forcar = false) {
   if (state.proximaTrocaCarregado && !forcar) return true;
@@ -96,26 +96,45 @@ export function infoProximaTroca(blingId) {
 export async function carregarMaletasTroca() {
   state.maletasTrocaMap = {};
   const { data } = await sbQ(sb.from('maletas').select('*').eq('status', 'ativa'));
-  (data || []).forEach(m => { if (m.data_troca) state.maletasTrocaMap[m.revendedora_id] = m.data_troca; });
+  (data || []).forEach(m => {
+    if (m.data_troca) state.maletasTrocaMap[m.revendedora_id] = { dataTroca: m.data_troca, criadaEm: m.created_at };
+  });
 }
 
-// Info de troca a partir de uma data conhecida (mesma forma do infoProximaTroca).
-function infoDaData(dataIso) {
+// Info de troca a partir de uma data conhecida. refDate identifica o "ciclo" desta
+// troca (p/ saber se uma resolucao antiga ainda vale) — usa a criacao da maleta,
+// pra funcionar mesmo com data de troca no futuro.
+function infoDaData(dataIso, refDate) {
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const prev = new Date(dataIso + 'T00:00:00');
   const dias = Math.round((prev - hoje) / 86400000);
   let status = 'normal';
   if (dias < 0) status = 'vencida';
   else if (dias <= 7) status = 'proximo';
-  return { status, dataPrevista: dataIso, diasRestantes: dias, dataPedido: dataIso, abertos: 0, fonte: 'maleta' };
+  return { status, dataPrevista: dataIso, diasRestantes: dias, dataPedido: refDate || dataIso, abertos: 0, fonte: 'maleta' };
 }
 
 // Hibrido: se a revendedora tem maleta ativa no app com data_troca, ela manda;
 // senao cai no calculo do Bling.
 export function infoTrocaRev(r) {
-  const dt = state.maletasTrocaMap[r.id];
-  if (dt) return infoDaData(dt);
+  const m = state.maletasTrocaMap[r.id];
+  if (m) return infoDaData(m.dataTroca, m.criadaEm);
   return infoProximaTroca(r.bling_contato_id);
+}
+
+// Finaliza a troca direto na tela de Trocas (sai da lista ate a proxima maleta/
+// pedido). Serve p/ trocas do Bling, que nao tem "Finalizar catalogo" no app.
+// Reversivel: reaparece quando surge maleta/pedido mais novo.
+export function resolverTroca(revId) {
+  const r = state.aprovadasCache.find(x => x.id === revId);
+  const nome = r ? r.nome : 'esta revendedora';
+  confirmarAcao('Finalizar troca', `Marcar a troca de ${nome} como feita?\n\nEla sai da lista de trocas e volta quando tiver uma maleta ou pedido novo.`, 'Finalizar', async () => {
+    const { error } = await sbQ(sb.from('profiles').update({ troca_resolvida_em: new Date().toISOString() }).eq('id', revId));
+    if (error) { toast('Erro ao finalizar troca'); return; }
+    toast('Troca finalizada');
+    state.aprovadasCache = [];
+    loadTrocasDashboard();
+  });
 }
 
 export function renderProximaTrocaBadge(info) {
@@ -204,7 +223,7 @@ export function trocaResolvida(r) {
   if (!r.troca_resolvida_em) return false;
   const dp = infoTrocaRev(r).dataPedido;
   if (!dp) return false;
-  return r.troca_resolvida_em.slice(0, 10) >= dp.slice(0, 10);
+  return r.troca_resolvida_em >= dp; // compara timestamps completos (trata mesmo-dia)
 }
 
 export function isoNoMesAtual(iso) {
@@ -345,6 +364,8 @@ export function renderTrocaRow(r) {
     ? `<a href="${waUrl}" target="_blank" rel="noopener" class="troca-wa" title="Avisar pelo WhatsApp" aria-label="Avisar pelo WhatsApp" onclick="event.stopPropagation()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></a>`
     : `<span class="troca-wa troca-wa-off" title="Sem telefone cadastrado" aria-label="Sem telefone"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>`;
 
+  const botaoResolver = `<button class="troca-done" title="Finalizar troca (sai da lista)" aria-label="Finalizar troca" onclick="event.stopPropagation();resolverTroca('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></button>`;
+
   return `<div class="card troca-row" onclick="verRevendedora('${r.id}')" style="cursor:pointer">
     <div class="troca-info">
       <div class="rev-avatar">${inicial}</div>
@@ -358,6 +379,7 @@ export function renderTrocaRow(r) {
         ${diasTxt ? `<div class="troca-data-sub">${diasTxt}</div>` : ''}
       </div>
       ${botaoWa}
+      ${botaoResolver}
     </div>
   </div>`;
 }

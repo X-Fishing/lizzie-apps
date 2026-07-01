@@ -273,6 +273,13 @@ svg.ico { width: 1em; height: 1em; fill: none; stroke: currentColor;
 .troca-wa .ico { width: 18px; height: 18px; }
 .troca-wa:hover { background: #1ebe57; }
 .troca-wa-off { background: var(--line, #e6e0e6); color: var(--muted); cursor: default; }
+.troca-done {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 40px; height: 40px; border-radius: 50%; flex-shrink: 0;
+  background: var(--gold); color: #fff; border: none; cursor: pointer; transition: filter 0.2s;
+}
+.troca-done .ico { width: 18px; height: 18px; }
+.troca-done:hover { filter: brightness(0.92); }
 
 /* FORM */
 .form-group { margin-bottom: 16px; }
