@@ -24,6 +24,7 @@ export const state = {
   blingPedidosCache: [],
   blingFiltro: '',
   proximaTrocaMap: {},
+  maletasTrocaMap: {}, // { revendedora_id: data_troca (ISO) } das maletas ativas do app
   proximaTrocaCarregado: false,
   proximaTrocaPromessa: null,
   ordemTrocaProxima: false,

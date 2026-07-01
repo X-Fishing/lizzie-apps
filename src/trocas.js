@@ -92,6 +92,32 @@ export function infoProximaTroca(blingId) {
   return { status, dataPrevista: e.dataPrevista, diasRestantes: dias, dataPedido: e.dataPedido, abertos: e.abertos };
 }
 
+// Carrega as maletas ATIVAS do app com data de troca (hibrido: a maleta manda).
+export async function carregarMaletasTroca() {
+  state.maletasTrocaMap = {};
+  const { data } = await sbQ(sb.from('maletas').select('*').eq('status', 'ativa'));
+  (data || []).forEach(m => { if (m.data_troca) state.maletasTrocaMap[m.revendedora_id] = m.data_troca; });
+}
+
+// Info de troca a partir de uma data conhecida (mesma forma do infoProximaTroca).
+function infoDaData(dataIso) {
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const prev = new Date(dataIso + 'T00:00:00');
+  const dias = Math.round((prev - hoje) / 86400000);
+  let status = 'normal';
+  if (dias < 0) status = 'vencida';
+  else if (dias <= 7) status = 'proximo';
+  return { status, dataPrevista: dataIso, diasRestantes: dias, dataPedido: dataIso, abertos: 0, fonte: 'maleta' };
+}
+
+// Hibrido: se a revendedora tem maleta ativa no app com data_troca, ela manda;
+// senao cai no calculo do Bling.
+export function infoTrocaRev(r) {
+  const dt = state.maletasTrocaMap[r.id];
+  if (dt) return infoDaData(dt);
+  return infoProximaTroca(r.bling_contato_id);
+}
+
 export function renderProximaTrocaBadge(info) {
   const aviso = info.abertos > 1
     ? ` <span style="color:var(--warning);font-weight:600">· <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> ${info.abertos} em aberto</span>`
@@ -113,8 +139,8 @@ export function renderProximaTrocaBadge(info) {
 export const PRIORIDADE_TROCA = { vencida: 0, proximo: 1, normal: 2, 'sem-data': 3, 'sem-aberto': 4, 'sem-pedido': 5, 'sem-vinculo': 6 };
 
 export function compararPorTroca(a, b) {
-  const ia = infoProximaTroca(a.bling_contato_id);
-  const ib = infoProximaTroca(b.bling_contato_id);
+  const ia = infoTrocaRev(a);
+  const ib = infoTrocaRev(b);
   const pa = PRIORIDADE_TROCA[ia.status] ?? 9;
   const pb = PRIORIDADE_TROCA[ib.status] ?? 9;
   if (pa !== pb) return pa - pb;
@@ -159,7 +185,7 @@ export const TROCAS_FILTROS = [
 ];
 
 export function trocaMatchFiltro(rev, filtro) {
-  const info = infoProximaTroca(rev.bling_contato_id);
+  const info = infoTrocaRev(rev);
   switch (filtro) {
     case 'todas': return true;
     case 'vencidas': return info.status === 'vencida';
@@ -176,7 +202,7 @@ export function trocaMatchFiltro(rev, filtro) {
 // reaparece sozinha quando surge uma maleta/pedido mais novo (data maior).
 export function trocaResolvida(r) {
   if (!r.troca_resolvida_em) return false;
-  const dp = infoProximaTroca(r.bling_contato_id).dataPedido;
+  const dp = infoTrocaRev(r).dataPedido;
   if (!dp) return false;
   return r.troca_resolvida_em.slice(0, 10) >= dp.slice(0, 10);
 }
@@ -217,6 +243,7 @@ export async function loadTrocasDashboard() {
     state.aprovadasCache = data || [];
   }
   const ok = await carregarProximasTrocas();
+  await carregarMaletasTroca();
   if (!ok) {
     lista.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Erro ao consultar Bling.</p></div>';
     return;
@@ -234,7 +261,7 @@ export function renderTrocas() {
   let vencidas = 0, prox7 = 0, noMes = 0, semVinculo = 0;
   for (const r of state.aprovadasCache) {
     if (trocaResolvida(r)) continue; // resolvida: fora dos contadores tambem
-    const info = infoProximaTroca(r.bling_contato_id);
+    const info = infoTrocaRev(r);
     if (info.status === 'vencida') vencidas++;
     if (info.status === 'proximo') prox7++;
     if (info.dataPrevista && isoNoMesAtual(info.dataPrevista)) noMes++;
@@ -270,7 +297,7 @@ export function setTrocaFiltro(id) {
 }
 
 export function renderTrocaRow(r) {
-  const info = infoProximaTroca(r.bling_contato_id);
+  const info = infoTrocaRev(r);
   const inicial = (r.nome || '?').charAt(0).toUpperCase();
   const tel = (r.telefone || '').trim();
   const telLimpo = tel.replace(/\D/g, '');

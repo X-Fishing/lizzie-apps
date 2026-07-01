@@ -70,6 +70,7 @@ export function lancadorTrocarDestino() { maletaDestino = null; render(); }
 function render() {
   // preserva a revendedora escolhida entre renders (cada bipe re-renderiza tudo)
   const revSel = document.getElementById('lan-rev')?.value || '';
+  const dataTrocaSel = document.getElementById('lan-data-troca')?.value || '';
   const total = carrinho.reduce((s, i) => s + i.qtd, 0);
   const valor = carrinho.reduce((s, i) => s + i.qtd * (i.preco_venda || 0), 0);
   const rows = carrinho.length ? carrinho.map((i, idx) => `
@@ -101,6 +102,9 @@ function render() {
           <option value="">Selecione a revendedora...</option>
           ${revsAprovadas.map(r => `<option value="${r.id}" ${String(r.id) === revSel ? 'selected' : ''}>${esc(r.nome)}</option>`).join('')}
         </select></div>
+      <div class="form-group" style="grid-column:1/-1"><label class="form-label">Data de troca</label>
+        <input type="date" id="lan-data-troca" class="form-control" value="${dataTrocaSel}">
+        <div style="font-size:11px;color:var(--muted);margin-top:4px">Aparece na tela de Trocas. Pode deixar em branco e definir depois.</div></div>
     </div>
 
     ${maletaPanelHtml(revSel)}
@@ -242,6 +246,13 @@ export async function lancadorEnviar() {
       toast('Erro ao criar maleta: ' + (mErr.message || '')); return;
     }
     maletaId = mData.id;
+  }
+
+  // Data de troca (opcional): grava na maleta. Best-effort — nao quebra o envio
+  // se a coluna data_troca ainda nao existir no banco.
+  const dataTroca = document.getElementById('lan-data-troca')?.value || null;
+  if (dataTroca) {
+    try { await sb.from('maletas').update({ data_troca: dataTroca }).eq('id', maletaId); } catch (e) { /* coluna ausente: ignora */ }
   }
 
   // 2) Insere as peças vinculadas à maleta.
