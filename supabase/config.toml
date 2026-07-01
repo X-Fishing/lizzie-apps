@@ -1,0 +1,15 @@
+# Config do Supabase CLI — fonte da verdade do deploy das Edge Functions.
+# Nas versões atuais do CLI, o verify_jwt vem DAQUI (a flag --no-verify-jwt
+# está deprecada). As funções-proxy do Bling fazem a própria auth (via a tabela
+# bling_tokens), então NÃO devem exigir JWT do Supabase no portão — senão a
+# chamada é barrada com {"code":"INVALID_CREDENTIALS"}.
+project_id = "qoouzjntyfzcxnwjksiu"
+
+[functions.bling-pedidos]
+verify_jwt = false
+
+[functions.bling-pedido-itens]
+verify_jwt = false
+
+[functions.bling-produtos]
+verify_jwt = false
