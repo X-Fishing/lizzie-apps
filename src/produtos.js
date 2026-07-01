@@ -1,9 +1,38 @@
 // Cadastro de Produtos (catálogo-mestre próprio). Lista + formulário em
 // etapas (numa página rolável) no padrão visual do app. Só gestor/admin grava.
-import { sb } from './supabase.js';
+import { sb, SUPABASE_URL, SUPABASE_KEY } from './supabase.js';
 import { esc, toast, sbQ, fmtBRL, confirmarAcao, handleSupabaseError,
          maskMoneyBR, parseMoneyBR, moneyToInput } from './utils.js';
 import { cadastroCache, carregarCadastrosParaSelect, cadNovo } from './cadastros.js';
+
+// ── Importação do Bling (Edge Function bling-produtos) ──
+const BLING_PRODUTOS_FN = `${SUPABASE_URL}/functions/v1/bling-produtos`;
+const BLING_HDRS = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function fetchBlingProdutos(pagina) {
+  const r = await fetch(`${BLING_PRODUTOS_FN}?pagina=${pagina}`, { headers: BLING_HDRS });
+  return r.json();
+}
+
+// Mapeia um produto do Bling v3 -> colunas de `produtos` (defensivo: os campos
+// variam; se algo nao vier na lista, a previa mostra e a gente ajusta/usa detalhe).
+function mapProdutoBling(p) {
+  const preco = Number(p.preco ?? p.precos?.preco ?? 0) || 0;
+  const foto = p.imagemURL || p.imagem?.link
+    || p.midia?.imagens?.externas?.[0]?.link
+    || p.midia?.imagens?.internas?.[0]?.link || null;
+  const sku = (p.codigo ?? p.sku ?? '').toString().trim();
+  const gtin = (p.gtin ?? p.codigoBarras ?? '').toString().trim();
+  return {
+    nome: (p.nome || p.descricao || '(sem nome)').toString().trim(),
+    sku: sku || null,
+    codigo_barras: gtin || null,
+    preco_venda: preco,
+    foto_url: foto,
+    formato: 'simples',
+  };
+}
 
 const IC_PLUS  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>';
 const IC_EDIT  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
@@ -70,7 +99,10 @@ function renderLista() {
     <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
       <div><div class="section-title">Produtos</div>
       <div class="section-subtitle">${produtosCache.length} produto${produtosCache.length !== 1 ? 's' : ''} no catálogo</div></div>
-      <button class="btn-primary btn-sm" onclick="produtoNovo()">${IC_PLUS} Novo produto</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn-secondary btn-sm" onclick="produtoImportarBling()">${IC_BARCODE} Importar do Bling</button>
+        <button class="btn-primary btn-sm" onclick="produtoNovo()">${IC_PLUS} Novo produto</button>
+      </div>
     </div>
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <input type="text" class="form-control" style="flex:1;min-width:200px" placeholder="Buscar por nome, SKU, código ou coleção..."
@@ -90,6 +122,104 @@ function renderLista() {
 
 export function produtoFiltrar(v) { filtroProdutos = v; renderLista(); }
 export function produtoFiltrarColecao(v) { filtroColecao = v; renderLista(); }
+
+// ════════════════════════════════════════════════════════════════════
+// IMPORTAR DO BLING
+// ════════════════════════════════════════════════════════════════════
+export function produtoImportarBling() {
+  panel().innerHTML = `
+    <div class="section-header" style="display:flex;align-items:center;gap:10px">
+      <button class="btn-voltar-ciclo" onclick="produtoVoltarLista()">← Voltar</button>
+      <div class="section-title" style="font-size:19px">Importar do Bling</div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <p style="font-size:13px;color:var(--muted);margin:0">Traz os produtos do Bling para o catálogo daqui (nome, código/SKU, código de barras, preço e foto). Não duplica: SKU/código de barras que já existem são ignorados.</p>
+      <button class="btn-primary btn-sm" style="margin-top:12px" onclick="produtoImportBlingPreview()">${IC_BARCODE} Buscar prévia (página 1)</button>
+    </div>
+    <div id="import-bling-area"></div>`;
+}
+
+function impErro(msg) {
+  return `<div class="card" style="border-color:var(--danger)"><div style="color:var(--danger);font-size:13px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> ${esc(msg)}</div></div>`;
+}
+
+export async function produtoImportBlingPreview() {
+  const area = document.getElementById('import-bling-area');
+  area.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Buscando no Bling...</div>';
+  let resp;
+  try { resp = await fetchBlingProdutos(1); }
+  catch (e) { area.innerHTML = impErro('Falha ao chamar a função bling-produtos: ' + e.message); return; }
+  if (resp?.error) { area.innerHTML = impErro('Bling: ' + resp.error); return; }
+  const arr = resp?.data || [];
+  if (!arr.length) { area.innerHTML = impErro('A página 1 voltou vazia. O Bling tem produtos cadastrados?'); return; }
+  console.log('[import-bling] 1º produto cru do Bling:', arr[0]);
+
+  const mapped = arr.slice(0, 12).map(mapProdutoBling);
+  const rows = mapped.map(m => `<tr class="ciclo-row">
+    <td class="ciclo-td"><div style="display:flex;align-items:center;gap:8px"><span class="ciclo-emoji">${m.foto_url ? `<img src="${esc(m.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">` : IC_GEM}</span><div class="ciclo-desc">${esc(m.nome)}</div></div></td>
+    <td class="ciclo-td">${m.sku ? esc(m.sku) : '—'}</td>
+    <td class="ciclo-td">${m.codigo_barras ? esc(m.codigo_barras) : '<span style="color:var(--danger)">faltando</span>'}</td>
+    <td class="ciclo-td">${fmtBRL(m.preco_venda)}</td></tr>`).join('');
+
+  area.innerHTML = `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:13px;color:var(--plum);font-weight:600;margin-bottom:8px">Prévia — ${arr.length} produto(s) na página 1 (mostrando ${mapped.length})</div>
+      <div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">Produto</th><th class="pag-th">SKU</th><th class="pag-th">Cód. barras</th><th class="pag-th">Preço</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">Ver JSON cru do 1º produto (conferência de campos)</summary>
+        <pre style="font-size:11px;white-space:pre-wrap;word-break:break-all;background:var(--cream);padding:10px;border-radius:8px;max-height:280px;overflow:auto">${esc(JSON.stringify(arr[0], null, 2))}</pre></details>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button class="btn-primary btn-sm" onclick="produtoImportBlingRun()">Importar TODOS os produtos</button>
+        <span style="font-size:12px;color:var(--muted)">Confira o código de barras e a foto acima antes de puxar tudo.</span>
+      </div>
+    </div>`;
+}
+
+export async function produtoImportBlingRun() {
+  const area = document.getElementById('import-bling-area');
+  area.innerHTML = '<div class="card"><div id="imp-prog" style="font-size:13px">Iniciando importação...</div></div>';
+  const prog = () => document.getElementById('imp-prog');
+
+  // Dedupe: carrega sku/codigo_barras existentes.
+  const { data: existentes } = await sbQ(sb.from('produtos').select('sku,codigo_barras'));
+  const skus = new Set((existentes || []).map(p => p.sku).filter(Boolean));
+  const barras = new Set((existentes || []).map(p => p.codigo_barras).filter(Boolean));
+
+  let pagina = 1, totalBling = 0, pulados = 0;
+  const paraInserir = [];
+  while (pagina <= 200) {
+    if (prog()) prog().textContent = `Buscando página ${pagina} no Bling... (${paraInserir.length} novos)`;
+    let resp;
+    try { resp = await fetchBlingProdutos(pagina); }
+    catch (e) { if (prog()) prog().innerHTML = impErro('Erro na página ' + pagina + ': ' + e.message); return; }
+    if (resp?.error) { if (prog()) prog().innerHTML = impErro('Bling: ' + resp.error); return; }
+    const arr = resp?.data || [];
+    if (!arr.length) break;
+    totalBling += arr.length;
+    for (const p of arr) {
+      const m = mapProdutoBling(p);
+      if ((m.sku && skus.has(m.sku)) || (m.codigo_barras && barras.has(m.codigo_barras))) { pulados++; continue; }
+      if (m.sku) skus.add(m.sku);
+      if (m.codigo_barras) barras.add(m.codigo_barras);
+      paraInserir.push(m);
+    }
+    pagina++;
+    await sleep(350); // respeita ~3 req/s do Bling
+  }
+
+  let gravados = 0;
+  for (let i = 0; i < paraInserir.length; i += 200) {
+    const lote = paraInserir.slice(i, i + 200);
+    if (prog()) prog().textContent = `Gravando ${gravados}/${paraInserir.length}...`;
+    const { error } = await sb.from('produtos').insert(lote);
+    if (error) { if (prog()) prog().innerHTML = impErro('Erro ao gravar: ' + error.message); return; }
+    gravados += lote.length;
+  }
+
+  if (prog()) prog().innerHTML = `
+    <div style="color:var(--success);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Importação concluída</div>
+    <div style="font-size:13px;margin-top:6px">Bling: ${totalBling} · Novos importados: ${gravados} · Já existentes (pulados): ${pulados}</div>
+    <button class="btn-primary btn-sm" style="margin-top:10px" onclick="produtoVoltarLista()">Ver produtos</button>`;
+}
 
 // ════════════════════════════════════════════════════════════════════
 // FORMULÁRIO (etapas numa página rolável)
