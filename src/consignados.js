@@ -501,7 +501,10 @@ export async function finalizarCicloRev(revId) {
     if (await handleSupabaseError(error, 'Erro ao finalizar catálogo')) return;
     // Marca a troca desta revendedora como resolvida (some da tela de Trocas ate a
     // proxima maleta). Best-effort: nao bloqueia o fechamento se a coluna nao existir.
-    try { await sb.from('profiles').update({ troca_resolvida_em: new Date().toISOString() }).eq('id', revId); } catch (e) { /* ignore */ }
+    try {
+      const { error: trErr } = await sb.from('profiles').update({ troca_resolvida_em: new Date().toISOString() }).eq('id', revId);
+      if (trErr) console.warn('[trocas] nao marcou troca_resolvida_em (rodou o SQL da coluna?):', trErr.message);
+    } catch (e) { console.warn('[trocas] erro ao marcar troca_resolvida_em:', e.message); }
     state.aprovadasCache = []; // forca a tela de Trocas a reler os profiles atualizados
     toast(`Catálogo de ${nome} encerrado`);
     loadConsignados();
