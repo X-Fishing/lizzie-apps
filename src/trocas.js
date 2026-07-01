@@ -304,8 +304,8 @@ export function renderTrocaRow(r) {
   const waMsg = mensagemTroca(r.nome, info.dataPrevista);
   const waUrl = whatsappLink(tel, waMsg);
   const botaoWa = waUrl
-    ? `<a href="${waUrl}" target="_blank" rel="noopener" class="troca-wa" onclick="event.stopPropagation()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Avisar pelo WhatsApp</a>`
-    : `<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:10px">Cadastre o telefone para usar o WhatsApp</div>`;
+    ? `<a href="${waUrl}" target="_blank" rel="noopener" class="troca-wa" title="Avisar pelo WhatsApp" aria-label="Avisar pelo WhatsApp" onclick="event.stopPropagation()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></a>`
+    : `<span class="troca-wa troca-wa-off" title="Sem telefone cadastrado" aria-label="Sem telefone"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>`;
 
   return `<div class="card troca-row" onclick="verRevendedora('${r.id}')" style="cursor:pointer">
     <div class="troca-info">
@@ -319,7 +319,7 @@ export function renderTrocaRow(r) {
         <div class="troca-data-val" style="color:${cor}">${dataTxt}</div>
         ${diasTxt ? `<div class="troca-data-sub">${diasTxt}</div>` : ''}
       </div>
+      ${botaoWa}
     </div>
-    ${botaoWa}
   </div>`;
 }
