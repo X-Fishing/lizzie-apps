@@ -171,6 +171,16 @@ export function trocaMatchFiltro(rev, filtro) {
   return true;
 }
 
+// Troca "resolvida": marcada ao Finalizar catálogo (profiles.troca_resolvida_em).
+// Esconde a revendedora da lista enquanto a resolução cobre o pedido atual;
+// reaparece sozinha quando surge uma maleta/pedido mais novo (data maior).
+export function trocaResolvida(r) {
+  if (!r.troca_resolvida_em) return false;
+  const dp = infoProximaTroca(r.bling_contato_id).dataPedido;
+  if (!dp) return false;
+  return r.troca_resolvida_em.slice(0, 10) >= dp.slice(0, 10);
+}
+
 export function isoNoMesAtual(iso) {
   if (!iso) return false;
   const hoje = new Date();
@@ -223,6 +233,7 @@ export function renderTrocas() {
   // Stats
   let vencidas = 0, prox7 = 0, noMes = 0, semVinculo = 0;
   for (const r of state.aprovadasCache) {
+    if (trocaResolvida(r)) continue; // resolvida: fora dos contadores tambem
     const info = infoProximaTroca(r.bling_contato_id);
     if (info.status === 'vencida') vencidas++;
     if (info.status === 'proximo') prox7++;
@@ -243,7 +254,7 @@ export function renderTrocas() {
   }).join('');
 
   // Lista filtrada e ordenada por urgência
-  const filtradas = state.aprovadasCache.filter(r => trocaMatchFiltro(r, state.trocasFiltroAtivo));
+  const filtradas = state.aprovadasCache.filter(r => !trocaResolvida(r) && trocaMatchFiltro(r, state.trocasFiltroAtivo));
   filtradas.sort(compararPorTroca);
 
   if (!filtradas.length) {
