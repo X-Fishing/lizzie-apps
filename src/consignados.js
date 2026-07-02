@@ -143,8 +143,11 @@ export function renderCicloRevendedora() {
   let ativos = soAtivos(state.allConsignados);
   if (state.maletaAtivaId) ativos = ativos.filter(c => c.maleta_id === state.maletaAtivaId);
   const temAtivos = ativos.some(c => qtdDisp(c) > 0);
+  const btnDivulgar = temAtivos
+    ? `<button class="btn-primary" style="width:100%;margin-top:16px" onclick="abrirDivulgarMaleta()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Divulgar minha maleta</button>`
+    : '';
   const btnFechamento = temAtivos
-    ? `<button class="btn-secondary" style="width:100%;margin-top:16px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</button>`
+    ? `<button class="btn-secondary" style="width:100%;margin-top:10px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</button>`
     : '';
 
   const historico = historicoCatalogosHtml(state.allConsignados);
@@ -166,7 +169,7 @@ export function renderCicloRevendedora() {
         : `Nenhuma peça encontrada com "${termo}"`;
       return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>${msgVazio}</p></div>` + historico;
     }
-    return cabecalho + cicloTableHtml(lista, false) + btnFechamento + historico;
+    return cabecalho + cicloTableHtml(lista, false) + btnDivulgar + btnFechamento + historico;
   }
 
   // Sem catálogo ativo: mostra aviso + histórico (se houver), em vez de tabela vazia.
@@ -174,7 +177,7 @@ export function renderCicloRevendedora() {
     return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div><p>Nenhum catálogo ativo no momento</p></div>` + historico;
   }
 
-  return cabecalho + cicloTableHtml(ativos, false) + btnFechamento + historico;
+  return cabecalho + cicloTableHtml(ativos, false) + btnDivulgar + btnFechamento + historico;
 }
 
 export function agruparPorRevendedora() {
@@ -350,7 +353,8 @@ export function renderCicloAdminDetalhe(revId, list) {
   const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
 
   const btnMaleta = ehGestor()
-    ? `<button class="btn-secondary btn-sm" style="border-color:var(--rose);color:var(--rose)" data-bling-id="${state.revBlingMap[revId] || ''}" data-rev-nome="${esc(nome)}" onclick="atualizarMaleta('${revId}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Atualizar itens da maleta</button>`
+    ? `<button class="btn-secondary btn-sm" style="border-color:var(--rose);color:var(--rose)" data-bling-id="${state.revBlingMap[revId] || ''}" data-rev-nome="${esc(nome)}" onclick="atualizarMaleta('${revId}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Atualizar itens da maleta</button>
+       <button class="btn-secondary btn-sm" onclick="abrirDivulgarMaleta('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link da maleta</button>`
     : '';
   const acoes = ehGestor()
     ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">

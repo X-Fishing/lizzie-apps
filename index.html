@@ -612,6 +612,28 @@
   </div>
 </div>
 
+<!-- MODAL DIVULGAR MALETA (link público do site-catálogo) -->
+<div class="modal-overlay" id="modal-divulgar">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Divulgar maleta</div>
+    <p style="font-size:13px;color:var(--muted);margin:-4px 0 14px">Link público com as peças <b>disponíveis</b> da maleta de <b id="div-rev-nome"></b>. Peça vendida some do link sozinha.</p>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input type="text" id="div-link" class="form-control" readonly style="font-size:12px" onclick="this.select()">
+      <button class="btn-secondary btn-sm" style="white-space:nowrap" onclick="copiarLinkMaleta(this)">Copiar</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <a id="div-wa" href="#" target="_blank" rel="noopener" class="btn-primary" style="flex:1;text-align:center;text-decoration:none;padding:12px;border-radius:10px;font-size:13px">Enviar no WhatsApp</a>
+      <button class="btn-secondary" style="flex:1" onclick="mostrarQrMaleta(this)">QR Code</button>
+    </div>
+    <div id="div-qr" style="display:none;text-align:center;margin-bottom:12px"></div>
+    <div id="div-regen-wrap" style="text-align:center;margin-bottom:6px">
+      <button type="button" onclick="regenerarLinkMaleta()" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:underline;font-family:inherit">Gerar novo link (o antigo para de funcionar)</button>
+    </div>
+    <button class="btn-secondary" style="width:100%" onclick="closeModal('modal-divulgar')">Fechar</button>
+  </div>
+</div>
+
 <!-- MODAL DE CONFIRMAÇÃO (embutido, funciona no PWA — substitui confirm()/prompt()) -->
 <div class="modal-overlay" id="modal-confirma" data-lock-outside>
   <div class="modal">

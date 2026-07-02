@@ -186,3 +186,85 @@ $$;
 
 revoke all on function public.sincronizar_maleta(uuid,text,jsonb) from public;
 grant execute on function public.sincronizar_maleta(uuid,text,jsonb) to authenticated;
+
+-- ════════════════════════════════════════════════════════════════════
+-- MALETA PÚBLICA — link exclusivo por revendedora no site-catálogo
+-- (lizzie-catalogo.netlify.app/maleta?t=<share_token>)
+-- ════════════════════════════════════════════════════════════════════
+
+-- Token de compartilhamento por profile (link público da maleta).
+alter table public.profiles
+  add column if not exists share_token uuid unique default gen_random_uuid();
+update public.profiles set share_token = gen_random_uuid() where share_token is null;
+
+-- maleta_publica: chamada ANÔNIMA pelo site-catálogo. Retorna SÓ para o
+-- profile APROVADO dono do token: primeiro nome, telefone (canal de compra
+-- que a própria revendedora divulga) e as peças ATIVAS com disponível > 0.
+-- Token inválido/não aprovada -> null (não vaza existência).
+-- NUNCA retornar: sobrenome, cidade, e-mail, custos, ids internos, clientes.
+create or replace function public.maleta_publica(p_token uuid)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select jsonb_build_object(
+    'nome', split_part(trim(p.nome), ' ', 1),
+    'telefone', p.telefone,
+    'itens', coalesce((
+      select jsonb_agg(jsonb_build_object(
+               'referencia', i.referencia,
+               'descricao',  i.descricao,
+               'preco',      i.preco,
+               'disponivel', i.disponivel
+             ) order by i.descricao)
+      from (
+        select c.referencia,
+               min(c.descricao)  as descricao,
+               max(c.preco_venda) as preco,
+               sum( (c.quantidade_enviada - coalesce(c.quantidade_vendida,0)
+                     - coalesce(c.quantidade_devolvida,0)) ) as disponivel
+        from consignados c
+        where c.revendedora_id = p.id
+          and c.status = 'ativo'
+          -- espelha o app: se existe maleta ATIVA, só as peças dela
+          -- (nunca expõe maleta 'aguardando'); sem registro de maleta
+          -- (dados legados), vale o status do consignado.
+          and (ma.id is null or c.maleta_id = ma.id)
+        group by c.referencia, c.descricao
+        having sum( (c.quantidade_enviada - coalesce(c.quantidade_vendida,0)
+                     - coalesce(c.quantidade_devolvida,0)) ) > 0
+      ) i
+    ), '[]'::jsonb)
+  )
+  from profiles p
+  left join lateral (
+    select m.id from maletas m
+    where m.revendedora_id = p.id and m.status = 'ativa'
+    limit 1
+  ) ma on true
+  where p.share_token = p_token
+    and p.aprovada = true
+    and p.role = 'revendedora';
+$$;
+
+revoke all on function public.maleta_publica(uuid) from public;
+grant execute on function public.maleta_publica(uuid) to anon;
+grant execute on function public.maleta_publica(uuid) to authenticated;
+
+-- regenerar_share_token: a própria usuária revoga um link vazado.
+-- SECURITY INVOKER: só atualiza a própria linha (RLS profiles_update_own).
+create or replace function public.regenerar_share_token()
+returns uuid
+language sql
+security invoker
+set search_path = public
+as $$
+  update profiles set share_token = gen_random_uuid()
+  where id = auth.uid()
+  returning share_token;
+$$;
+
+revoke all on function public.regenerar_share_token() from public;
+grant execute on function public.regenerar_share_token() to authenticated;
