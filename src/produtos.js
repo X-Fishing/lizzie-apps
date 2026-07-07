@@ -254,11 +254,31 @@ export async function produtoImportBlingRun() {
     await sleep(350); // respeita ~3 req/s do Bling
   }
 
+  // A varredura do Bling demora minutos — re-checa os existentes AGORA, na hora
+  // de gravar. Evita duplicate key (23505) quando uma rodada anterior abortada
+  // (ou outra aba) já gravou parte dos "novos" desde o início desta rodada.
+  const { data: atuais } = await sbQ(sb.from('produtos').select('sku,codigo_barras'));
+  const skuAgora = new Set((atuais || []).map(p => p.sku).filter(Boolean));
+  const barrasAgora = new Set((atuais || []).map(p => p.codigo_barras).filter(Boolean));
+  const aInserir = paraInserir.filter(m =>
+    !(m.sku && skuAgora.has(m.sku)) && !(m.codigo_barras && barrasAgora.has(m.codigo_barras)));
+  pulados += paraInserir.length - aInserir.length;
+
   let gravados = 0;
-  for (let i = 0; i < paraInserir.length; i += 200) {
-    const lote = paraInserir.slice(i, i + 200);
-    if (prog()) prog().textContent = `Gravando novos ${gravados}/${paraInserir.length}...`;
+  for (let i = 0; i < aInserir.length; i += 200) {
+    const lote = aInserir.slice(i, i + 200);
+    if (prog()) prog().textContent = `Gravando novos ${gravados}/${aInserir.length}...`;
     const { error } = await sb.from('produtos').insert(lote);
+    if (error && error.code === '23505') {
+      // corrida com outra aba/rodada: grava o lote linha a linha, pulando repetidos
+      for (const row of lote) {
+        const { error: e1 } = await sb.from('produtos').insert(row);
+        if (e1 && e1.code === '23505') { pulados++; continue; }
+        if (e1) { if (prog()) prog().innerHTML = impErro('Erro ao gravar: ' + e1.message); return; }
+        gravados++;
+      }
+      continue;
+    }
     if (error) { if (prog()) prog().innerHTML = impErro('Erro ao gravar: ' + error.message); return; }
     gravados += lote.length;
   }
