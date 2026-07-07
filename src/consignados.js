@@ -421,33 +421,63 @@ export function voltarCardsCiclo() {
   renderCicloGrid();
 }
 
-export function openBuscaPeca() {
+// Catálogo-mestre (tabela produtos) pra busca por código de fornecedor e pra
+// mostrar o que está no NOSSO estoque (não consignado). Carregado ao abrir o modal.
+let bpProdutos = [];
+
+export async function openBuscaPeca() {
   const input = document.getElementById('bp-search');
   input.value = '';
   renderBuscaPeca();
   openModal('modal-busca-peca');
   setTimeout(() => input.focus(), 100);
+  const { data } = await sbQ(sb.from('produtos')
+    .select('id,nome,sku,codigo_fornecedor,estoque_qtd,preco_venda'));
+  bpProdutos = data || [];
+  renderBuscaPeca(); // re-renderiza caso já tenha termo digitado
+}
+
+function bpMatchProduto(p, termo) {
+  return [p.nome, p.sku, p.codigo_fornecedor].some(v => (v || '').toLowerCase().includes(termo));
 }
 
 export function renderBuscaPeca() {
   const div = document.getElementById('bp-results');
   const termo = (document.getElementById('bp-search').value || '').toLowerCase().trim();
   if (!termo) {
-    div.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></div><p>Digite o nome ou código da peça acima.</p></div>';
+    div.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></div><p>Digite o nome, o código (SKU) ou o código do fornecedor.</p></div>';
     return;
   }
+  // Índices do catálogo-mestre pra casar consignado → produto (por produto_id ou por SKU na referencia)
+  const prodById = Object.fromEntries(bpProdutos.map(p => [String(p.id), p]));
+  const prodBySku = Object.fromEntries(bpProdutos.filter(p => p.sku).map(p => [p.sku.toLowerCase(), p]));
+
   // Busca serve para saber onde a peça está AGORA: só catálogo ativo.
-  const matches = soAtivos(state.allConsignados).filter(c =>
-    (c.descricao || '').toLowerCase().includes(termo) ||
-    (c.referencia || '').toLowerCase().includes(termo)
-  ).sort((a, b) => (a.descricao || '').localeCompare(b.descricao || ''));
+  const matches = soAtivos(state.allConsignados).filter(c => {
+    if ((c.descricao || '').toLowerCase().includes(termo)) return true;
+    if ((c.referencia || '').toLowerCase().includes(termo)) return true;
+    const p = prodById[String(c.produto_id)] || prodBySku[(c.referencia || '').toLowerCase()];
+    return p ? bpMatchProduto(p, termo) : false;
+  }).sort((a, b) => (a.descricao || '').localeCompare(b.descricao || ''));
 
-  if (!matches.length) {
-    div.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhuma peça encontrada com "${termo}"</p></div>`;
+  // E o que casa no catálogo-mestre com estoque conosco (não consignado)
+  const emEstoque = bpProdutos.filter(p => bpMatchProduto(p, termo) && (p.estoque_qtd || 0) > 0);
+  const estoqueHTML = emEstoque.map(p => {
+    const cod = [p.sku && `SKU ${esc(p.sku)}`, p.codigo_fornecedor && `FORN ${esc(p.codigo_fornecedor)}`].filter(Boolean).join(' · ');
+    return `<div style="padding:12px 14px;border:1px solid var(--line,#eee);border-radius:12px;margin-bottom:8px;background:rgba(91,110,92,0.06)">
+      <div style="font-weight:600;color:var(--plum)">${esc(p.nome)}</div>
+      <div style="font-size:12px;margin-top:3px">${cod ? `<span style="color:var(--muted)">${cod} · </span>` : ''}<b>Em nosso estoque</b></div>
+      <div style="font-size:12px;margin-top:4px"><span style="color:var(--success);font-weight:600">● ${p.estoque_qtd} em estoque</span>${p.preco_venda ? ` <span style="color:var(--muted)">· R$ ${Number(p.preco_venda).toFixed(2)}</span>` : ''}</div>
+    </div>`;
+  }).join('');
+
+  if (!matches.length && !emEstoque.length) {
+    div.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>Nenhuma peça encontrada com "${termo}" — nem com revendedora, nem em estoque.</p></div>`;
     return;
   }
+  if (!matches.length) { div.innerHTML = estoqueHTML; return; }
 
-  div.innerHTML = matches.map(c => {
+  div.innerHTML = estoqueHTML + matches.map(c => {
     const vendida = c.quantidade_vendida || 0;
     const disp = qtdDisp(c);
     const nomeRev = state.revNameMap[c.revendedora_id] || 'Revendedora desconhecida';

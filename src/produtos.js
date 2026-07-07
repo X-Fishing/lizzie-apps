@@ -61,7 +61,7 @@ function nomeColecao(id) {
 export async function loadProdutos() {
   panel().innerHTML = '<div class="loading"><div class="spinner"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div><br>Carregando produtos...</div>';
   const { data, error } = await sbQ(sb.from('produtos')
-    .select('id,nome,sku,codigo_barras,preco_venda,estoque_qtd,foto_url,ativo,categoria_id,colecao_id')
+    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,estoque_qtd,foto_url,ativo,categoria_id,colecao_id')
     .order('nome', { ascending: true }));
   if (error) { if (await handleSupabaseError(error, 'Erro ao carregar produtos')) return; }
   produtosCache = data || [];
@@ -76,7 +76,7 @@ function renderLista() {
   let lista = produtosCache;
   if (filtroColecao) lista = lista.filter(p => String(p.colecao_id) === String(filtroColecao));
   if (f) lista = lista.filter(p =>
-    [p.nome, p.sku, p.codigo_barras, nomeColecao(p.colecao_id)].some(v => (v || '').toLowerCase().includes(f)));
+    [p.nome, p.sku, p.codigo_barras, p.codigo_fornecedor, nomeColecao(p.colecao_id)].some(v => (v || '').toLowerCase().includes(f)));
 
   const linhas = lista.length ? lista.map(p => `
     <tr class="ciclo-row">
@@ -313,11 +313,13 @@ async function abrirForm(p) {
 
     ${secHeader('Fornecedor')}
     <div class="form-grid">
-      <div class="form-group" style="grid-column:1/-1"><label class="form-label">Fornecedor</label>
+      <div class="form-group"><label class="form-label">Fornecedor</label>
         <div style="display:flex;gap:8px">
           <select id="p-fornecedor" class="form-control">${optsSelect('fornecedores', p.fornecedor_id)}</select>
           <button type="button" class="btn-secondary btn-sm" title="Cadastrar fornecedor" onclick="produtoNovoFornecedor()">${IC_PLUS}</button>
         </div></div>
+      <div class="form-group"><label class="form-label">Código no fornecedor</label>
+        <input type="text" id="p-cod-fornecedor" class="form-control" placeholder="código da peça no fornecedor" value="${esc(p.codigo_fornecedor || '')}"></div>
     </div>
 
     ${secHeader('Tributação', 'Em breve')}
@@ -433,6 +435,7 @@ export async function produtoSalvar(id) {
     categoria_id: document.getElementById('p-categoria').value || null,
     colecao_id: document.getElementById('p-colecao').value || null,
     fornecedor_id: document.getElementById('p-fornecedor').value || null,
+    codigo_fornecedor: document.getElementById('p-cod-fornecedor').value.trim() || null,
     formato,
     peso_liquido: num('p-peso-liq'),
     peso_bruto: num('p-peso-bruto'),
