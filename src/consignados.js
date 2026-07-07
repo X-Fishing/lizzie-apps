@@ -431,8 +431,8 @@ export async function openBuscaPeca() {
   renderBuscaPeca();
   openModal('modal-busca-peca');
   setTimeout(() => input.focus(), 100);
-  const { data } = await sbQ(sb.from('produtos')
-    .select('id,nome,sku,codigo_fornecedor,estoque_qtd,preco_venda'));
+  const { data } = await fetchPaginado(() => sb.from('produtos')
+    .select('id,nome,sku,codigo_fornecedor,estoque_qtd,preco_venda').order('id'));
   bpProdutos = data || [];
   renderBuscaPeca(); // re-renderiza caso já tenha termo digitado
 }

@@ -1,7 +1,7 @@
 // Cadastro de Produtos (catálogo-mestre próprio). Lista + formulário em
 // etapas (numa página rolável) no padrão visual do app. Só gestor/admin grava.
 import { sb, SUPABASE_URL, SUPABASE_KEY } from './supabase.js';
-import { esc, toast, sbQ, fmtBRL, confirmarAcao, handleSupabaseError,
+import { esc, toast, sbQ, fetchPaginado, fmtBRL, confirmarAcao, handleSupabaseError,
          maskMoneyBR, parseMoneyBR, moneyToInput } from './utils.js';
 import { cadastroCache, carregarCadastrosParaSelect, cadNovo } from './cadastros.js';
 
@@ -73,7 +73,9 @@ function nomeColecao(id) {
 // ════════════════════════════════════════════════════════════════════
 export async function loadProdutos() {
   panel().innerHTML = '<div class="loading"><div class="spinner"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div><br>Carregando produtos...</div>';
-  const { data, error } = await sbQ(sb.from('produtos')
+  // fetchPaginado: o PostgREST devolve no máx. 1000 linhas por chamada — sem
+  // isso, catálogo acima de 1000 produtos aparece truncado na grid.
+  const { data, error } = await fetchPaginado(() => sb.from('produtos')
     .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,estoque_qtd,foto_url,ativo,categoria_id,colecao_id,fornecedor_id')
     .order('nome', { ascending: true }));
   if (error) { if (await handleSupabaseError(error, 'Erro ao carregar produtos')) return; }
@@ -236,7 +238,7 @@ export async function produtoImportBlingRun() {
 
   // Existentes: usados pra deduplicar (nunca duplica) E pra completar campos
   // vazios (custo zerado / sem foto) com o que veio do Bling — sem sobrescrever nada.
-  const { data: existentes } = await sbQ(sb.from('produtos').select('id,sku,codigo_barras,custo_compra,foto_url'));
+  const { data: existentes } = await fetchPaginado(() => sb.from('produtos').select('id,sku,codigo_barras,custo_compra,foto_url').order('id'));
   const porSku = new Map((existentes || []).filter(p => p.sku).map(p => [p.sku, p]));
   const porBarras = new Map((existentes || []).filter(p => p.codigo_barras).map(p => [p.codigo_barras, p]));
 
@@ -281,7 +283,7 @@ export async function produtoImportBlingRun() {
   // A varredura do Bling demora minutos — re-checa os existentes AGORA, na hora
   // de gravar. Evita duplicate key (23505) quando uma rodada anterior abortada
   // (ou outra aba) já gravou parte dos "novos" desde o início desta rodada.
-  const { data: atuais } = await sbQ(sb.from('produtos').select('sku,codigo_barras'));
+  const { data: atuais } = await fetchPaginado(() => sb.from('produtos').select('id,sku,codigo_barras').order('id'));
   const skuAgora = new Set((atuais || []).map(p => p.sku).filter(Boolean));
   const barrasAgora = new Set((atuais || []).map(p => p.codigo_barras).filter(Boolean));
   const aInserir = paraInserir.filter(m =>
