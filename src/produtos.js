@@ -239,10 +239,12 @@ export async function produtoImportBlingRun() {
       const m = mapProdutoBling(p);
       const ex = (m.sku && porSku.get(m.sku)) || (m.codigo_barras && porBarras.get(m.codigo_barras));
       if (ex) {
+        // ex sem id = duplicado DENTRO do próprio Bling nesta varredura (mesmo SKU
+        // duas vezes) — só pula; completar vale apenas pra registro já no banco.
         const upd = {};
-        if (!(Number(ex.custo_compra) > 0) && m.custo_compra > 0) upd.custo_compra = m.custo_compra;
-        if (!ex.foto_url && m.foto_url) upd.foto_url = m.foto_url;
-        if (Object.keys(upd).length) paraCompletar.push({ id: ex.id, ...upd });
+        if (ex.id && !(Number(ex.custo_compra) > 0) && m.custo_compra > 0) upd.custo_compra = m.custo_compra;
+        if (ex.id && !ex.foto_url && m.foto_url) upd.foto_url = m.foto_url;
+        if (ex.id && Object.keys(upd).length) paraCompletar.push({ id: ex.id, ...upd });
         else pulados++;
         continue;
       }
@@ -271,7 +273,10 @@ export async function produtoImportBlingRun() {
     const { error } = await sb.from('produtos').insert(lote);
     if (error && error.code === '23505') {
       // corrida com outra aba/rodada: grava o lote linha a linha, pulando repetidos
+      let linha = 0;
       for (const row of lote) {
+        linha++;
+        if (prog() && linha % 10 === 0) prog().textContent = `Gravando novos ${gravados}/${aInserir.length}... (lote com duplicados: ${linha}/${lote.length} linha a linha)`;
         const { error: e1 } = await sb.from('produtos').insert(row);
         if (e1 && e1.code === '23505') { pulados++; continue; }
         if (e1) { if (prog()) prog().innerHTML = impErro('Erro ao gravar: ' + e1.message); return; }
