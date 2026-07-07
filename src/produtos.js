@@ -80,10 +80,69 @@ export async function loadProdutos() {
     .order('nome', { ascending: true }));
   if (error) { if (await handleSupabaseError(error, 'Erro ao carregar produtos')) return; }
   produtosCache = data || [];
+  gruposAbertos.clear();
   if (!cadastroCache.colecoes || !cadastroCache.colecoes.length) {
     await carregarCadastrosParaSelect(); // popula categorias/colecoes/fornecedores p/ nome e filtro
   }
   renderLista();
+}
+
+// ── Agrupamento de anéis por modelo ───────────────────────────────────────────
+// Cada aro é um produto/SKU próprio (padrão herdado do Bling e das etiquetas);
+// o aro vive no nome: "Anel 15 Dois Corações". A grid agrupa por modelo SÓ
+// visualmente — sem schema novo, sem produto_variacoes, bipe/maleta intocados.
+const gruposAbertos = new Set();
+
+// "Anel 15 Dois Corações Ródio" -> { base: 'Anel Dois Corações Ródio', tamanho: '15' }
+// Nome fora do padrão -> null (produto avulso, sem grupo)
+function grupoAnel(nome) {
+  const m = /^Anel\s+(\d{1,2})\s+(.+)$/i.exec((nome || '').trim());
+  return m ? { base: `Anel ${m[2].trim()}`, tamanho: m[1] } : null;
+}
+
+// Linha padrão de produto (sub=true = membro de grupo, com recuo)
+function linhaProdutoHTML(p, sub = false) {
+  return `
+    <tr class="ciclo-row"${sub ? ' style="background:rgba(201,116,138,0.045)"' : ''}>
+      <td class="ciclo-td"${sub ? ' style="padding-left:34px"' : ''}>
+        <div style="display:flex;align-items:center;gap:10px">
+          <span class="ciclo-emoji">${p.foto_url ? `<img src="${esc(p.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
+          <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}</div>
+          <div style="font-size:11px;color:var(--muted)">${p.sku ? 'SKU ' + esc(p.sku) : ''}${p.codigo_barras ? ' · ' + esc(p.codigo_barras) : ''}</div></div>
+        </div>
+      </td>
+      <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${p.estoque_qtd ?? 0}</span></td>
+      <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(p.preco_venda)}</span></td>
+      <td class="ciclo-td" style="text-align:right;white-space:nowrap">
+        <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
+        <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
+      </td>
+    </tr>`;
+}
+
+// Linha-cabeçalho de um grupo de anéis (clicável: expande/colapsa)
+function linhaGrupoHTML(g, aberto) {
+  const tams = g.membros.map(m => m.tamanho).sort((a, b) => Number(a) - Number(b));
+  const precos = g.membros.map(m => Number(m.p.preco_venda) || 0);
+  const pMin = Math.min(...precos), pMax = Math.max(...precos);
+  const preco = pMin === pMax ? fmtBRL(pMin) : `${fmtBRL(pMin)} – ${fmtBRL(pMax)}`;
+  const estoque = g.membros.reduce((s, m) => s + (m.p.estoque_qtd ?? 0), 0);
+  const foto = g.membros.find(m => m.p.foto_url)?.p.foto_url || null;
+  const chave = encodeURIComponent(g.base);
+  return `
+    <tr class="ciclo-row" style="cursor:pointer" onclick="produtoToggleGrupo('${chave}')">
+      <td class="ciclo-td">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="width:14px;color:var(--rose);font-size:12px">${aberto ? '▾' : '▸'}</span>
+          <span class="ciclo-emoji">${foto ? `<img src="${esc(foto)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
+          <div><div class="ciclo-desc">${esc(g.base)}</div>
+          <div style="font-size:11px;color:var(--muted)">${g.membros.length} tamanhos · aros ${tams.join(' · ')}</div></div>
+        </div>
+      </td>
+      <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
+      <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
+      <td class="ciclo-td" style="text-align:right;white-space:nowrap;font-size:11px;color:var(--muted)">${aberto ? 'fechar' : 'ver aros'}</td>
+    </tr>`;
 }
 
 // Monta SÓ a tabela + pager (parte que muda com filtro/página). Manter separado
@@ -98,35 +157,46 @@ function tabelaHTML() {
   if (f) lista = lista.filter(p =>
     [p.nome, p.sku, p.codigo_barras, p.codigo_fornecedor, nomeColecao(p.colecao_id)].some(v => (v || '').toLowerCase().includes(f)));
 
-  // Paginação client-side: máx. POR_PAGINA por página
-  const totalFiltrado = lista.length;
+  // Unidades de exibição: anéis do mesmo modelo colapsam num grupo; resto é avulso
+  const porBase = new Map();
+  const unidades = [];
+  for (const p of lista) {
+    const g = grupoAnel(p.nome);
+    if (g) {
+      let u = porBase.get(g.base);
+      if (!u) { u = { tipo: 'grupo', base: g.base, membros: [] }; porBase.set(g.base, u); unidades.push(u); }
+      u.membros.push({ p, tamanho: g.tamanho });
+    } else {
+      unidades.push({ tipo: 'prod', p });
+    }
+  }
+  // Grupo de 1 membro só não tem cara de grupo — vira linha normal
+  const units = unidades.map(u => (u.tipo === 'grupo' && u.membros.length === 1) ? { tipo: 'prod', p: u.membros[0].p } : u);
+  units.sort((a, b) => (a.tipo === 'grupo' ? a.base : a.p.nome).localeCompare(b.tipo === 'grupo' ? b.base : b.p.nome));
+
+  // Paginação client-side sobre unidades (grupo conta como 1)
+  const totalFiltrado = units.length;
   const totalPaginas = Math.max(1, Math.ceil(totalFiltrado / POR_PAGINA));
   if (paginaAtual > totalPaginas) paginaAtual = totalPaginas;
   if (paginaAtual < 1) paginaAtual = 1;
-  const pagina = lista.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
+  const pagina = units.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
 
-  const linhas = pagina.length ? pagina.map(p => `
-    <tr class="ciclo-row">
-      <td class="ciclo-td">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span class="ciclo-emoji">${p.foto_url ? `<img src="${esc(p.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
-          <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}</div>
-          <div style="font-size:11px;color:var(--muted)">${p.sku ? 'SKU ' + esc(p.sku) : ''}${p.codigo_barras ? ' · ' + esc(p.codigo_barras) : ''}</div></div>
-        </div>
-      </td>
-      <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${p.estoque_qtd ?? 0}</span></td>
-      <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(p.preco_venda)}</span></td>
-      <td class="ciclo-td" style="text-align:right;white-space:nowrap">
-        <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
-        <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
-      </td>
-    </tr>`).join('') :
+  const linhas = pagina.length ? pagina.map(u => {
+    if (u.tipo === 'prod') return linhaProdutoHTML(u.p);
+    // buscando por texto, o grupo abre sozinho (senão o SKU procurado fica escondido)
+    const aberto = gruposAbertos.has(u.base) || !!f;
+    let html = linhaGrupoHTML(u, aberto);
+    if (aberto) html += u.membros
+      .sort((a, b) => Number(a.tamanho) - Number(b.tamanho))
+      .map(m => linhaProdutoHTML(m.p, true)).join('');
+    return html;
+  }).join('') :
     `<tr><td colspan="4"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
 
   const pager = totalFiltrado > POR_PAGINA ? `
     <div style="display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px">
       <button class="btn-secondary btn-sm" ${paginaAtual <= 1 ? 'disabled style="opacity:.4"' : ''} onclick="produtoPagina(-1)">‹ Anterior</button>
-      <span style="font-size:12px;color:var(--muted)">Página <b>${paginaAtual}</b> de <b>${totalPaginas}</b> · ${totalFiltrado} produto${totalFiltrado !== 1 ? 's' : ''}</span>
+      <span style="font-size:12px;color:var(--muted)">Página <b>${paginaAtual}</b> de <b>${totalPaginas}</b> · ${totalFiltrado} ite${totalFiltrado !== 1 ? 'ns' : 'm'}</span>
       <button class="btn-secondary btn-sm" ${paginaAtual >= totalPaginas ? 'disabled style="opacity:.4"' : ''} onclick="produtoPagina(1)">Próxima ›</button>
     </div>` : '';
 
@@ -181,6 +251,12 @@ export function produtoFiltrarColecao(v) { filtroColecao = v; paginaAtual = 1; r
 export function produtoFiltrarCategoria(v) { filtroCategoria = v; paginaAtual = 1; renderTabela(); }
 export function produtoFiltrarFornecedor(v) { filtroFornecedor = v; paginaAtual = 1; renderTabela(); }
 export function produtoPagina(delta) { paginaAtual += delta; renderTabela(); }
+export function produtoToggleGrupo(chave) {
+  const base = decodeURIComponent(chave);
+  if (gruposAbertos.has(base)) gruposAbertos.delete(base);
+  else gruposAbertos.add(base);
+  renderTabela();
+}
 
 // ════════════════════════════════════════════════════════════════════
 // IMPORTAR DO BLING
