@@ -86,7 +86,10 @@ export async function loadProdutos() {
   renderLista();
 }
 
-function renderLista() {
+// Monta SÓ a tabela + pager (parte que muda com filtro/página). Manter separado
+// da toolbar: re-renderizar o painel inteiro a cada tecla destruía o input de
+// busca e derrubava o foco do teclado.
+function tabelaHTML() {
   const f = filtroProdutos.trim().toLowerCase();
   let lista = produtosCache;
   if (filtroColecao) lista = lista.filter(p => String(p.colecao_id) === String(filtroColecao));
@@ -127,6 +130,24 @@ function renderLista() {
       <button class="btn-secondary btn-sm" ${paginaAtual >= totalPaginas ? 'disabled style="opacity:.4"' : ''} onclick="produtoPagina(1)">Próxima ›</button>
     </div>` : '';
 
+  return `
+    <div class="pag-wrap"><table class="pag-table"><thead><tr>
+      <th class="pag-th">Produto</th>
+      <th class="pag-th" style="text-align:center">Estoque</th>
+      <th class="pag-th">Preço</th>
+      <th class="pag-th" style="text-align:right">Ações</th>
+    </tr></thead><tbody>${linhas}</tbody></table></div>
+    ${pager}`;
+}
+
+// Atualiza SÓ a região da tabela (preserva toolbar e o foco do input de busca)
+function renderTabela() {
+  const alvo = document.getElementById('prod-lista');
+  if (alvo) alvo.innerHTML = tabelaHTML();
+  else renderLista();
+}
+
+function renderLista() {
   panel().innerHTML = `
     <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
       <div><div class="section-title">Produtos</div>
@@ -152,20 +173,14 @@ function renderLista() {
         ${(cadastroCache.fornecedores || []).map(c => `<option value="${c.id}" ${String(c.id) === String(filtroFornecedor) ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}
       </select>
     </div>
-    <div class="pag-wrap"><table class="pag-table"><thead><tr>
-      <th class="pag-th">Produto</th>
-      <th class="pag-th" style="text-align:center">Estoque</th>
-      <th class="pag-th">Preço</th>
-      <th class="pag-th" style="text-align:right">Ações</th>
-    </tr></thead><tbody>${linhas}</tbody></table></div>
-    ${pager}`;
+    <div id="prod-lista">${tabelaHTML()}</div>`;
 }
 
-export function produtoFiltrar(v) { filtroProdutos = v; paginaAtual = 1; renderLista(); }
-export function produtoFiltrarColecao(v) { filtroColecao = v; paginaAtual = 1; renderLista(); }
-export function produtoFiltrarCategoria(v) { filtroCategoria = v; paginaAtual = 1; renderLista(); }
-export function produtoFiltrarFornecedor(v) { filtroFornecedor = v; paginaAtual = 1; renderLista(); }
-export function produtoPagina(delta) { paginaAtual += delta; renderLista(); }
+export function produtoFiltrar(v) { filtroProdutos = v; paginaAtual = 1; renderTabela(); }
+export function produtoFiltrarColecao(v) { filtroColecao = v; paginaAtual = 1; renderTabela(); }
+export function produtoFiltrarCategoria(v) { filtroCategoria = v; paginaAtual = 1; renderTabela(); }
+export function produtoFiltrarFornecedor(v) { filtroFornecedor = v; paginaAtual = 1; renderTabela(); }
+export function produtoPagina(delta) { paginaAtual += delta; renderTabela(); }
 
 // ════════════════════════════════════════════════════════════════════
 // IMPORTAR DO BLING
