@@ -185,15 +185,17 @@ export async function produtoImportBlingRun() {
   area.innerHTML = '<div class="card"><div id="imp-prog" style="font-size:13px">Iniciando importação...</div></div>';
   const prog = () => document.getElementById('imp-prog');
 
-  // Dedupe: carrega sku/codigo_barras existentes.
-  const { data: existentes } = await sbQ(sb.from('produtos').select('sku,codigo_barras'));
-  const skus = new Set((existentes || []).map(p => p.sku).filter(Boolean));
-  const barras = new Set((existentes || []).map(p => p.codigo_barras).filter(Boolean));
+  // Existentes: usados pra deduplicar (nunca duplica) E pra completar campos
+  // vazios (custo zerado / sem foto) com o que veio do Bling — sem sobrescrever nada.
+  const { data: existentes } = await sbQ(sb.from('produtos').select('id,sku,codigo_barras,custo_compra,foto_url'));
+  const porSku = new Map((existentes || []).filter(p => p.sku).map(p => [p.sku, p]));
+  const porBarras = new Map((existentes || []).filter(p => p.codigo_barras).map(p => [p.codigo_barras, p]));
 
   let pagina = 1, totalBling = 0, pulados = 0;
   const paraInserir = [];
+  const paraCompletar = [];   // updates parciais: só campos hoje vazios
   while (pagina <= 200) {
-    if (prog()) prog().textContent = `Buscando página ${pagina} no Bling... (${paraInserir.length} novos)`;
+    if (prog()) prog().textContent = `Buscando página ${pagina} no Bling... (${paraInserir.length} novos · ${paraCompletar.length} a completar)`;
     let resp;
     try { resp = await fetchBlingProdutos(pagina); }
     catch (e) { if (prog()) prog().innerHTML = impErro('Erro na página ' + pagina + ': ' + e.message); return; }
@@ -203,9 +205,17 @@ export async function produtoImportBlingRun() {
     totalBling += arr.length;
     for (const p of arr) {
       const m = mapProdutoBling(p);
-      if ((m.sku && skus.has(m.sku)) || (m.codigo_barras && barras.has(m.codigo_barras))) { pulados++; continue; }
-      if (m.sku) skus.add(m.sku);
-      if (m.codigo_barras) barras.add(m.codigo_barras);
+      const ex = (m.sku && porSku.get(m.sku)) || (m.codigo_barras && porBarras.get(m.codigo_barras));
+      if (ex) {
+        const upd = {};
+        if (!(Number(ex.custo_compra) > 0) && m.custo_compra > 0) upd.custo_compra = m.custo_compra;
+        if (!ex.foto_url && m.foto_url) upd.foto_url = m.foto_url;
+        if (Object.keys(upd).length) paraCompletar.push({ id: ex.id, ...upd });
+        else pulados++;
+        continue;
+      }
+      if (m.sku) porSku.set(m.sku, m);
+      if (m.codigo_barras) porBarras.set(m.codigo_barras, m);
       paraInserir.push(m);
     }
     pagina++;
@@ -215,15 +225,24 @@ export async function produtoImportBlingRun() {
   let gravados = 0;
   for (let i = 0; i < paraInserir.length; i += 200) {
     const lote = paraInserir.slice(i, i + 200);
-    if (prog()) prog().textContent = `Gravando ${gravados}/${paraInserir.length}...`;
+    if (prog()) prog().textContent = `Gravando novos ${gravados}/${paraInserir.length}...`;
     const { error } = await sb.from('produtos').insert(lote);
     if (error) { if (prog()) prog().innerHTML = impErro('Erro ao gravar: ' + error.message); return; }
     gravados += lote.length;
   }
 
+  let completados = 0;
+  for (const u of paraCompletar) {
+    if (prog() && completados % 25 === 0) prog().textContent = `Completando campos vazios ${completados}/${paraCompletar.length}...`;
+    const { id, ...campos } = u;
+    const { error } = await sb.from('produtos').update(campos).eq('id', id);
+    if (error) { if (prog()) prog().innerHTML = impErro('Erro ao completar produto: ' + error.message); return; }
+    completados++;
+  }
+
   if (prog()) prog().innerHTML = `
     <div style="color:var(--success);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Importação concluída</div>
-    <div style="font-size:13px;margin-top:6px">Bling: ${totalBling} · Novos importados: ${gravados} · Já existentes (pulados): ${pulados}</div>
+    <div style="font-size:13px;margin-top:6px">Bling: ${totalBling} · Novos: ${gravados} · Completados (custo/foto que faltava): ${completados} · Já completos: ${pulados}</div>
     <button class="btn-primary btn-sm" style="margin-top:10px" onclick="produtoVoltarLista()">Ver produtos</button>`;
 }
 
