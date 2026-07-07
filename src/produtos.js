@@ -10,10 +10,19 @@ const BLING_PRODUTOS_FN = `${SUPABASE_URL}/functions/v1/bling-produtos`;
 const BLING_HDRS = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-async function fetchBlingProdutos(pagina) {
-  const r = await fetch(`${BLING_PRODUTOS_FN}?pagina=${pagina}`, { headers: BLING_HDRS });
+async function fetchBlingProdutos(pagina, filtros = {}) {
+  const qs = new URLSearchParams({ pagina });
+  for (const [k, v] of Object.entries(filtros)) if (v) qs.set(k, v);
+  const r = await fetch(`${BLING_PRODUTOS_FN}?${qs}`, { headers: BLING_HDRS });
   return r.json();
 }
+
+// Lê os filtros escolhidos na tela de importação
+function impFiltros() {
+  const desde = document.getElementById('imp-desde')?.value || '';
+  return desde ? { dataInclusaoInicial: desde } : {};
+}
+function impSoAtivos() { return document.getElementById('imp-ativos')?.checked ?? true; }
 
 // Mapeia um produto do Bling v3 -> colunas de `produtos` (defensivo: os campos
 // variam; se algo nao vier na lista, a previa mostra e a gente ajusta/usa detalhe).
@@ -166,7 +175,14 @@ export function produtoImportarBling() {
       <div class="section-title" style="font-size:19px">Importar do Bling</div>
     </div>
     <div class="card" style="margin-bottom:14px">
-      <p style="font-size:13px;color:var(--muted);margin:0">Traz os produtos do Bling para o catálogo daqui (nome, código/SKU, código de barras, preço e foto). Não duplica: SKU/código de barras que já existem são ignorados.</p>
+      <p style="font-size:13px;color:var(--muted);margin:0">Traz os produtos do Bling para o catálogo daqui (nome, código/SKU, código de barras, preço, custo e foto). Não duplica: SKU/código de barras que já existem são ignorados; os existentes têm custo/foto completados se estiverem vazios.</p>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-top:14px">
+        <div class="form-group" style="margin:0"><label class="form-label">Incluídas no Bling a partir de</label>
+          <input type="date" id="imp-desde" class="form-control" style="max-width:190px"></div>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--plum);padding-bottom:10px;cursor:pointer">
+          <input type="checkbox" id="imp-ativos" checked> Só produtos ativos</label>
+      </div>
+      <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0">Deixe a data vazia pra trazer tudo. Ex.: pra só os últimos 2 anos, escolha a data de 2 anos atrás.</p>
       <button class="btn-primary btn-sm" style="margin-top:12px" onclick="produtoImportBlingPreview()">${IC_BARCODE} Buscar prévia (página 1)</button>
     </div>
     <div id="import-bling-area"></div>`;
@@ -180,11 +196,12 @@ export async function produtoImportBlingPreview() {
   const area = document.getElementById('import-bling-area');
   area.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Buscando no Bling...</div>';
   let resp;
-  try { resp = await fetchBlingProdutos(1); }
+  try { resp = await fetchBlingProdutos(1, impFiltros()); }
   catch (e) { area.innerHTML = impErro('Falha ao chamar a função bling-produtos: ' + e.message); return; }
   console.log('[import-bling] resposta crua da funcao:', resp);
   if (resp?.error) { area.innerHTML = impErro('Bling: ' + resp.error); return; }
-  const arr = resp?.data || resp?.retorno?.produtos || [];
+  let arr = resp?.data || resp?.retorno?.produtos || [];
+  if (impSoAtivos()) arr = arr.filter(p => (p.situacao ?? 'A') === 'A');
   if (!arr.length) {
     area.innerHTML = impErro('A página 1 voltou sem produtos no formato esperado. Segue a resposta crua da função — me manda isto:')
       + `<pre style="font-size:11px;white-space:pre-wrap;word-break:break-all;background:var(--cream);padding:10px;border-radius:8px;max-height:340px;overflow:auto">${esc(JSON.stringify(resp, null, 2))}</pre>`;
@@ -223,19 +240,24 @@ export async function produtoImportBlingRun() {
   const porSku = new Map((existentes || []).filter(p => p.sku).map(p => [p.sku, p]));
   const porBarras = new Map((existentes || []).filter(p => p.codigo_barras).map(p => [p.codigo_barras, p]));
 
-  let pagina = 1, totalBling = 0, pulados = 0;
+  // Filtros capturados UMA vez no início (valem pra rodada inteira)
+  const filtros = impFiltros();
+  const soAtivos = impSoAtivos();
+
+  let pagina = 1, totalBling = 0, pulados = 0, foraDoFiltro = 0;
   const paraInserir = [];
   const paraCompletar = [];   // updates parciais: só campos hoje vazios
   while (pagina <= 200) {
     if (prog()) prog().textContent = `Buscando página ${pagina} no Bling... (${paraInserir.length} novos · ${paraCompletar.length} a completar)`;
     let resp;
-    try { resp = await fetchBlingProdutos(pagina); }
+    try { resp = await fetchBlingProdutos(pagina, filtros); }
     catch (e) { if (prog()) prog().innerHTML = impErro('Erro na página ' + pagina + ': ' + e.message); return; }
     if (resp?.error) { if (prog()) prog().innerHTML = impErro('Bling: ' + resp.error); return; }
     const arr = resp?.data || [];
     if (!arr.length) break;
     totalBling += arr.length;
     for (const p of arr) {
+      if (soAtivos && (p.situacao ?? 'A') !== 'A') { foraDoFiltro++; continue; }
       const m = mapProdutoBling(p);
       const ex = (m.sku && porSku.get(m.sku)) || (m.codigo_barras && porBarras.get(m.codigo_barras));
       if (ex) {
@@ -299,7 +321,7 @@ export async function produtoImportBlingRun() {
 
   if (prog()) prog().innerHTML = `
     <div style="color:var(--success);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Importação concluída</div>
-    <div style="font-size:13px;margin-top:6px">Bling: ${totalBling} · Novos: ${gravados} · Completados (custo/foto que faltava): ${completados} · Já completos: ${pulados}</div>
+    <div style="font-size:13px;margin-top:6px">Bling: ${totalBling} · Novos: ${gravados} · Completados (custo/foto que faltava): ${completados} · Já completos: ${pulados}${foraDoFiltro ? ` · Fora do filtro (inativos): ${foraDoFiltro}` : ''}</div>
     <button class="btn-primary btn-sm" style="margin-top:10px" onclick="produtoVoltarLista()">Ver produtos</button>`;
 }
 

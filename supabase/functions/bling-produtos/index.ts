@@ -62,9 +62,18 @@ Deno.serve(async (req) => {
   const id = url.searchParams.get('id')
   const pagina = url.searchParams.get('pagina') || '1'
 
+  // Filtros opcionais repassados ao Bling (whitelist — datas no formato YYYY-MM-DD)
+  const REPASSA = ['criterio', 'tipo', 'dataInclusaoInicial', 'dataInclusaoFinal',
+                   'dataAlteracaoInicial', 'dataAlteracaoFinal', 'nome', 'idCategoria']
+  const qs = new URLSearchParams({ pagina, limite: '100' })
+  for (const k of REPASSA) {
+    const v = url.searchParams.get(k)
+    if (v) qs.set(k, v)
+  }
+
   const blingUrl = id
     ? `https://www.bling.com.br/Api/v3/produtos/${encodeURIComponent(id)}`
-    : `https://www.bling.com.br/Api/v3/produtos?${new URLSearchParams({ pagina, limite: '100' })}`
+    : `https://www.bling.com.br/Api/v3/produtos?${qs}`
 
   const blingRes = await fetch(blingUrl, { headers: { Authorization: `Bearer ${accessToken}` } })
   if (!blingRes.ok) {
