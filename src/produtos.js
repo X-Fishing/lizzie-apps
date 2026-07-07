@@ -29,6 +29,7 @@ function mapProdutoBling(p) {
     sku: sku || null,
     codigo_barras: gtin || null,
     preco_venda: preco,
+    custo_compra: Number(p.precoCusto ?? p.precos?.precoCusto ?? 0) || 0,
     foto_url: foto,
     formato: 'simples',
   };
