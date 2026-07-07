@@ -44,7 +44,11 @@ const IC_CAM   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path 
 
 let produtosCache = [];
 let filtroProdutos = '';
-let filtroColecao = '';   // id da coleção selecionada no filtro ('' = todas)
+let filtroColecao = '';      // id da coleção selecionada no filtro ('' = todas)
+let filtroCategoria = '';    // id da categoria ('' = todas)
+let filtroFornecedor = '';   // id do fornecedor ('' = todos)
+let paginaAtual = 1;         // paginação client-side da grid
+const POR_PAGINA = 50;
 let formVariacoes = [];   // variações em edição no formulário (client-side)
 
 function panel() { return document.getElementById('panel-produtos'); }
@@ -61,7 +65,7 @@ function nomeColecao(id) {
 export async function loadProdutos() {
   panel().innerHTML = '<div class="loading"><div class="spinner"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div><br>Carregando produtos...</div>';
   const { data, error } = await sbQ(sb.from('produtos')
-    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,estoque_qtd,foto_url,ativo,categoria_id,colecao_id')
+    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,estoque_qtd,foto_url,ativo,categoria_id,colecao_id,fornecedor_id')
     .order('nome', { ascending: true }));
   if (error) { if (await handleSupabaseError(error, 'Erro ao carregar produtos')) return; }
   produtosCache = data || [];
@@ -75,10 +79,19 @@ function renderLista() {
   const f = filtroProdutos.trim().toLowerCase();
   let lista = produtosCache;
   if (filtroColecao) lista = lista.filter(p => String(p.colecao_id) === String(filtroColecao));
+  if (filtroCategoria) lista = lista.filter(p => String(p.categoria_id) === String(filtroCategoria));
+  if (filtroFornecedor) lista = lista.filter(p => String(p.fornecedor_id) === String(filtroFornecedor));
   if (f) lista = lista.filter(p =>
     [p.nome, p.sku, p.codigo_barras, p.codigo_fornecedor, nomeColecao(p.colecao_id)].some(v => (v || '').toLowerCase().includes(f)));
 
-  const linhas = lista.length ? lista.map(p => `
+  // Paginação client-side: máx. POR_PAGINA por página
+  const totalFiltrado = lista.length;
+  const totalPaginas = Math.max(1, Math.ceil(totalFiltrado / POR_PAGINA));
+  if (paginaAtual > totalPaginas) paginaAtual = totalPaginas;
+  if (paginaAtual < 1) paginaAtual = 1;
+  const pagina = lista.slice((paginaAtual - 1) * POR_PAGINA, paginaAtual * POR_PAGINA);
+
+  const linhas = pagina.length ? pagina.map(p => `
     <tr class="ciclo-row">
       <td class="ciclo-td">
         <div style="display:flex;align-items:center;gap:10px">
@@ -94,7 +107,14 @@ function renderLista() {
         <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
       </td>
     </tr>`).join('') :
-    `<tr><td colspan="4"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
+    `<tr><td colspan="4"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
+
+  const pager = totalFiltrado > POR_PAGINA ? `
+    <div style="display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px">
+      <button class="btn-secondary btn-sm" ${paginaAtual <= 1 ? 'disabled style="opacity:.4"' : ''} onclick="produtoPagina(-1)">‹ Anterior</button>
+      <span style="font-size:12px;color:var(--muted)">Página <b>${paginaAtual}</b> de <b>${totalPaginas}</b> · ${totalFiltrado} produto${totalFiltrado !== 1 ? 's' : ''}</span>
+      <button class="btn-secondary btn-sm" ${paginaAtual >= totalPaginas ? 'disabled style="opacity:.4"' : ''} onclick="produtoPagina(1)">Próxima ›</button>
+    </div>` : '';
 
   panel().innerHTML = `
     <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
@@ -106,11 +126,19 @@ function renderLista() {
       </div>
     </div>
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
-      <input type="text" class="form-control" style="flex:1;min-width:200px" placeholder="Buscar por nome, SKU, código ou coleção..."
+      <input type="text" class="form-control" style="flex:1;min-width:200px" placeholder="Buscar por nome, SKU, código, cód. fornecedor ou coleção..."
         value="${esc(filtroProdutos)}" oninput="produtoFiltrar(this.value)">
-      <select class="form-control" style="max-width:220px" onchange="produtoFiltrarColecao(this.value)">
+      <select class="form-control" style="max-width:200px" onchange="produtoFiltrarColecao(this.value)">
         <option value="">Todas as coleções</option>
         ${(cadastroCache.colecoes || []).map(c => `<option value="${c.id}" ${String(c.id) === String(filtroColecao) ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}
+      </select>
+      <select class="form-control" style="max-width:200px" onchange="produtoFiltrarCategoria(this.value)">
+        <option value="">Todas as categorias</option>
+        ${(cadastroCache.categorias || []).map(c => `<option value="${c.id}" ${String(c.id) === String(filtroCategoria) ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}
+      </select>
+      <select class="form-control" style="max-width:200px" onchange="produtoFiltrarFornecedor(this.value)">
+        <option value="">Todos os fornecedores</option>
+        ${(cadastroCache.fornecedores || []).map(c => `<option value="${c.id}" ${String(c.id) === String(filtroFornecedor) ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}
       </select>
     </div>
     <div class="pag-wrap"><table class="pag-table"><thead><tr>
@@ -118,11 +146,15 @@ function renderLista() {
       <th class="pag-th" style="text-align:center">Estoque</th>
       <th class="pag-th">Preço</th>
       <th class="pag-th" style="text-align:right">Ações</th>
-    </tr></thead><tbody>${linhas}</tbody></table></div>`;
+    </tr></thead><tbody>${linhas}</tbody></table></div>
+    ${pager}`;
 }
 
-export function produtoFiltrar(v) { filtroProdutos = v; renderLista(); }
-export function produtoFiltrarColecao(v) { filtroColecao = v; renderLista(); }
+export function produtoFiltrar(v) { filtroProdutos = v; paginaAtual = 1; renderLista(); }
+export function produtoFiltrarColecao(v) { filtroColecao = v; paginaAtual = 1; renderLista(); }
+export function produtoFiltrarCategoria(v) { filtroCategoria = v; paginaAtual = 1; renderLista(); }
+export function produtoFiltrarFornecedor(v) { filtroFornecedor = v; paginaAtual = 1; renderLista(); }
+export function produtoPagina(delta) { paginaAtual += delta; renderLista(); }
 
 // ════════════════════════════════════════════════════════════════════
 // IMPORTAR DO BLING
