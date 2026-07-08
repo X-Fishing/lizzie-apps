@@ -76,11 +76,22 @@ export async function loadProdutos() {
   // fetchPaginado: o PostgREST devolve no máx. 1000 linhas por chamada — sem
   // isso, catálogo acima de 1000 produtos aparece truncado na grid.
   const { data, error } = await fetchPaginado(() => sb.from('produtos')
-    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,estoque_qtd,foto_url,ativo,categoria_id,colecao_id,fornecedor_id')
+    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,estoque_qtd,foto_url,ativo,categoria_id,colecao_id,fornecedor_id,formato')
     .order('nome', { ascending: true }));
   if (error) { if (await handleSupabaseError(error, 'Erro ao carregar produtos')) return; }
   produtosCache = data || [];
   gruposAbertos.clear();
+
+  // Variações (produtos formato 'variacao') aparecem na grid como sub-linhas
+  const { data: vars } = await fetchPaginado(() => sb.from('produto_variacoes')
+    .select('id,produto_id,atributo,valor,sku,codigo_barras,preco_venda,estoque_qtd')
+    .order('created_at'));
+  variacoesPorProduto.clear();
+  for (const v of (vars || [])) {
+    const k = String(v.produto_id);
+    if (!variacoesPorProduto.has(k)) variacoesPorProduto.set(k, []);
+    variacoesPorProduto.get(k).push(v);
+  }
   if (!cadastroCache.colecoes || !cadastroCache.colecoes.length) {
     await carregarCadastrosParaSelect(); // popula categorias/colecoes/fornecedores p/ nome e filtro
   }
@@ -92,6 +103,7 @@ export async function loadProdutos() {
 // o aro vive no nome: "Anel 15 Dois Corações". A grid agrupa por modelo SÓ
 // visualmente — sem schema novo, sem produto_variacoes, bipe/maleta intocados.
 const gruposAbertos = new Set();
+const variacoesPorProduto = new Map();   // produto_id -> [variações] (pra grid)
 
 // "Anel 15 Dois Corações Ródio" -> { base: 'Anel Dois Corações Ródio', tamanho: '15' }
 // Nome fora do padrão -> null (produto avulso, sem grupo)
@@ -108,12 +120,56 @@ function linhaProdutoHTML(p, sub = false) {
         <div style="display:flex;align-items:center;gap:10px">
           <span class="ciclo-emoji">${p.foto_url ? `<img src="${esc(p.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
           <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}</div>
-          <div style="font-size:11px;color:var(--muted)">${p.sku ? 'SKU ' + esc(p.sku) : ''}${p.codigo_barras ? ' · ' + esc(p.codigo_barras) : ''}</div></div>
+          ${p.codigo_barras ? `<div style="font-size:11px;color:var(--muted)">${esc(p.codigo_barras)}</div>` : ''}</div>
         </div>
       </td>
+      <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${p.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(p.preco_venda)}</span></td>
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
+        <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
+        <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
+      </td>
+    </tr>`;
+}
+
+// Sub-linha de uma variação (dentro do produto formato 'variacao')
+function linhaVariacaoHTML(p, v) {
+  return `
+    <tr class="ciclo-row" style="background:rgba(201,116,138,0.045)">
+      <td class="ciclo-td" style="padding-left:34px">
+        <div class="ciclo-desc" style="font-size:13px">${esc(p.nome)} — ${esc(v.atributo)}: <b>${esc(v.valor)}</b></div>
+        ${v.codigo_barras ? `<div style="font-size:11px;color:var(--muted)">${esc(v.codigo_barras)}</div>` : ''}
+      </td>
+      <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${v.sku ? esc(v.sku) : '—'}</td>
+      <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${v.estoque_qtd ?? 0}</span></td>
+      <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(v.preco_venda ?? p.preco_venda)}</span></td>
+      <td class="ciclo-td" style="text-align:right;white-space:nowrap">
+        <button class="btn-icon" title="Editar (abre o produto)" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
+      </td>
+    </tr>`;
+}
+
+// Linha-cabeçalho de um produto com variações (expande/colapsa igual grupo)
+function linhaVarProdHTML(p, vars, aberto) {
+  const estoque = vars.reduce((s, v) => s + (v.estoque_qtd ?? 0), 0);
+  const precos = vars.map(v => Number(v.preco_venda ?? p.preco_venda) || 0);
+  const pMin = Math.min(...precos), pMax = Math.max(...precos);
+  const preco = pMin === pMax ? fmtBRL(pMin) : `${fmtBRL(pMin)} – ${fmtBRL(pMax)}`;
+  return `
+    <tr class="ciclo-row" style="cursor:pointer" onclick="produtoToggleGrupo('${encodeURIComponent('var:' + p.id)}')">
+      <td class="ciclo-td">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="width:14px;color:var(--rose);font-size:12px">${aberto ? '▾' : '▸'}</span>
+          <span class="ciclo-emoji">${p.foto_url ? `<img src="${esc(p.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
+          <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}</div>
+          <div style="font-size:11px;color:var(--muted)">${vars.length} variaç${vars.length !== 1 ? 'ões' : 'ão'}: ${vars.map(v => esc(v.valor)).join(' · ')}</div></div>
+        </div>
+      </td>
+      <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
+      <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
+      <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
+      <td class="ciclo-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
         <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
       </td>
@@ -139,6 +195,7 @@ function linhaGrupoHTML(g, aberto) {
           <div style="font-size:11px;color:var(--muted)">${g.membros.length} tamanhos · aros ${tams.join(' · ')}</div></div>
         </div>
       </td>
+      <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">—</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
       <td class="ciclo-td" style="text-align:right;white-space:nowrap;font-size:11px;color:var(--muted)">${aberto ? 'fechar' : 'ver aros'}</td>
@@ -154,13 +211,21 @@ function tabelaHTML() {
   if (filtroColecao) lista = lista.filter(p => String(p.colecao_id) === String(filtroColecao));
   if (filtroCategoria) lista = lista.filter(p => String(p.categoria_id) === String(filtroCategoria));
   if (filtroFornecedor) lista = lista.filter(p => String(p.fornecedor_id) === String(filtroFornecedor));
-  if (f) lista = lista.filter(p =>
-    [p.nome, p.sku, p.codigo_barras, p.codigo_fornecedor, nomeColecao(p.colecao_id)].some(v => (v || '').toLowerCase().includes(f)));
+  if (f) lista = lista.filter(p => {
+    if ([p.nome, p.sku, p.codigo_barras, p.codigo_fornecedor, nomeColecao(p.colecao_id)]
+      .some(v => (v || '').toLowerCase().includes(f))) return true;
+    // busca também nos SKUs/códigos/valores das variações do produto
+    const vs = variacoesPorProduto.get(String(p.id)) || [];
+    return vs.some(v => [v.sku, v.codigo_barras, v.valor].some(x => (x || '').toLowerCase().includes(f)));
+  });
 
-  // Unidades de exibição: anéis do mesmo modelo colapsam num grupo; resto é avulso
+  // Unidades de exibição: produto com variações e anéis do mesmo modelo
+  // colapsam em linhas expansíveis; resto é avulso
   const porBase = new Map();
   const unidades = [];
   for (const p of lista) {
+    const vars = p.formato === 'variacao' ? (variacoesPorProduto.get(String(p.id)) || []) : [];
+    if (vars.length) { unidades.push({ tipo: 'varprod', p, vars }); continue; }
     const g = grupoAnel(p.nome);
     if (g) {
       let u = porBase.get(g.base);
@@ -183,7 +248,13 @@ function tabelaHTML() {
 
   const linhas = pagina.length ? pagina.map(u => {
     if (u.tipo === 'prod') return linhaProdutoHTML(u.p);
-    // buscando por texto, o grupo abre sozinho (senão o SKU procurado fica escondido)
+    // buscando por texto, grupos/variações abrem sozinhos (senão o SKU procurado fica escondido)
+    if (u.tipo === 'varprod') {
+      const aberto = gruposAbertos.has('var:' + u.p.id) || !!f;
+      let html = linhaVarProdHTML(u.p, u.vars, aberto);
+      if (aberto) html += u.vars.map(v => linhaVariacaoHTML(u.p, v)).join('');
+      return html;
+    }
     const aberto = gruposAbertos.has(u.base) || !!f;
     let html = linhaGrupoHTML(u, aberto);
     if (aberto) html += u.membros
@@ -191,7 +262,7 @@ function tabelaHTML() {
       .map(m => linhaProdutoHTML(m.p, true)).join('');
     return html;
   }).join('') :
-    `<tr><td colspan="4"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
+    `<tr><td colspan="5"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
 
   const pager = totalFiltrado > POR_PAGINA ? `
     <div style="display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px">
@@ -203,6 +274,7 @@ function tabelaHTML() {
   return `
     <div class="pag-wrap"><table class="pag-table"><thead><tr>
       <th class="pag-th">Produto</th>
+      <th class="pag-th">SKU</th>
       <th class="pag-th" style="text-align:center">Estoque</th>
       <th class="pag-th">Preço</th>
       <th class="pag-th" style="text-align:right">Ações</th>
@@ -558,17 +630,18 @@ function renderVariacoes() {
   if (!wrap || document.getElementById('p-formato').value !== 'variacao') return;
   const rows = formVariacoes.map((v, i) => `
     <tr class="ciclo-row">
-      <td class="ciclo-td"><input class="form-control" style="min-width:90px" value="${esc(v.atributo)}" oninput="produtoVarSet(${i},'atributo',this.value)" placeholder="Cor"></td>
-      <td class="ciclo-td"><input class="form-control" style="min-width:90px" value="${esc(v.valor)}" oninput="produtoVarSet(${i},'valor',this.value)" placeholder="Dourado"></td>
+      <td class="ciclo-td"><input class="form-control" style="min-width:90px" value="${esc(v.atributo)}" oninput="produtoVarSet(${i},'atributo',this.value)" placeholder="Tamanho"></td>
+      <td class="ciclo-td"><input class="form-control" style="min-width:80px" value="${esc(v.valor)}" oninput="produtoVarSet(${i},'valor',this.value)" placeholder="15"></td>
+      <td class="ciclo-td"><input class="form-control" style="min-width:90px" value="${esc(v.sku || '')}" oninput="produtoVarSet(${i},'sku',this.value)" placeholder="SKU"></td>
       <td class="ciclo-td"><input class="form-control" style="min-width:90px" value="${esc(v.codigo_barras)}" oninput="produtoVarSet(${i},'codigo_barras',this.value)" placeholder="Cód. barras"></td>
       <td class="ciclo-td" style="text-align:center"><input type="number" class="form-control" style="width:70px" value="${v.estoque_qtd ?? 0}" oninput="produtoVarSet(${i},'estoque_qtd',this.value)"></td>
       <td class="ciclo-td" style="text-align:right"><button class="btn-icon" style="color:var(--danger)" onclick="produtoVarRemover(${i})">${IC_TRASH}</button></td>
     </tr>`).join('');
   wrap.innerHTML = `
     <div class="pag-wrap"><table class="pag-table"><thead><tr>
-      <th class="pag-th">Atributo</th><th class="pag-th">Valor</th><th class="pag-th">Cód. barras</th>
+      <th class="pag-th">Atributo</th><th class="pag-th">Valor</th><th class="pag-th">SKU</th><th class="pag-th">Cód. barras</th>
       <th class="pag-th" style="text-align:center">Estoque</th><th class="pag-th"></th>
-    </tr></thead><tbody>${rows || `<tr><td colspan="5" style="padding:14px;color:var(--muted);font-size:12px">Nenhuma variação. Adicione abaixo.</td></tr>`}</tbody></table></div>
+    </tr></thead><tbody>${rows || `<tr><td colspan="6" style="padding:14px;color:var(--muted);font-size:12px">Nenhuma variação. Adicione abaixo.</td></tr>`}</tbody></table></div>
     <button class="btn-secondary btn-sm" style="margin-top:10px" onclick="produtoVarAdicionar()">${IC_PLUS} Adicionar variação</button>`;
 }
 
