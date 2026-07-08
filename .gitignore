@@ -9,6 +9,14 @@ dev-dist/
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials.json
+token.json
+service-account*.json
 
 # Sistema operacional
 .DS_Store
