@@ -645,7 +645,13 @@ function renderVariacoes() {
     <button class="btn-secondary btn-sm" style="margin-top:10px" onclick="produtoVarAdicionar()">${IC_PLUS} Adicionar variação</button>`;
 }
 
-export function produtoVarAdicionar() { formVariacoes.push({ atributo: '', valor: '', sku: '', codigo_barras: '', preco_venda: null, estoque_qtd: 0 }); renderVariacoes(); }
+export function produtoVarAdicionar() {
+  // Atributo já vem preenchido (herda o da linha anterior; padrão "Tamanho") —
+  // placeholder cinza parecia preenchido e a linha era descartada no salvar.
+  const anterior = formVariacoes[formVariacoes.length - 1];
+  formVariacoes.push({ atributo: (anterior?.atributo || '').trim() || 'Tamanho', valor: '', sku: '', codigo_barras: '', preco_venda: null, estoque_qtd: 0 });
+  renderVariacoes();
+}
 export function produtoVarRemover(i) { formVariacoes.splice(i, 1); renderVariacoes(); }
 export function produtoVarSet(i, campo, val) {
   if (!formVariacoes[i]) return;
@@ -729,13 +735,30 @@ export async function produtoSalvar(id) {
 
   // variações: substitui (apaga as antigas e regrava) só se formato = variacao
   if (produtoId) {
-    await sb.from('produto_variacoes').delete().eq('produto_id', produtoId);
     if (formato === 'variacao') {
       const vlist = formVariacoes.filter(v => (v.atributo || '').trim() && (v.valor || '').trim())
         .map(v => ({ produto_id: produtoId, atributo: v.atributo.trim(), valor: v.valor.trim(),
-          sku: v.sku || null, codigo_barras: v.codigo_barras || null,
+          sku: (v.sku || '').trim() || null, codigo_barras: (v.codigo_barras || '').trim() || null,
           preco_venda: v.preco_venda ?? null, estoque_qtd: v.estoque_qtd || 0 }));
-      if (vlist.length) await sb.from('produto_variacoes').insert(vlist);
+      const incompletas = formVariacoes.length - vlist.length;
+      // Trava anti-perda: linha digitada mas incompleta NÃO é descartada em silêncio
+      if (incompletas > 0) {
+        if (btn) { btn.disabled = false; btn.textContent = id ? 'Salvar alterações' : 'Salvar produto'; }
+        toast(`${incompletas} variação(ões) sem Atributo ou Valor — preencha (ou remova a linha) antes de salvar`);
+        return;
+      }
+      await sb.from('produto_variacoes').delete().eq('produto_id', produtoId);
+      if (vlist.length) {
+        const { error: vErr } = await sb.from('produto_variacoes').insert(vlist);
+        if (vErr) {
+          toast('Produto salvo, mas ERRO ao gravar variações: ' + (vErr.message || 'tente de novo'));
+          loadProdutos();
+          return;
+        }
+      }
+    } else {
+      // virou "simples": limpa variações antigas
+      await sb.from('produto_variacoes').delete().eq('produto_id', produtoId);
     }
   }
 
