@@ -93,17 +93,21 @@ export function cicloRowHtml(c, isAdmin, historico = false) {
   const cat = c.categoria || detectarCategoria(c.descricao);
   const vendida = c.quantidade_vendida || 0;
   let acao, extraClass = '', extraStyle = '';
+  // Venda reconhecida só na conferência física do fechamento: badge âmbar distinto.
+  const badgeDiv = '<span style="font-size:11px;color:var(--warning);font-weight:600" title="Não voltou na maleta e não havia sido lançada como vendida">Vendido (divergência)</span>';
   if (historico) {
     // Status por VENDA real (não por estoque). Peça vendida fica em destaque (sem fade).
     if (vendida > 0) {
-      acao = `<span style="font-size:11px;color:var(--success);font-weight:600">Vendido${vendida>1?` (${vendida})`:''}</span>`;
+      acao = c.vendido_por_divergencia ? badgeDiv
+        : `<span style="font-size:11px;color:var(--success);font-weight:600">Vendido${vendida>1?` (${vendida})`:''}</span>`;
     } else {
       acao = `<span style="font-size:11px;color:var(--muted)">Não vendido</span>`;
       extraStyle = ' style="opacity:.55"'; // esmaece só a NÃO vendida
     }
   } else {
+    const statusVendido = c.vendido_por_divergencia ? badgeDiv : 'Vendido';
     acao = isAdmin
-      ? `<span style="font-size:11px;color:var(--muted)">${c.status === 'encerrado' ? 'Encerrado' : (esgotado ? 'Vendido' : '—')}</span>`
+      ? `<span style="font-size:11px;color:var(--muted)">${c.status === 'encerrado' ? 'Encerrado' : (esgotado ? statusVendido : '—')}</span>`
       : (!esgotado ? `<button class="btn-vender" onclick="openVenda('${c.id}')">Vender</button>` : '<span style="font-size:11px;color:var(--muted)">Vendido</span>');
     extraClass = esgotado ? ' esgotado' : '';
   }
@@ -154,7 +158,7 @@ export function renderCicloRevendedora() {
   const cabecalho = pedidoLabelHtml(ativos, 12);
 
   const termo = (document.getElementById('c-search')?.value || '').toLowerCase().trim();
-  if (termo || state.cicloSoVendidos) {
+  if (termo || state.cicloSoVendidos || state.cicloSoNaoVendidos) {
     let lista = ativos;
     if (termo) {
       lista = lista.filter(c =>
@@ -163,10 +167,13 @@ export function renderCicloRevendedora() {
       );
     }
     if (state.cicloSoVendidos) lista = lista.filter(foiVendida);
+    if (state.cicloSoNaoVendidos) lista = lista.filter(c => !foiVendida(c));
     if (!lista.length) {
       const msgVazio = state.cicloSoVendidos
         ? (termo ? `Nenhuma peça vendida encontrada com "${termo}"` : 'Nenhuma peça vendida neste catálogo')
-        : `Nenhuma peça encontrada com "${termo}"`;
+        : state.cicloSoNaoVendidos
+          ? (termo ? `Nenhuma peça não vendida encontrada com "${termo}"` : 'Nenhuma peça não vendida neste catálogo')
+          : `Nenhuma peça encontrada com "${termo}"`;
       return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>${msgVazio}</p></div>` + historico;
     }
     return cabecalho + cicloTableHtml(lista, false) + btnDivulgar + btnFechamento + historico;
@@ -203,9 +210,34 @@ export function pedidoLabelHtml(list, fontSize) {
 
 export const foiVendida = c => (c.quantidade_vendida || 0) > 0;
 
+// Os dois filtros são mutuamente exclusivos (marcar um desmarca o outro).
 export function toggleCicloSoVendidos(el) {
   state.cicloSoVendidos = !!el.checked;
+  if (el.checked) {
+    state.cicloSoNaoVendidos = false;
+    const o = document.getElementById('c-so-nao-vendidos');
+    if (o) o.checked = false;
+  }
   renderCicloGrid();
+}
+
+export function toggleCicloSoNaoVendidos(el) {
+  state.cicloSoNaoVendidos = !!el.checked;
+  if (el.checked) {
+    state.cicloSoVendidos = false;
+    const o = document.getElementById('c-so-vendidos');
+    if (o) o.checked = false;
+  }
+  renderCicloGrid();
+}
+
+function limparFiltrosVendidos() {
+  state.cicloSoVendidos = false;
+  state.cicloSoNaoVendidos = false;
+  const cv = document.getElementById('c-so-vendidos');
+  if (cv) cv.checked = false;
+  const cnv = document.getElementById('c-so-nao-vendidos');
+  if (cnv) cnv.checked = false;
 }
 
 export const soAtivos     = list => list.filter(c => c.status === 'ativo');
@@ -282,9 +314,7 @@ export function abrirHistoricoCiclo(chave) {
   state.historicoCicloSel = chave;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
-  state.cicloSoVendidos = false;
-  const cv = document.getElementById('c-so-vendidos');
-  if (cv) cv.checked = false;
+  limparFiltrosVendidos();
   renderCicloGrid();
 }
 
@@ -352,15 +382,19 @@ export function renderCicloAdminDetalhe(revId, list) {
   const nome = state.revNameMap[revId] || 'Revendedora desconhecida';
   const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
 
-  const btnMaleta = ehGestor()
-    ? `<button class="btn-secondary btn-sm" style="border-color:var(--rose);color:var(--rose)" data-bling-id="${state.revBlingMap[revId] || ''}" data-rev-nome="${esc(nome)}" onclick="atualizarMaleta('${revId}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Atualizar itens da maleta</button>
-       <button class="btn-secondary btn-sm" onclick="abrirDivulgarMaleta('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link da maleta</button>`
+  // Ações em evidência no topo do card (perto do "Vendido R$ ..."):
+  // Link da maleta + Finalizar Mostruário. O rodapé fica só com
+  // "Atualizar itens da maleta" e "Excluir maleta aguardando".
+  const acoesTopo = ehGestor()
+    ? `<div class="btn-group" style="margin-bottom:14px">
+        <button class="btn btn-outline" onclick="abrirDivulgarMaleta('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link da maleta</button>
+        ${temAtivos ? `<button class="btn btn-primary" onclick="abrirConferencia('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar Mostruário</button>` : ''}
+      </div>`
     : '';
   const acoes = ehGestor()
-    ? `<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
-        ${btnMaleta}
-        ${temAtivos ? `<button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="finalizarCicloRev('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar catálogo</button>
-        <button class="btn-danger btn-sm" onclick="deletarCicloRev('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Excluir maleta aguardando</button>` : ''}
+    ? `<div class="btn-group" style="margin-top:12px">
+        <button class="btn btn-outline" data-bling-id="${state.revBlingMap[revId] || ''}" data-rev-nome="${esc(nome)}" onclick="atualizarMaleta('${revId}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Atualizar itens da maleta</button>
+        ${temAtivos ? `<button class="btn btn-danger" onclick="deletarCicloRev('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Excluir maleta aguardando</button>` : ''}
       </div>`
     : (temAtivos ? '' : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem catálogo ativo</div>`);
 
@@ -373,10 +407,13 @@ export function renderCicloAdminDetalhe(revId, list) {
     );
   }
   if (state.cicloSoVendidos) listaTabela = listaTabela.filter(foiVendida);
+  if (state.cicloSoNaoVendidos) listaTabela = listaTabela.filter(c => !foiVendida(c));
   const msgVazio = state.cicloSoVendidos
     ? (termo ? `Nenhuma peça vendida encontrada com "${termo}"` : 'Nenhuma peça vendida neste catálogo')
-    : `Nenhuma peça encontrada com "${termo}"`;
-  const tabelaHtml = (!listaTabela.length && (termo || state.cicloSoVendidos))
+    : state.cicloSoNaoVendidos
+      ? (termo ? `Nenhuma peça não vendida encontrada com "${termo}"` : 'Nenhuma peça não vendida neste catálogo')
+      : `Nenhuma peça encontrada com "${termo}"`;
+  const tabelaHtml = (!listaTabela.length && (termo || state.cicloSoVendidos || state.cicloSoNaoVendidos))
     ? `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>${msgVazio}</p></div>`
     : cicloTableHtml(listaTabela, true);
 
@@ -393,6 +430,7 @@ export function renderCicloAdminDetalhe(revId, list) {
           <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--rose)">${fmtBRL(totalRecv)}</div>
         </div>
       </div>
+      ${acoesTopo}
       ${tabelaHtml}
       ${acoes}
     </div>
@@ -404,9 +442,7 @@ export function abrirCicloRev(revId) {
   state.historicoCicloSel = null;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
-  state.cicloSoVendidos = false;
-  const cv = document.getElementById('c-so-vendidos');
-  if (cv) cv.checked = false;
+  limparFiltrosVendidos();
   renderCicloGrid();
 }
 
@@ -415,9 +451,7 @@ export function voltarCardsCiclo() {
   state.historicoCicloSel = null;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
-  state.cicloSoVendidos = false;
-  const cv = document.getElementById('c-so-vendidos');
-  if (cv) cv.checked = false;
+  limparFiltrosVendidos();
   renderCicloGrid();
 }
 
@@ -494,11 +528,52 @@ export function renderBuscaPeca() {
   }).join('');
 }
 
+// Núcleo do encerramento (sem confirmação — os chamadores confirmam antes).
+// Retorna true se encerrou; false se falhou (erro já surfado).
+async function encerrarMostruarioCore(revId, msgFinal) {
+  const nome = state.revNameMap[revId] || 'esta revendedora';
+  // Descobre a maleta ATIVA e a AGUARDANDO (a troca) desta revendedora.
+  const { data: maletas } = await sbQ(sb.from('maletas')
+    .select('id,status').eq('revendedora_id', revId).in('status', ['ativa', 'aguardando']));
+  const maletaAtiva = (maletas || []).find(m => m.status === 'ativa');
+  const maletaAguardando = (maletas || []).find(m => m.status === 'aguardando');
+
+  let error;
+  try {
+    // 1) encerra as peças (escopo: maleta ativa, ou legado por revendedora)
+    let q = sb.from('consignados')
+      .update({ status: 'encerrado', encerrado_em: new Date().toISOString() })
+      .eq('revendedora_id', revId).eq('status', 'ativo');
+    if (maletaAtiva) q = q.eq('maleta_id', maletaAtiva.id);
+    ({ error } = await q);
+    // 2) maleta ativa -> finalizada
+    if (!error && maletaAtiva) {
+      ({ error } = await sb.from('maletas')
+        .update({ status: 'finalizada', finalizada_at: new Date().toISOString() })
+        .eq('id', maletaAtiva.id));
+    }
+    // 3) aguardando -> ativa (só após a anterior sair de 'ativa', respeitando o índice único)
+    if (!error && maletaAguardando) {
+      ({ error } = await sb.from('maletas').update({ status: 'ativa' }).eq('id', maletaAguardando.id));
+    }
+  } catch (e) { error = e; }
+  if (await handleSupabaseError(error, 'Erro ao finalizar mostruário')) return false;
+  // Marca a troca desta revendedora como resolvida (some da tela de Trocas ate a
+  // proxima maleta). Best-effort: nao bloqueia o fechamento se a coluna nao existir.
+  try {
+    const { error: trErr } = await sb.from('profiles').update({ troca_resolvida_em: new Date().toISOString() }).eq('id', revId);
+    if (trErr) console.warn('[trocas] nao marcou troca_resolvida_em (rodou o SQL da coluna?):', trErr.message);
+  } catch (e) { console.warn('[trocas] erro ao marcar troca_resolvida_em:', e.message); }
+  state.aprovadasCache = []; // forca a tela de Trocas a reler os profiles atualizados
+  toast(msgFinal || `Mostruário de ${nome} encerrado`);
+  loadConsignados();
+  return true;
+}
+
 export async function finalizarCicloRev(revId) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
   const nome = state.revNameMap[revId] || 'esta revendedora';
 
-  // Descobre a maleta ATIVA e a AGUARDANDO (a troca) desta revendedora.
   const { data: maletas } = await sbQ(sb.from('maletas')
     .select('id,status').eq('revendedora_id', revId).in('status', ['ativa', 'aguardando']));
   const maletaAtiva = (maletas || []).find(m => m.status === 'ativa');
@@ -507,42 +582,235 @@ export async function finalizarCicloRev(revId) {
   // Peças a encerrar: só as da maleta ativa (fallback legado = todas as ativas da revendedora).
   const ativos = state.allConsignados.filter(c => c.revendedora_id === revId && c.status === 'ativo'
     && (!maletaAtiva || c.maleta_id === maletaAtiva.id));
-  if (!ativos.length) { toast('Nenhum catálogo ativo para finalizar'); return; }
+  if (!ativos.length) { toast('Nenhum mostruário ativo para finalizar'); return; }
 
   const aviso = maletaAguardando
     ? `\n\nA maleta em "aguardando" passará a ser a ativa (a troca).`
     : '';
-  confirmarAcao('Finalizar catálogo', `Finalizar catálogo de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} passarão para "encerrado".${aviso}\n\nEssa ação não pode ser desfeita.`, 'Finalizar', async () => {
-    let error;
-    try {
-      // 1) encerra as peças (escopo: maleta ativa, ou legado por revendedora)
-      let q = sb.from('consignados')
-        .update({ status: 'encerrado', encerrado_em: new Date().toISOString() })
-        .eq('revendedora_id', revId).eq('status', 'ativo');
-      if (maletaAtiva) q = q.eq('maleta_id', maletaAtiva.id);
-      ({ error } = await q);
-      // 2) maleta ativa -> finalizada
-      if (!error && maletaAtiva) {
-        ({ error } = await sb.from('maletas')
-          .update({ status: 'finalizada', finalizada_at: new Date().toISOString() })
-          .eq('id', maletaAtiva.id));
-      }
-      // 3) aguardando -> ativa (só após a anterior sair de 'ativa', respeitando o índice único)
-      if (!error && maletaAguardando) {
-        ({ error } = await sb.from('maletas').update({ status: 'ativa' }).eq('id', maletaAguardando.id));
-      }
-    } catch (e) { error = e; }
-    if (await handleSupabaseError(error, 'Erro ao finalizar catálogo')) return;
-    // Marca a troca desta revendedora como resolvida (some da tela de Trocas ate a
-    // proxima maleta). Best-effort: nao bloqueia o fechamento se a coluna nao existir.
-    try {
-      const { error: trErr } = await sb.from('profiles').update({ troca_resolvida_em: new Date().toISOString() }).eq('id', revId);
-      if (trErr) console.warn('[trocas] nao marcou troca_resolvida_em (rodou o SQL da coluna?):', trErr.message);
-    } catch (e) { console.warn('[trocas] erro ao marcar troca_resolvida_em:', e.message); }
-    state.aprovadasCache = []; // forca a tela de Trocas a reler os profiles atualizados
-    toast(`Catálogo de ${nome} encerrado`);
-    loadConsignados();
-  });
+  confirmarAcao('Finalizar Mostruário', `Finalizar mostruário de ${nome}?\n\n${ativos.length} peça${ativos.length>1?'s':''} passarão para "encerrado".${aviso}\n\nEssa ação não pode ser desfeita.`, 'Finalizar',
+    () => encerrarMostruarioCore(revId));
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CONFERÊNCIA DE FECHAMENTO (admin) — modal aberto pelo "Finalizar
+// Mostruário". O admin marca peça por peça que voltou fisicamente na
+// maleta (persistido em consignados.devolvido, sobrevive a reload).
+// O que sobra (devolvido=false) deve bater com o que foi lançado vendido.
+// ═══════════════════════════════════════════════════════════════════
+let confRevId = null;
+let confMaletaAtivaId = null;
+
+// Peças em conferência: ativas da revendedora, no escopo da maleta ativa
+// (mesmo escopo do finalizarCicloRev; fallback legado = todas as ativas).
+function pecasConferencia() {
+  return state.allConsignados.filter(c => c.revendedora_id === confRevId && c.status === 'ativo'
+    && (!confMaletaAtivaId || c.maleta_id === confMaletaAtivaId));
+}
+
+export async function abrirConferencia(revId) {
+  if (!ehGestor()) { toast('Sem permissão'); return; }
+  confRevId = revId;
+  const { data: maleta, error } = await sbQ(sb.from('maletas')
+    .select('id').eq('revendedora_id', revId).eq('status', 'ativa').maybeSingle());
+  if (error) { console.error('Erro ao buscar maleta ativa:', error); }
+  confMaletaAtivaId = maleta?.id || null;
+  if (!pecasConferencia().length) { toast('Nenhum mostruário ativo para conferir'); return; }
+  const nome = state.revNameMap[revId] || 'Revendedora';
+  document.getElementById('conf-title').innerHTML =
+    `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Conferência de fechamento — ${esc(nome)}`;
+  document.getElementById('conf-search').value = '';
+  document.getElementById('conf-ver-devolvidos').checked = false;
+  document.getElementById('conf-resultado').innerHTML = '';
+  renderConferencia();
+  openModal('modal-conferencia');
+}
+
+export function renderConferencia() {
+  const base = pecasConferencia();
+  const restantes  = base.filter(c => !c.devolvido);
+  const devolvidos = base.filter(c => c.devolvido);
+  const vendidos   = base.filter(foiVendida);
+
+  document.getElementById('conf-contadores').innerHTML =
+    `Restantes: <b style="color:var(--plum)">${restantes.length}</b> · ` +
+    `Devolvidos: <b style="color:var(--success)">${devolvidos.length}</b> · ` +
+    `Vendidos (lançados): <b style="color:var(--rose)">${vendidos.length}</b>`;
+
+  // Peças iguais (mesmo código/descrição) são LINHAS físicas distintas:
+  // numera "1 de 2", "2 de 2" para o admin distinguir qual voltou.
+  const chaveDup = c => ((c.referencia || '') + '|' + (c.descricao || '')).toLowerCase();
+  const contagem = {}, posicao = {}, seq = {};
+  base.forEach(c => { contagem[chaveDup(c)] = (contagem[chaveDup(c)] || 0) + 1; });
+  base.forEach(c => { const k = chaveDup(c); seq[k] = (seq[k] || 0) + 1; posicao[c.id] = seq[k]; });
+
+  const verDevolvidos = document.getElementById('conf-ver-devolvidos').checked;
+  const termo = (document.getElementById('conf-search').value || '').toLowerCase().trim();
+  let lista = verDevolvidos ? devolvidos : restantes;
+  if (termo) {
+    lista = lista.filter(c =>
+      (c.descricao || '').toLowerCase().includes(termo) ||
+      (c.referencia || '').toLowerCase().includes(termo));
+  }
+
+  const div = document.getElementById('conf-list');
+  if (!lista.length) {
+    div.innerHTML = `<div class="empty-state" style="padding:20px 0"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></div><p>${verDevolvidos ? 'Nenhuma peça devolvida ainda' : (termo ? `Nada encontrado com "${termo}"` : 'Todas as peças foram conferidas!')}</p></div>`;
+    return;
+  }
+  div.innerHTML = lista.map(c => `
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line,#eee)">
+      <div style="flex:1;min-width:0">
+        <div class="ciclo-desc" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.descricao)}</div>
+        <div style="font-size:11px;color:var(--muted)">${c.referencia ? esc(c.referencia) + ' · ' : ''}${foiVendida(c) ? '<span style="color:var(--rose);font-weight:600">vendido</span>' : 'não vendido'}${contagem[chaveDup(c)] > 1 ? ` · <b style="color:var(--plum)">${posicao[c.id]} de ${contagem[chaveDup(c)]}</b>` : ''}</div>
+      </div>
+      ${verDevolvidos
+        ? `<button class="btn-secondary btn-sm" onclick="confMarcarDevolvido('${c.id}', false)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Restaurar</button>`
+        : `<button class="btn-secondary btn-sm" style="border-color:var(--success);color:var(--success)" title="Voltou na maleta" onclick="confMarcarDevolvido('${c.id}', true)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Voltou</button>`}
+    </div>`).join('');
+}
+
+// Persistência da conferência (sobrevive a fechar o modal / recarregar).
+export async function confMarcarDevolvido(id, devolvido) {
+  const { error } = await sbQ(sb.from('consignados').update({ devolvido }).eq('id', id));
+  if (error) {
+    console.error('Erro ao salvar conferência:', error);
+    if (/devolvido|column|schema cache/i.test(error.message || '')) {
+      toast('Coluna "devolvido" não existe — rode a migração 0002 no Supabase.');
+      return;
+    }
+    if (await handleSupabaseError(error, `Erro ao salvar: ${error.message}`)) return;
+  }
+  const c = state.allConsignados.find(x => String(x.id) === String(id));
+  if (c) c.devolvido = devolvido;
+  document.getElementById('conf-resultado').innerHTML = ''; // resultado antigo fica obsoleto
+  renderConferencia();
+}
+
+// A = restantes (devolvido=false) · B = vendidos (lançados pela revendedora).
+function divergenciasConferencia() {
+  const base = pecasConferencia();
+  return {
+    naoLancadas: base.filter(c => !c.devolvido && !foiVendida(c)), // em A e não em B
+    voltouVendida: base.filter(c => c.devolvido && foiVendida(c)), // em B e não em A
+  };
+}
+
+export function conferirFechamento() {
+  const { naoLancadas, voltouVendida } = divergenciasConferencia();
+  const div = document.getElementById('conf-resultado');
+  if (!naoLancadas.length && !voltouVendida.length) {
+    div.innerHTML = `<div style="margin-top:12px;padding:12px 14px;border-radius:10px;background:rgba(91,110,92,0.1);color:var(--success);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Fechamento do mostruário conferido com sucesso!</div>`;
+    toast('Fechamento do mostruário conferido com sucesso!');
+    return;
+  }
+  const itemHtml = c => `<li style="margin:3px 0">${esc(c.descricao)}${c.referencia ? ` <span style="color:var(--muted);font-family:monospace">(${esc(c.referencia)})</span>` : ''}</li>`;
+  div.innerHTML = `<div style="margin-top:12px;padding:12px 14px;border-radius:10px;background:rgba(192,57,43,0.08);color:var(--danger);font-size:13px">
+    <div style="font-weight:600;margin-bottom:6px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> Divergências encontradas</div>
+    ${naoLancadas.length ? `<div style="font-weight:600;margin-top:6px">Não voltou na maleta e não foi lançado como vendido (${naoLancadas.length}):</div>
+      <ul style="margin:4px 0 0 18px;padding:0">${naoLancadas.map(itemHtml).join('')}</ul>
+      <div style="font-size:11.5px;color:var(--muted)">Possível peça extraviada ou venda não lançada.</div>` : ''}
+    ${voltouVendida.length ? `<div style="font-weight:600;margin-top:8px">Marcado como vendido, porém voltou na maleta (${voltouVendida.length}):</div>
+      <ul style="margin:4px 0 0 18px;padding:0">${voltouVendida.map(itemHtml).join('')}</ul>` : ''}
+  </div>`;
+}
+
+export function finalizarAposConferencia() {
+  const { naoLancadas, voltouVendida } = divergenciasConferencia();
+  const total = naoLancadas.length + voltouVendida.length;
+  const nome = state.revNameMap[confRevId] || 'esta revendedora';
+  if (!total) {
+    confirmarAcao('Finalizar Mostruário',
+      `Conferência sem divergências. Finalizar o mostruário de ${nome}?\n\nPeças devolvidas voltam ao estoque e as demais ficam como vendidas. Essa ação não pode ser desfeita.`,
+      'Finalizar e reconciliar', () => executarFechamentoReconciliado());
+    return;
+  }
+  conferirFechamento(); // mostra a listagem antes de decidir
+  confirmarAcao('⚠ Divergências na conferência',
+    `Há ${total} divergência${total > 1 ? 's' : ''}. Ao finalizar, a conferência física será aplicada: peças que voltaram retornam ao estoque (mesmo lançadas como vendidas) e peças que não voltaram serão marcadas como vendidas (as não lançadas ficarão como "Vendido por Divergência"). Tudo será registrado. Deseja finalizar?`,
+    'Finalizar e reconciliar', () => executarFechamentoReconciliado());
+}
+
+// ── Reconciliação: a conferência física é o veredito final ─────────
+// Tudo por LINHA (consignados.id) — nunca agregando por SKU. Robusta a
+// peças iguais: cada linha física tem seu próprio devolvido/vendido.
+async function executarFechamentoReconciliado() {
+  const revId = confRevId;
+  const nome = state.revNameMap[revId] || 'Revendedora';
+  const base = pecasConferencia();
+  if (!base.length) { toast('Nenhum mostruário ativo para finalizar'); return; }
+
+  const devolvidas   = base.filter(c => c.devolvido);
+  const naoVoltaram  = base.filter(c => !c.devolvido);
+  const divVendida   = naoVoltaram.filter(c => !foiVendida(c)); // não voltou e não lançada -> Vendido por Divergência
+  const divDevolvida = devolvidas.filter(foiVendida);           // voltou mas estava lançada vendida -> reverte a venda
+  const totalDiv = divVendida.length + divDevolvida.length;
+
+  // Agrupa por quantidade_enviada para setar quantidade_devolvida/vendida = enviada
+  // em lote (normalmente qtd 1 por linha — cada bipe do lançador é 1 peça física).
+  const grupos = lista => {
+    const m = new Map();
+    lista.forEach(c => {
+      const q = c.quantidade_enviada || 1;
+      if (!m.has(q)) m.set(q, []);
+      m.get(q).push(c.id);
+    });
+    return [...m.entries()];
+  };
+
+  // 1) Veredito físico. Sequencial: no primeiro erro, aborta e avisa
+  //    (reabra a conferência e finalize de novo — updates são idempotentes).
+  for (const [qtd, ids] of grupos(devolvidas)) {
+    const { error } = await sbQ(sb.from('consignados')
+      .update({ quantidade_vendida: 0, quantidade_devolvida: qtd, vendido_por_divergencia: false })
+      .in('id', ids));
+    if (error) { console.error('Reconciliação (devolvidas):', error); toast(`Erro ao aplicar devoluções: ${error.message}. Nada foi finalizado — tente de novo.`); return; }
+  }
+  for (const [qtd, ids] of grupos(divVendida)) {
+    const { error } = await sbQ(sb.from('consignados')
+      .update({ quantidade_vendida: qtd, quantidade_devolvida: 0, vendido_por_divergencia: true })
+      .in('id', ids));
+    if (error) { console.error('Reconciliação (vendas por divergência):', error); toast(`Erro ao marcar vendas: ${error.message}. Nada foi finalizado — tente de novo.`); return; }
+  }
+  // (não voltou e JÁ estava vendida: nada a mudar)
+
+  // 2) Auditoria (cabeçalho + itens divergentes)
+  const peds = pedidosDoCatalogo(base);
+  const { data: fech, error: eFech } = await sbQ(sb.from('fechamentos_mostruario').insert({
+    pedido_numero: peds.join(', ') || null,
+    revendedora_id: revId,
+    revendedora_nome: nome,
+    total_pecas: base.length,
+    total_vendidas: naoVoltaram.length,
+    total_devolvidas: devolvidas.length,
+    total_divergencias: totalDiv,
+    finalizado_com_divergencia: totalDiv > 0,
+    admin_user_id: state.currentUser.id,
+  }).select('id').single());
+  if (eFech) {
+    console.error('Auditoria do fechamento:', eFech);
+    const dica = /fechamentos_mostruario|relation|schema cache/i.test(eFech.message || '')
+      ? ' Rode a migração 0003 no Supabase.' : '';
+    toast(`Erro ao registrar o fechamento: ${eFech.message}.${dica} O mostruário NÃO foi encerrado.`);
+    return;
+  }
+  const divRows = [
+    ...divVendida.map(c => ({ tipo: 'vendido_por_divergencia', c })),
+    ...divDevolvida.map(c => ({ tipo: 'devolvido_estava_vendido', c })),
+  ].map(({ tipo, c }) => ({
+    fechamento_id: fech.id, consignado_id: c.id,
+    descricao: c.descricao || null, codigo: c.referencia || null, tipo,
+  }));
+  if (divRows.length) {
+    const { error: eDiv } = await sbQ(sb.from('fechamentos_divergencias').insert(divRows));
+    if (eDiv) { console.error('Auditoria (itens divergentes):', eDiv); toast(`Erro ao registrar divergências: ${eDiv.message}. O mostruário NÃO foi encerrado.`); return; }
+  }
+
+  // 3) Encerramento (fluxo existente: encerra peças, troca de maleta etc.)
+  closeModal('modal-conferencia');
+  const msg = totalDiv > 0
+    ? `Mostruário finalizado. ${divVendida.length} peça${divVendida.length !== 1 ? 's' : ''} marcada${divVendida.length !== 1 ? 's' : ''} como Vendido por Divergência (registrado).`
+    : 'Fechamento do mostruário conferido com sucesso!';
+  await encerrarMostruarioCore(revId, msg);
 }
 
 // Ação destrutiva: exclui SOMENTE a maleta AGUARDANDO (a próxima já montada).
@@ -899,4 +1167,101 @@ export function gerarPdfFechamento() {
 
 export function fecharPrint() {
   document.getElementById('print-overlay').classList.remove('show');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PDF da grid do mostruário (jsPDF + autotable, import dinâmico para
+// não pesar o bundle inicial). Exporta o que está filtrado na tela.
+// ═══════════════════════════════════════════════════════════════════
+function sanitizeArquivo(s) {
+  return String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+export async function baixarPdfMostruario() {
+  try {
+    const isAdmin = ehStaff();
+    let nomeRev, ativos;
+    if (isAdmin) {
+      if (!state.cicloRevSelecionada) { toast('Abra o mostruário de uma revendedora primeiro'); return; }
+      nomeRev = state.revNameMap[state.cicloRevSelecionada] || 'Revendedora';
+      ativos = soAtivos(state.allConsignados).filter(c => c.revendedora_id === state.cicloRevSelecionada);
+    } else {
+      nomeRev = state.currentProfile.nome;
+      ativos = soAtivos(state.allConsignados);
+      if (state.maletaAtivaId) ativos = ativos.filter(c => c.maleta_id === state.maletaAtivaId);
+    }
+    if (!ativos.length) { toast('Nenhum mostruário ativo para exportar'); return; }
+
+    // Mesmo filtro/busca aplicado na tela no momento.
+    const termo = (document.getElementById('c-search')?.value || '').toLowerCase().trim();
+    let lista = ativos;
+    if (termo) {
+      lista = lista.filter(c =>
+        (c.descricao || '').toLowerCase().includes(termo) ||
+        (c.referencia || '').toLowerCase().includes(termo));
+    }
+    if (state.cicloSoVendidos) lista = lista.filter(foiVendida);
+    if (state.cicloSoNaoVendidos) lista = lista.filter(c => !foiVendida(c));
+    lista = cicloSortRows(lista);
+    if (!lista.length) { toast('Nenhuma peça para exportar com o filtro atual'); return; }
+
+    const [{ jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'), import('jspdf-autotable')
+    ]);
+
+    const totalEnv  = ativos.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
+    const totalVend = ativos.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+    const totalRecv = ativos.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
+    const totalDiverg = ativos.filter(c => c.vendido_por_divergencia && (c.quantidade_vendida || 0) > 0).length;
+    const peds = pedidosDoCatalogo(ativos);
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    const filtroLabel = state.cicloSoVendidos ? ' · filtro: apenas vendidos'
+      : state.cicloSoNaoVendidos ? ' · filtro: apenas não vendidos'
+      : termo ? ` · busca: "${termo}"` : '';
+
+    const doc = new jsPDF();
+    // Cabeçalho
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(212, 168, 75); // --gold
+    doc.text('L I Z Z I E   S E M I J O I A S', 14, 14);
+    doc.setFontSize(18); doc.setTextColor(26, 10, 46); // --plum
+    doc.text('Mostruário', 14, 23);
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(110, 100, 120);
+    doc.text(`Revendedora: ${nomeRev}${peds.length ? `  ·  Pedido${peds.length > 1 ? 's' : ''} #${peds.join(', #')}` : ''}  ·  Gerado em ${hoje}`, 14, 30);
+    doc.text(`Resumo: ${ativos.length} peça${ativos.length !== 1 ? 's' : ''} · vendidas ${totalVend}/${totalEnv} · vendido ${fmtBRL(totalRecv)}${totalDiverg ? ` · ${totalDiverg} peça${totalDiverg !== 1 ? 's' : ''} vendida${totalDiverg !== 1 ? 's' : ''} por divergência` : ''}${filtroLabel}`, 14, 36);
+
+    autoTable(doc, {
+      startY: 42,
+      head: [['Descrição', 'Código', 'Categoria', 'Enviadas', 'Preço', 'Status']],
+      body: lista.map(c => {
+        const cat = c.categoria || detectarCategoria(c.descricao);
+        const vendida = c.quantidade_vendida || 0;
+        return [
+          c.descricao || '—',
+          c.referencia || '—',
+          CAT_LABEL[cat] || cat,
+          String(c.quantidade_enviada ?? '—'),
+          c.preco_venda ? 'R$ ' + Number(c.preco_venda).toFixed(2) : '—',
+          vendida > 0
+            ? (c.vendido_por_divergencia ? 'Vendido (divergência)' : `Vendido${vendida > 1 ? ` (${vendida})` : ''}`)
+            : '—',
+        ];
+      }),
+      styles: { font: 'helvetica', fontSize: 8.5, cellPadding: 2.5, textColor: [45, 31, 53] },
+      headStyles: { fillColor: [201, 116, 138], textColor: 255, fontStyle: 'bold' }, // --rose
+      alternateRowStyles: { fillColor: [250, 247, 242] },
+      columnStyles: { 3: { halign: 'center' }, 4: { halign: 'right' } },
+      didDrawPage: () => {
+        const page = doc.internal.getCurrentPageInfo().pageNumber;
+        doc.setFontSize(8); doc.setTextColor(150);
+        doc.text(`Página ${page}`, doc.internal.pageSize.getWidth() - 14,
+          doc.internal.pageSize.getHeight() - 8, { align: 'right' });
+      },
+    });
+
+    doc.save(`Mostruario_${sanitizeArquivo(nomeRev)}_Pedido${peds.length ? sanitizeArquivo(peds[0]) : 's-n'}.pdf`);
+  } catch (e) {
+    console.error('Erro ao gerar PDF do mostruário:', e);
+    toast('Erro ao gerar o PDF — tente novamente.');
+  }
 }

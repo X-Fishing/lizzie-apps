@@ -329,6 +329,24 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   font-size: 12px; cursor: pointer; font-family: 'DM Sans', sans-serif;
 }
 
+/* ── Sistema de botões unificado (mesma família: altura/cantos/tipografia) ──
+   Use .btn + variante (.btn-primary/.btn-outline/.btn-danger) e agrupe com
+   .btn-group. O .btn normaliza os legados (ex.: width:100% do .btn-primary). */
+.btn-group { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 36px; padding: 0 16px; border-radius: 10px; width: auto;
+  font-size: 13px; font-weight: 500; font-family: 'DM Sans', sans-serif;
+  cursor: pointer; transition: all 0.2s; white-space: nowrap; line-height: 1;
+}
+.btn .ico { width: 14px; height: 14px; flex: none; }
+.btn-outline { background: #fff; border: 1.5px solid var(--rose); color: var(--rose); }
+.btn-outline:hover { background: rgba(201,116,138,0.08); }
+.btn.btn-danger { background: rgba(224,85,85,0.08); border: 1px solid rgba(224,85,85,0.35); }
+@media (max-width: 600px) {
+  .btn-group .btn { flex: 1 1 auto; min-width: 140px; }
+}
+
 /* MODAL */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 500;

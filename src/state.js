@@ -16,6 +16,7 @@ export const state = {
   cSort: { col: 'descricao', dir: 'asc' },
   cicloRevSelecionada: null,
   cicloSoVendidos: false,
+  cicloSoNaoVendidos: false,  // exclusivo com cicloSoVendidos
   maletaAtivaId: null,       // revendedora: id da maleta 'ativa' (catálogo só mostra ela)
   historicoCicloSel: null,
   carrinhoVenda: [],

@@ -2,6 +2,7 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { sbQ, showMsg, toast, handleSupabaseError, openModal, closeModal } from './utils.js';
+import { carregarPermissoes, renderSidebar } from './menu.js';
 export function mostrarRecovery() {
   state.recoveryAtiva = true;
   document.getElementById('splash').style.display = 'none';
@@ -51,6 +52,7 @@ export async function loadUser(user) {
 
   // Visibilidade por nível. Pagamentos/Histórico são do próprio (só revendedora).
   document.getElementById('btn-bling-sync').style.display = (ehRevendedora || ehGestor()) ? 'block' : 'none';
+  document.getElementById('btn-pdf-mostruario').style.display = (ehRevendedora || ehGestor()) ? 'inline-flex' : 'none';
   document.getElementById('btn-novo-consig').style.display = ehGestor() ? 'block' : 'none';
   document.getElementById('nav-admin').style.display = ehGestor() ? 'flex' : 'none';
   document.getElementById('nav-trocas').style.display = ehStaff() ? 'flex' : 'none';
@@ -58,6 +60,10 @@ export async function loadUser(user) {
   document.getElementById('nav-historico').style.display = ehRevendedora ? 'flex' : 'none';
   // Dashboard PC (barra lateral) só para staff; o CSS faz o resto em telas >=900px.
   document.getElementById('app').classList.toggle('staff-desktop', ehStaff());
+
+  // Permissões por perfil ANTES de montar a sidebar (uma vez por login).
+  if (ehStaff()) await carregarPermissoes();
+  renderSidebar();
 
   showPanel('dashboard');   // já dispara loadDashboard()
 

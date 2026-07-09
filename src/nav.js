@@ -5,6 +5,11 @@ export function showPanel(name) {
   if (name === 'trocas' && !ehStaff()) name = 'dashboard';
   if (name === 'admin' && !ehGestor()) name = 'dashboard';
   if (PANEIS_STAFF.includes(name) && !ehStaff()) name = 'dashboard';
+  // Guarda por perfil (staff): sem a chave do menu, volta pro dashboard.
+  if (name !== 'dashboard' && ehStaff() && !podeAcessarPanel(name)) {
+    toast('Você não tem acesso a essa área.');
+    name = 'dashboard';
+  }
   ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin', ...PANEIS_STAFF].forEach(p => {
     document.getElementById('panel-' + p).style.display = p === name ? 'block' : 'none';
     const nav = document.getElementById('nav-' + p);
@@ -35,6 +40,8 @@ export function showPanel(name) {
   if (name === 'lancador') loadLancador();
 }
 
+// Mantido por compatibilidade (grupo Cadastros gerado pelo renderSidebar).
 export function toggleCadastros() {
-  document.getElementById('snav-cadastros').classList.toggle('collapsed');
+  const g = document.getElementById('snav-grp_cadastros');
+  if (g) g.classList.toggle('collapsed');
 }
