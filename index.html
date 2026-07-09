@@ -452,14 +452,14 @@
 
 <!-- MODAL BUSCAR PEÇA (admin) -->
 <div class="modal-overlay" id="modal-busca-peca">
-  <div class="modal">
+  <div class="modal modal-fixa">
     <div class="modal-handle"></div>
     <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar peça</div>
     <div style="font-size:12px;color:var(--muted);margin:-6px 0 12px">Digite o nome, o código (SKU) ou o código do fornecedor — mostra se a peça está com uma revendedora ou em nosso estoque.</div>
     <div class="search-bar" style="margin-bottom:12px">
       <input class="search-input" id="bp-search" placeholder="Nome, SKU ou código do fornecedor..." oninput="renderBuscaPeca()">
     </div>
-    <div id="bp-results" style="max-height:55vh;overflow-y:auto"></div>
+    <div id="bp-results" class="modal-body"></div>
     <div style="margin-top:12px">
       <button class="btn-secondary" style="width:100%" onclick="closeModal('modal-busca-peca')">Fechar</button>
     </div>
@@ -548,24 +548,44 @@
   </div>
 </div>
 
+<!-- LIGHTBOX DE FOTO (preview por cima de outros modais; fecha só no X/Esc) -->
+<div class="modal-overlay" id="lightbox-foto" style="z-index:700;align-items:center">
+  <button type="button" class="modal-close-x" aria-label="Fechar" style="position:absolute;top:18px;right:18px;margin:0;float:none;z-index:701" onclick="closeModal('lightbox-foto')">✕</button>
+  <div id="lightbox-foto-body" style="max-width:92vw;max-height:82vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px"></div>
+</div>
+
+<!-- MODAL BUSCA DE PRODUTO (F3 — lançador de mostruário) -->
+<div class="modal-overlay" id="modal-busca-produto">
+  <div class="modal modal-fixa" style="max-width:640px">
+    <button type="button" class="modal-close-x" aria-label="Fechar" onclick="lancadorFecharBusca()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar produto <span style="font-size:11px;color:var(--muted);font-weight:400">(F3)</span></div>
+    <input class="search-input" id="f3-search" placeholder="Nome, SKU, código do fornecedor ou preço..." autocomplete="off"
+      oninput="lancadorBuscaInput()" onkeydown="lancadorBuscaTeclas(event)">
+    <div id="f3-results" class="modal-body" style="margin-top:10px"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">
+      <span style="font-size:11.5px;color:var(--muted)">↑/↓ navegar · Enter adicionar · Esc fechar</span>
+      <button class="btn btn-outline" onclick="lancadorFecharBusca()">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL CONFERÊNCIA DE FECHAMENTO (admin) — estado persiste no banco (coluna devolvido) -->
 <div class="modal-overlay" id="modal-conferencia">
-  <div class="modal">
+  <div class="modal modal-fixa">
     <button type="button" class="modal-close-x" aria-label="Fechar" onclick="closeModal('modal-conferencia')">✕</button>
     <div class="modal-handle"></div>
     <div class="modal-title" id="conf-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Conferência de fechamento</div>
     <div id="conf-contadores" style="font-size:12.5px;color:var(--muted);margin-bottom:10px"></div>
-    <input class="search-input" id="conf-search" placeholder="Buscar por nome ou código..." oninput="renderConferencia()">
+    <input class="search-input" id="conf-search" placeholder="Buscar por nome ou código... (* marca como Voltou)" oninput="renderConferencia()" onkeydown="confBuscaTeclas(event)">
     <label style="display:flex;align-items:center;gap:6px;margin:8px 0 10px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none">
       <input type="checkbox" id="conf-ver-devolvidos" onchange="renderConferencia()" style="accent-color:var(--rose);cursor:pointer">
       Ver devolvidos (restaurar)
     </label>
-    <div id="conf-list" style="max-height:42vh;overflow:auto"></div>
+    <div id="conf-list" class="modal-body"></div>
     <div id="conf-resultado"></div>
-    <div style="display:flex;gap:10px;margin-top:16px">
-      <button class="btn-secondary" style="flex:1" onclick="conferirFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Conferir fechamento</button>
-      <button class="btn-secondary" style="flex:1;border-color:var(--gold);color:var(--gold)" onclick="finalizarAposConferencia()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar Mostruário</button>
-    </div>
+    <!-- Rodapé montado pelo JS: modo normal (Conferir + Finalizar) ou modo correção (Conferir + Salvar correção) -->
+    <div id="conf-acoes" style="display:flex;gap:10px;margin-top:16px"></div>
   </div>
 </div>
 

@@ -2,6 +2,7 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, hojeBR } from './utils.js';
+import { IS_ADMIN, PERMISSOES } from './menu.js';
 export async function loadConsignados() {
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
   const isAdmin = ehStaff();
@@ -113,8 +114,13 @@ export function cicloRowHtml(c, isAdmin, historico = false) {
   }
   return `<tr class="ciclo-row${extraClass}"${extraStyle}>
     <td class="ciclo-td">
-      <div class="ciclo-desc">${esc(c.descricao)}</div>
-      ${c.referencia ? `<div class="ciclo-ref">${esc(c.referencia)}</div>` : ''}
+      <div style="display:flex;align-items:center;gap:6px">
+        <button class="btn-icon" title="Ver foto" style="color:var(--rose);padding:2px;flex:none" onclick="confVerFoto('${c.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></button>
+        <div style="min-width:0">
+          <div class="ciclo-desc">${esc(c.descricao)}</div>
+          ${c.referencia ? `<div class="ciclo-ref">${esc(c.referencia)}</div>` : ''}
+        </div>
+      </div>
     </td>
     <td class="ciclo-td"><span class="ciclo-badge">${CAT_LABEL[cat] || cat}</span></td>
     <td class="ciclo-td"><span class="ciclo-num">${c.quantidade_enviada}</span></td>
@@ -293,8 +299,15 @@ export function renderHistoricoCicloDetalhe(chave) {
   const env  = pecas.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
   const vend = pecas.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
   const recv = pecas.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
+  // Correção de conferência: só admin (ou perfil com a ação especial), e só
+  // no contexto admin com revendedora aberta (o modo correção usa esse escopo).
+  const btnCorrigir = (ehStaff() && state.cicloRevSelecionada && podeCorrigirMaleta())
+    ? `<div class="btn-group" style="margin-bottom:12px">
+        <button class="btn btn-outline" onclick="abrirConferenciaCorrecao('${chave}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> Corrigir conferência</button>
+      </div>` : '';
   return `<button class="btn-voltar-ciclo" onclick="voltarHistoricoCiclo()">← Voltar para o catálogo</button>
     <div class="card">
+      ${btnCorrigir}
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
         <div>
           <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">Catálogo fechado em ${dataFmt}</div>
@@ -599,37 +612,103 @@ export async function finalizarCicloRev(revId) {
 // ═══════════════════════════════════════════════════════════════════
 let confRevId = null;
 let confMaletaAtivaId = null;
+let confCicloChave = null;    // modo correção: chave (data) do ciclo FINALIZADO
+let confOrigVendida = null;   // modo correção: Set de ids lançados como vendidos na ORIGEM
+let confFechamento = null;    // modo correção: linha da auditoria (ou null se não achou)
 
-// Peças em conferência: ativas da revendedora, no escopo da maleta ativa
-// (mesmo escopo do finalizarCicloRev; fallback legado = todas as ativas).
+// Peças em conferência. Modo normal: ativas da maleta ativa (mesmo escopo do
+// finalizarCicloRev; fallback legado = todas as ativas). Modo correção:
+// peças ENCERRADAS do ciclo escolhido (a maleta continua finalizada).
 function pecasConferencia() {
+  if (confCicloChave) {
+    return soEncerrados(state.allConsignados).filter(c => c.revendedora_id === confRevId
+      && (c.encerrado_em || c.created_at || '').slice(0, 10) === confCicloChave);
+  }
   return state.allConsignados.filter(c => c.revendedora_id === confRevId && c.status === 'ativo'
     && (!confMaletaAtivaId || c.maleta_id === confMaletaAtivaId));
 }
 
+// "Lançada como vendida" na visão da conferência. No modo correção a
+// reconciliação já sobrescreveu quantidade_vendida — o lançamento original
+// é reconstruído dos flags + auditoria (confOrigVendida).
+function foiLancada(c) {
+  if (confCicloChave) return confOrigVendida ? confOrigVendida.has(String(c.id)) : false;
+  return foiVendida(c);
+}
+
+export function podeCorrigirMaleta() {
+  return IS_ADMIN || PERMISSOES.has('acao_editar_maleta_finalizada');
+}
+
+function abrirModalConferencia(titulo, acoesHtml) {
+  document.getElementById('conf-title').innerHTML =
+    `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> ${titulo}`;
+  document.getElementById('conf-search').value = '';
+  document.getElementById('conf-ver-devolvidos').checked = false;
+  document.getElementById('conf-resultado').innerHTML = '';
+  document.getElementById('conf-acoes').innerHTML = acoesHtml;
+  renderConferencia();
+  openModal('modal-conferencia');
+}
+
+const CONF_BTN_CONFERIR = '<button class="btn-secondary" style="flex:1" onclick="conferirFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Conferir fechamento</button>';
+
 export async function abrirConferencia(revId) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
   confRevId = revId;
+  confCicloChave = null; confOrigVendida = null; confFechamento = null;
   const { data: maleta, error } = await sbQ(sb.from('maletas')
     .select('id').eq('revendedora_id', revId).eq('status', 'ativa').maybeSingle());
   if (error) { console.error('Erro ao buscar maleta ativa:', error); }
   confMaletaAtivaId = maleta?.id || null;
   if (!pecasConferencia().length) { toast('Nenhum mostruário ativo para conferir'); return; }
   const nome = state.revNameMap[revId] || 'Revendedora';
-  document.getElementById('conf-title').innerHTML =
-    `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Conferência de fechamento — ${esc(nome)}`;
-  document.getElementById('conf-search').value = '';
-  document.getElementById('conf-ver-devolvidos').checked = false;
-  document.getElementById('conf-resultado').innerHTML = '';
-  renderConferencia();
-  openModal('modal-conferencia');
+  abrirModalConferencia(`Conferência de fechamento — ${esc(nome)}`,
+    CONF_BTN_CONFERIR +
+    '<button class="btn-secondary" style="flex:1;border-color:var(--gold);color:var(--gold)" onclick="finalizarAposConferencia()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar Mostruário</button>');
+}
+
+// ── Modo correção: reabre a conferência de um ciclo já FINALIZADO ───
+// A maleta continua finalizada e a próxima não é tocada — só o veredito
+// das peças e a auditoria mudam (ação protegida por permissão).
+export async function abrirConferenciaCorrecao(chave) {
+  if (!podeCorrigirMaleta()) { toast('Sem permissão para corrigir maleta finalizada'); return; }
+  confRevId = state.cicloRevSelecionada;
+  confMaletaAtivaId = null;
+  confCicloChave = chave;
+  const base = pecasConferencia();
+  if (!base.length) { toast('Nenhuma peça neste fechamento'); return; }
+
+  // Reconstrói o "lançado como vendido" original: vendidas sem flag de
+  // divergência + as que a auditoria diz que voltaram estando vendidas.
+  confOrigVendida = new Set(base.filter(c => foiVendida(c) && !c.vendido_por_divergencia).map(c => String(c.id)));
+  confFechamento = null;
+  const { data: fechs, error: eF } = await sbQ(sb.from('fechamentos_mostruario')
+    .select('id').eq('revendedora_id', confRevId)
+    .gte('created_at', chave + 'T00:00:00').lte('created_at', chave + 'T23:59:59.999')
+    .order('created_at', { ascending: false }).limit(1));
+  if (eF) console.error('Auditoria do ciclo:', eF);
+  confFechamento = fechs?.[0] || null;
+  if (confFechamento) {
+    const { data: divs, error: eD } = await sbQ(sb.from('fechamentos_divergencias')
+      .select('consignado_id,tipo').eq('fechamento_id', confFechamento.id));
+    if (eD) console.error('Divergências do ciclo:', eD);
+    (divs || []).filter(d => d.tipo === 'devolvido_estava_vendido')
+      .forEach(d => confOrigVendida.add(String(d.consignado_id)));
+  }
+
+  const nome = state.revNameMap[confRevId] || 'Revendedora';
+  const dataFmt = chave ? chave.split('-').reverse().join('/') : '';
+  abrirModalConferencia(`Correção de conferência — ${esc(nome)} <span style="font-size:12px;color:var(--muted)">(fechado em ${dataFmt})</span>`,
+    CONF_BTN_CONFERIR +
+    '<button class="btn-primary btn" style="flex:1" onclick="salvarCorrecaoConferencia()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Salvar correção</button>');
 }
 
 export function renderConferencia() {
   const base = pecasConferencia();
   const restantes  = base.filter(c => !c.devolvido);
   const devolvidos = base.filter(c => c.devolvido);
-  const vendidos   = base.filter(foiVendida);
+  const vendidos   = base.filter(foiLancada);
 
   document.getElementById('conf-contadores').innerHTML =
     `Restantes: <b style="color:var(--plum)">${restantes.length}</b> · ` +
@@ -661,12 +740,90 @@ export function renderConferencia() {
     <div style="display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line,#eee)">
       <div style="flex:1;min-width:0">
         <div class="ciclo-desc" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.descricao)}</div>
-        <div style="font-size:11px;color:var(--muted)">${c.referencia ? esc(c.referencia) + ' · ' : ''}${foiVendida(c) ? '<span style="color:var(--rose);font-weight:600">vendido</span>' : 'não vendido'}${contagem[chaveDup(c)] > 1 ? ` · <b style="color:var(--plum)">${posicao[c.id]} de ${contagem[chaveDup(c)]}</b>` : ''}</div>
+        <div style="font-size:11px;color:var(--muted)">${c.referencia ? esc(c.referencia) + ' · ' : ''}${foiLancada(c) ? '<span style="color:var(--rose);font-weight:600">vendido</span>' : 'não vendido'}${contagem[chaveDup(c)] > 1 ? ` · <b style="color:var(--plum)">${posicao[c.id]} de ${contagem[chaveDup(c)]}</b>` : ''}</div>
       </div>
+      <button class="btn-icon" title="Ver foto" style="color:var(--rose)" onclick="confVerFoto('${c.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></button>
       ${verDevolvidos
         ? `<button class="btn-secondary btn-sm" onclick="confMarcarDevolvido('${c.id}', false)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg> Restaurar</button>`
         : `<button class="btn-secondary btn-sm" style="border-color:var(--success);color:var(--success)" title="Voltou na maleta" onclick="confMarcarDevolvido('${c.id}', true)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Voltou</button>`}
     </div>`).join('');
+}
+
+// Preview da foto do produto (lightbox por cima da conferência — o estado
+// do modal de trás fica intacto). Usa consignados.foto_url; se a peça não
+// tiver, busca no produto de origem (produtos.foto_url) e guarda no item.
+let lbFotos = [];       // urls exibidas no lightbox
+let lbIdx = 0;
+let lbLegenda = '';
+
+export async function confVerFoto(id) {
+  const c = state.allConsignados.find(x => String(x.id) === String(id));
+  if (!c) return;
+  lbLegenda = `${esc(c.descricao)}${c.referencia ? ` <span style="opacity:.7">· ${esc(c.referencia)}</span>` : ''}`;
+  const body = document.getElementById('lightbox-foto-body');
+  body.innerHTML = '<div class="spinner" style="color:#fff">⟳</div>';
+  openModal('lightbox-foto');
+
+  // Todas as imagens do produto de origem (imagens[] com fallback foto_url).
+  lbFotos = [];
+  if (c.produto_id) {
+    const { data, error } = await sbQ(sb.from('produtos').select('foto_url,imagens').eq('id', c.produto_id).maybeSingle());
+    if (error) console.error('Fotos do produto:', error);
+    if (data?.imagens?.length) lbFotos = data.imagens;
+    else if (data?.foto_url) lbFotos = [data.foto_url];
+  }
+  if (!lbFotos.length && c.foto_url) lbFotos = [c.foto_url];
+  lbIdx = 0;
+  lightboxRender();
+}
+
+export function lightboxFotoNav(delta) {
+  if (!lbFotos.length) return;
+  lbIdx = (lbIdx + delta + lbFotos.length) % lbFotos.length;
+  lightboxRender();
+}
+
+function lightboxRender() {
+  const body = document.getElementById('lightbox-foto-body');
+  const legenda = `<div style="color:#fff;font-size:13px;text-align:center">${lbLegenda}</div>`;
+  if (!lbFotos.length) {
+    body.innerHTML = `<div style="background:rgba(255,255,255,0.08);border:1px dashed rgba(255,255,255,0.35);border-radius:14px;padding:44px 56px;color:#fff;text-align:center">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="width:34px;height:34px;opacity:.7"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+        <div style="margin-top:10px;font-size:14px">Sem foto</div>
+      </div>${legenda}`;
+    return;
+  }
+  const btnNav = dir => `<button type="button" onclick="lightboxFotoNav(${dir})"
+    style="width:40px;height:40px;border-radius:50%;border:1px solid rgba(255,255,255,0.4);background:rgba(0,0,0,0.35);color:#fff;font-size:18px;cursor:pointer;flex:none">${dir < 0 ? '‹' : '›'}</button>`;
+  const contador = lbFotos.length > 1
+    ? `<div style="color:#fff;font-size:12px;opacity:.75;text-align:center">${lbIdx + 1} / ${lbFotos.length}</div>` : '';
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px">
+      ${lbFotos.length > 1 ? btnNav(-1) : ''}
+      <img src="${esc(lbFotos[lbIdx])}" style="max-width:78vw;max-height:70vh;border-radius:14px;object-fit:contain"
+        onerror="this.outerHTML='<div style=&quot;color:#fff;padding:30px;font-size:14px&quot;>Não foi possível carregar a foto</div>'">
+      ${lbFotos.length > 1 ? btnNav(1) : ''}
+    </div>${contador}${legenda}`;
+}
+
+// Atalho de bipe na busca da conferência: "*" marca a peça filtrada como
+// "Voltou", limpa o campo e deixa pronto para o próximo código.
+export function confBuscaTeclas(e) {
+  if (e.key !== '*') return;
+  e.preventDefault(); // não deixa o * entrar no campo
+  const input = document.getElementById('conf-search');
+  const termo = (input.value || '').toLowerCase().trim();
+  if (!termo) return;
+  // Mesmo filtro da lista visível (só as restantes, não devolvidas).
+  const matches = pecasConferencia().filter(c => !c.devolvido &&
+    ((c.descricao || '').toLowerCase().includes(termo) ||
+     (c.referencia || '').toLowerCase().includes(termo)));
+  if (!matches.length) { toast(`Nenhuma peça restante com "${termo}"`); return; }
+  if (matches.length > 1) { toast(`${matches.length} peças casam com "${termo}" — refine até sobrar 1.`); return; }
+  confMarcarDevolvido(matches[0].id, true); // já re-renderiza a lista
+  toast(`Voltou: ${matches[0].descricao}`);
+  input.value = '';
+  setTimeout(() => { input.focus(); renderConferencia(); }, 0);
 }
 
 // Persistência da conferência (sobrevive a fechar o modal / recarregar).
@@ -690,8 +847,8 @@ export async function confMarcarDevolvido(id, devolvido) {
 function divergenciasConferencia() {
   const base = pecasConferencia();
   return {
-    naoLancadas: base.filter(c => !c.devolvido && !foiVendida(c)), // em A e não em B
-    voltouVendida: base.filter(c => c.devolvido && foiVendida(c)), // em B e não em A
+    naoLancadas: base.filter(c => !c.devolvido && !foiLancada(c)), // em A e não em B
+    voltouVendida: base.filter(c => c.devolvido && foiLancada(c)), // em B e não em A
   };
 }
 
@@ -730,6 +887,109 @@ export function finalizarAposConferencia() {
     'Finalizar e reconciliar', () => executarFechamentoReconciliado());
 }
 
+// ── Salvar correção (modo correção): re-reconcilia por linha e ATUALIZA a
+// auditoria existente. NÃO reencerra nada: status das peças, da maleta
+// finalizada e da maleta seguinte ficam intocados.
+export function salvarCorrecaoConferencia() {
+  if (!podeCorrigirMaleta()) { toast('Sem permissão'); return; }
+  const { naoLancadas, voltouVendida } = divergenciasConferencia();
+  const total = naoLancadas.length + voltouVendida.length;
+  if (total) {
+    conferirFechamento(); // mostra a listagem antes de decidir
+    confirmarAcao('⚠ Divergências na correção',
+      `Há ${total} divergência${total > 1 ? 's' : ''}. Ao salvar, a conferência corrigida será aplicada (peças que voltaram deixam de ser venda; as que não voltaram viram venda — não lançadas ficam como "Vendido por Divergência"). A maleta continua finalizada. Salvar?`,
+      'Salvar correção', () => aplicarCorrecaoConferencia());
+  } else {
+    confirmarAcao('Salvar correção',
+      'Aplicar a conferência corrigida? O veredito das peças e a auditoria serão atualizados — a maleta continua finalizada.',
+      'Salvar correção', () => aplicarCorrecaoConferencia());
+  }
+}
+
+async function aplicarCorrecaoConferencia() {
+  const base = pecasConferencia();
+  const devolvidas  = base.filter(c => c.devolvido);
+  const naoVoltaram = base.filter(c => !c.devolvido);
+  const divVendida   = naoVoltaram.filter(c => !foiLancada(c));
+  const divDevolvida = devolvidas.filter(c => foiLancada(c));
+  const totalDiv = divVendida.length + divDevolvida.length;
+
+  // 1) Veredito por linha (idempotente). No modo correção TODAS as não
+  //    voltadas são regravadas (podem ter sido marcadas devolvidas antes).
+  for (const [qtd, ids] of gruposPorQtd(devolvidas)) {
+    const { error } = await sbQ(sb.from('consignados')
+      .update({ quantidade_vendida: 0, quantidade_devolvida: qtd, vendido_por_divergencia: false })
+      .in('id', ids));
+    if (error) { console.error('Correção (devolvidas):', error); toast(`Erro ao aplicar devoluções: ${error.message}. Nada foi concluído — tente de novo.`); return; }
+  }
+  const vendidasLancadas = naoVoltaram.filter(c => foiLancada(c));
+  for (const [grupo, flag] of [[divVendida, true], [vendidasLancadas, false]]) {
+    for (const [qtd, ids] of gruposPorQtd(grupo)) {
+      const { error } = await sbQ(sb.from('consignados')
+        .update({ quantidade_vendida: qtd, quantidade_devolvida: 0, vendido_por_divergencia: flag })
+        .in('id', ids));
+      if (error) { console.error('Correção (vendas):', error); toast(`Erro ao marcar vendas: ${error.message}. Tente de novo.`); return; }
+    }
+  }
+
+  // 2) Auditoria: ATUALIZA o cabeçalho existente (ou cria, se o fechamento
+  //    for anterior à auditoria) e SUBSTITUI os itens divergentes.
+  const cab = {
+    total_pecas: base.length,
+    total_vendidas: naoVoltaram.length,
+    total_devolvidas: devolvidas.length,
+    total_divergencias: totalDiv,
+    finalizado_com_divergencia: totalDiv > 0,
+    corrigido_em: new Date().toISOString(),
+    corrigido_por: state.currentUser.id,
+  };
+  let fechId = confFechamento?.id || null;
+  if (fechId) {
+    const { error } = await sbQ(sb.from('fechamentos_mostruario').update(cab).eq('id', fechId));
+    if (error) { console.error('Auditoria (update):', error); toast(`Erro ao atualizar a auditoria: ${error.message}. Rode a migração 0005.`); return; }
+  } else {
+    const nome = state.revNameMap[confRevId] || 'Revendedora';
+    const { data, error } = await sbQ(sb.from('fechamentos_mostruario').insert({
+      ...cab, revendedora_id: confRevId, revendedora_nome: nome,
+      pedido_numero: pedidosDoCatalogo(base).join(', ') || null,
+      admin_user_id: state.currentUser.id,
+    }).select('id').single());
+    if (error) { console.error('Auditoria (insert):', error); toast(`Erro ao registrar a auditoria: ${error.message}.`); return; }
+    fechId = data.id;
+  }
+  const { error: eDel } = await sbQ(sb.from('fechamentos_divergencias').delete().eq('fechamento_id', fechId));
+  if (eDel) { console.error('Auditoria (limpar itens):', eDel); toast(`Erro ao atualizar divergências: ${eDel.message}. Rode a migração 0005.`); return; }
+  const divRows = [
+    ...divVendida.map(c => ({ tipo: 'vendido_por_divergencia', c })),
+    ...divDevolvida.map(c => ({ tipo: 'devolvido_estava_vendido', c })),
+  ].map(({ tipo, c }) => ({
+    fechamento_id: fechId, consignado_id: c.id,
+    descricao: c.descricao || null, codigo: c.referencia || null, tipo,
+  }));
+  if (divRows.length) {
+    const { error: eIns } = await sbQ(sb.from('fechamentos_divergencias').insert(divRows));
+    if (eIns) { console.error('Auditoria (itens):', eIns); toast(`Erro ao registrar divergências: ${eIns.message}.`); return; }
+  }
+
+  closeModal('modal-conferencia');
+  toast(totalDiv > 0
+    ? `Correção salva. ${totalDiv} divergência${totalDiv !== 1 ? 's' : ''} registrada${totalDiv !== 1 ? 's' : ''} na auditoria.`
+    : 'Conferência corrigida com sucesso!');
+  loadConsignados();
+}
+
+// Agrupa por quantidade_enviada para setar quantidade_devolvida/vendida =
+// enviada em lote (normalmente qtd 1 por linha — cada bipe é 1 peça física).
+function gruposPorQtd(lista) {
+  const m = new Map();
+  lista.forEach(c => {
+    const q = c.quantidade_enviada || 1;
+    if (!m.has(q)) m.set(q, []);
+    m.get(q).push(c.id);
+  });
+  return [...m.entries()];
+}
+
 // ── Reconciliação: a conferência física é o veredito final ─────────
 // Tudo por LINHA (consignados.id) — nunca agregando por SKU. Robusta a
 // peças iguais: cada linha física tem seu próprio devolvido/vendido.
@@ -745,27 +1005,15 @@ async function executarFechamentoReconciliado() {
   const divDevolvida = devolvidas.filter(foiVendida);           // voltou mas estava lançada vendida -> reverte a venda
   const totalDiv = divVendida.length + divDevolvida.length;
 
-  // Agrupa por quantidade_enviada para setar quantidade_devolvida/vendida = enviada
-  // em lote (normalmente qtd 1 por linha — cada bipe do lançador é 1 peça física).
-  const grupos = lista => {
-    const m = new Map();
-    lista.forEach(c => {
-      const q = c.quantidade_enviada || 1;
-      if (!m.has(q)) m.set(q, []);
-      m.get(q).push(c.id);
-    });
-    return [...m.entries()];
-  };
-
   // 1) Veredito físico. Sequencial: no primeiro erro, aborta e avisa
   //    (reabra a conferência e finalize de novo — updates são idempotentes).
-  for (const [qtd, ids] of grupos(devolvidas)) {
+  for (const [qtd, ids] of gruposPorQtd(devolvidas)) {
     const { error } = await sbQ(sb.from('consignados')
       .update({ quantidade_vendida: 0, quantidade_devolvida: qtd, vendido_por_divergencia: false })
       .in('id', ids));
     if (error) { console.error('Reconciliação (devolvidas):', error); toast(`Erro ao aplicar devoluções: ${error.message}. Nada foi finalizado — tente de novo.`); return; }
   }
-  for (const [qtd, ids] of grupos(divVendida)) {
+  for (const [qtd, ids] of gruposPorQtd(divVendida)) {
     const { error } = await sbQ(sb.from('consignados')
       .update({ quantidade_vendida: qtd, quantidade_devolvida: 0, vendido_por_divergencia: true })
       .in('id', ids));

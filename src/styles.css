@@ -347,6 +347,18 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   .btn-group .btn { flex: 1 1 auto; min-width: 140px; }
 }
 
+/* Busca de produto (F3) no lançador */
+.f3-row {
+  display: flex; align-items: center; gap: 10px; padding: 9px 8px;
+  border-bottom: 1px solid var(--border); cursor: pointer; border-radius: 8px;
+}
+.f3-row:hover { background: rgba(201,116,138,0.06); }
+.f3-row.sel { background: rgba(201,116,138,0.14); }
+.f3-row .f3-meta { display: flex; gap: 12px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+@media (max-width: 600px) {
+  .f3-row { flex-direction: column; align-items: flex-start; gap: 4px; }
+}
+
 /* MODAL */
 .modal-overlay {
   position: fixed; inset: 0; z-index: 500;
@@ -380,6 +392,23 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 .modal-close-x:active { background: var(--blush); }
 @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+/* Modal de LISTA com tamanho estático: altura fixa independente do conteúdo
+   (sem "pulos" entre poucos e muitos itens); só a área .modal-body rola. */
+.modal.modal-fixa {
+  height: min(80vh, 640px); height: min(80dvh, 640px);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+/* Só a LISTA (.modal-body) cresce e rola; todo o resto (título, contadores,
+   campo de busca, toggles, rodapé) fica com altura natural de 1 linha. */
+.modal-fixa > * { flex: 0 0 auto; }
+/* Campo de busca compacto (~42px), porte dos selects de filtro. O flex-basis
+   fixo é essencial: o .search-input global tem flex:1 (basis 0) e, na coluna,
+   colapsava para altura 0 quando a lista disputava o espaço. */
+.modal-fixa .search-input, .modal-fixa .search-bar .search-input {
+  flex: 0 0 42px; height: 42px; min-height: 42px; padding: 0 14px; box-sizing: border-box;
+}
+.modal-fixa .modal-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.modal-fixa .modal-close-x { position: absolute; top: 14px; right: 14px; margin: 0; float: none; }
 .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 20px; }
 .modal-title { font-family: 'Cormorant Garamond', serif; font-size: 24px; font-weight: 400; margin-bottom: 20px; color: var(--plum); }
 

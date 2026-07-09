@@ -21,10 +21,10 @@ import { loadVendas, setPFilter, verVenda, excluirVenda, registrarPagamento } fr
 import { loadHistorico, filtrarHistorico, toggleHistorico } from './historico.js';
 import { loadTrocasDashboard, setTrocaFiltro, toggleOrdemTroca, resolverTroca } from './trocas.js';
 import { loadAdmin, renderAprovadas, verRevendedora, aprovarRev, revogarRev, definirPapel, confirmarExclusaoRev, excluirRevendedora } from './admin.js';
-import { loadConsignados, sortConsignados, renderCicloGrid, toggleCicloSoVendidos, toggleCicloSoNaoVendidos, abrirConferencia, renderConferencia, confMarcarDevolvido, conferirFechamento, finalizarAposConferencia, baixarPdfMostruario, abrirHistoricoCiclo, voltarHistoricoCiclo, abrirCicloRev, voltarCardsCiclo, openBuscaPeca, renderBuscaPeca, finalizarCicloRev, deletarCicloRev, openVenda, atualizarTotalVenda, adicionarAoCarrinho, removerDoCarrinho, abrirFinalizarVenda, ajustarValorPago, confirmarVendaCarrinho, openNovoConsignado, salvarConsignado, openFechamento, gerarPdfFechamento, fecharPrint } from './consignados.js';
+import { loadConsignados, sortConsignados, renderCicloGrid, toggleCicloSoVendidos, toggleCicloSoNaoVendidos, abrirConferencia, abrirConferenciaCorrecao, salvarCorrecaoConferencia, renderConferencia, confMarcarDevolvido, confBuscaTeclas, confVerFoto, lightboxFotoNav, conferirFechamento, finalizarAposConferencia, baixarPdfMostruario, abrirHistoricoCiclo, voltarHistoricoCiclo, abrirCicloRev, voltarCardsCiclo, openBuscaPeca, renderBuscaPeca, finalizarCicloRev, deletarCicloRev, openVenda, atualizarTotalVenda, adicionarAoCarrinho, removerDoCarrinho, abrirFinalizarVenda, ajustarValorPago, confirmarVendaCarrinho, openNovoConsignado, salvarConsignado, openFechamento, gerarPdfFechamento, fecharPrint } from './consignados.js';
 import { loadCategorias, loadColecoes, loadFornecedores, cadNovo, cadEditar, cadSalvar, cadExcluir } from './cadastros.js';
-import { loadProdutos, produtoNovo, produtoEditar, produtoVoltarLista, produtoFiltrar, produtoFiltrarColecao, produtoFiltrarCategoria, produtoFiltrarFornecedor, produtoPagina, produtoToggleGrupo, produtoSalvar, produtoExcluir, produtoToggleVariacao, produtoVarAdicionar, produtoVarRemover, produtoVarSet, produtoNovoFornecedor, maskMoneyProduto, produtoImportarBling, produtoImportBlingPreview, produtoImportBlingRun } from './produtos.js';
-import { loadLancador, lancadorBipar, lancadorSetQtd, lancadorRemover, lancadorEnviar, lancadorCamera, fecharCamera, scanBarcodeInto, lancadorSelecionarRev, lancadorDestinoNova, lancadorDestinoExistente, lancadorTrocarDestino } from './lancador.js';
+import { loadProdutos, produtoNovo, produtoEditar, produtoVoltarLista, produtoFiltrar, produtoFiltrarColecao, produtoFiltrarCategoria, produtoFiltrarFornecedor, produtoPagina, produtoToggleGrupo, produtoSalvar, produtoExcluir, produtoToggleVariacao, produtoVarAdicionar, produtoVarRemover, produtoVarSet, produtoNovoFornecedor, maskMoneyProduto, produtoImportarBling, produtoImportBlingPreview, produtoImportBlingRun, produtoImgAdd, produtoImgRemover, produtoImgPrincipal } from './produtos.js';
+import { loadLancador, lancadorBipar, lancadorSetQtd, lancadorRemover, lancadorEnviar, lancadorCamera, fecharCamera, scanBarcodeInto, lancadorSelecionarRev, lancadorDestinoNova, lancadorDestinoExistente, lancadorTrocarDestino, lancadorAbrirBusca, lancadorFecharBusca, lancadorBuscaInput, lancadorBuscaTeclas, lancadorBuscaAdicionar } from './lancador.js';
 import { abrirDivulgarMaleta, copiarLinkMaleta, mostrarQrMaleta, regenerarLinkMaleta } from './divulgar.js';
 
 // ═══════════════════════════════════════════════
@@ -66,21 +66,54 @@ async function init() {
   calcPrazoGarantia();
 }
 
-// Fecha pop-ups ao clicar fora (exceto os com data-lock-outside, ex.: garantia).
+// ═══════════════════════════════════════════════════════════════════
+// REGRA GLOBAL DE MODAIS: NÃO fecham por clique fora nem por arraste —
+// apenas pelo botão Fechar/X (Esc é atalho opcional). Isso evita perder
+// um formulário ao soltar o mouse fora durante uma seleção de texto.
+// ═══════════════════════════════════════════════════════════════════
+
+// Fechamento correto por modal (alguns têm teardown próprio).
+function fecharModalPadrao(overlay) {
+  const id = overlay.id;
+  if (id === 'modal-complemento') return;                 // bloqueante de propósito (cadastro obrigatório)
+  if (id === 'modal-scanner') { fecharCamera(); return; } // desliga a câmera
+  if (id === 'modal-busca-produto') { lancadorFecharBusca(); return; }
+  if (id === 'modal-confirma') { fecharConfirma(false); return; }
+  overlay.classList.remove('show');
+}
+
+// Todo modal ganha um X no canto (injetado aqui para não repetir HTML),
+// exceto os que já têm ou os intencionalmente bloqueantes.
 document.querySelectorAll('.modal-overlay').forEach(o => {
-  o.addEventListener('click', e => {
-    if (e.target === o && !o.hasAttribute('data-lock-outside')) o.classList.remove('show');
-  });
+  if (o.id === 'modal-complemento') return;
+  const modal = o.querySelector('.modal');
+  if (!modal || modal.querySelector('.modal-close-x')) return;
+  const x = document.createElement('button');
+  x.type = 'button'; x.className = 'modal-close-x'; x.setAttribute('aria-label', 'Fechar');
+  x.textContent = '✕';
+  x.addEventListener('click', () => fecharModalPadrao(o));
+  modal.prepend(x);
+});
+
+// Esc fecha o modal aberto (atalho de teclado não sofre o bug do arraste).
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  // O lightbox de foto fica por cima de qualquer modal (z-index maior).
+  const lightbox = document.querySelector('#lightbox-foto.show');
+  if (lightbox) { lightbox.classList.remove('show'); return; }
+  const abertos = [...document.querySelectorAll('.modal-overlay.show')];
+  const topo = abertos[abertos.length - 1];
+  if (topo) fecharModalPadrao(topo);
 });
 
 // Expoe no window TODAS as funcoes chamadas via on* no HTML (estatico e gerado),
 // pois cada modulo tem escopo proprio (ES modules). Lista derivada dos handlers on*.
-Object.assign(window, { renderAprovadas, renderGarantiaCard, ehAdmin, ehStaff, ehGestor, loadDashboard, loadGarantias, loadConsignados, loadVendas, loadHistorico, loadTrocasDashboard, loadAdmin, loadFinanceiro, loadCalculadora, loadClientes, loadMarketing, loadFuncionarios, loadFormasPagamento, loadCategoriasFinanceiras, sb, abrirCicloRev, abrirFinalizarVenda, abrirHistoricoCiclo, adicionarAoCarrinho, ajustarValorPago, aprovarRev, atualizarMaleta, atualizarStatusCard, atualizarTotalVenda, buscarBling, calcPrazoGarantia, closeModal, confirmarExclusaoRev, confirmarMaleta, confirmarVendaCarrinho, definirPapel, deletarCicloRev, detectarBlingId, editarGarantia, enviarLinkRecuperacao, escolherBlingCandidato, excluirGarantia, excluirRevendedora, excluirVenda, fazerCadastro, fazerLogin, fecharConfirma, fecharPrint, filtrarBling, filtrarGarantias, filtrarHistorico, finalizarCicloRev, gerarPdfFechamento, importarItensBling, loginGoogle, maskDateBR, maskMoneyBR, maskTelBR, mostrarRecuperar, mudarStatus, openBlingSync, openBuscaPeca, openFechamento, openNovaGarantia, openNovoConsignado, openVenda, previewFoto, previewMaletaPorId, registrarPagamento, removerDoCarrinho, renderBuscaPeca, renderCicloGrid, revogarRev, salvarBlingId, salvarComplemento, salvarConsignado, salvarGarantia, salvarNovaSenha, setGFilter, setPFilter, setTrocaFiltro, resolverTroca, showPanel, sortConsignados, sortGarantiasStaff, toggleCicloSoVendidos, toggleCicloSoNaoVendidos, abrirConferencia, renderConferencia, confMarcarDevolvido, conferirFechamento, finalizarAposConferencia, baixarPdfMostruario, switchTab, toggleCadastros, toggleHistorico, toggleOrdemTroca, verGarantia, verItensBling, verRevendedora, verVenda, voltarCardsCiclo, voltarHistoricoCiclo, voltarListaBling, voltarLogin,
-  loadProdutos, produtoNovo, produtoEditar, produtoVoltarLista, produtoFiltrar, produtoFiltrarColecao, produtoFiltrarCategoria, produtoFiltrarFornecedor, produtoPagina, produtoToggleGrupo, produtoSalvar, produtoExcluir, produtoToggleVariacao, produtoVarAdicionar, produtoVarRemover, produtoVarSet, produtoNovoFornecedor, maskMoneyProduto, produtoImportarBling, produtoImportBlingPreview, produtoImportBlingRun,
+Object.assign(window, { renderAprovadas, renderGarantiaCard, ehAdmin, ehStaff, ehGestor, loadDashboard, loadGarantias, loadConsignados, loadVendas, loadHistorico, loadTrocasDashboard, loadAdmin, loadFinanceiro, loadCalculadora, loadClientes, loadMarketing, loadFuncionarios, loadFormasPagamento, loadCategoriasFinanceiras, sb, abrirCicloRev, abrirFinalizarVenda, abrirHistoricoCiclo, adicionarAoCarrinho, ajustarValorPago, aprovarRev, atualizarMaleta, atualizarStatusCard, atualizarTotalVenda, buscarBling, calcPrazoGarantia, closeModal, confirmarExclusaoRev, confirmarMaleta, confirmarVendaCarrinho, definirPapel, deletarCicloRev, detectarBlingId, editarGarantia, enviarLinkRecuperacao, escolherBlingCandidato, excluirGarantia, excluirRevendedora, excluirVenda, fazerCadastro, fazerLogin, fecharConfirma, fecharPrint, filtrarBling, filtrarGarantias, filtrarHistorico, finalizarCicloRev, gerarPdfFechamento, importarItensBling, loginGoogle, maskDateBR, maskMoneyBR, maskTelBR, mostrarRecuperar, mudarStatus, openBlingSync, openBuscaPeca, openFechamento, openNovaGarantia, openNovoConsignado, openVenda, previewFoto, previewMaletaPorId, registrarPagamento, removerDoCarrinho, renderBuscaPeca, renderCicloGrid, revogarRev, salvarBlingId, salvarComplemento, salvarConsignado, salvarGarantia, salvarNovaSenha, setGFilter, setPFilter, setTrocaFiltro, resolverTroca, showPanel, sortConsignados, sortGarantiasStaff, toggleCicloSoVendidos, toggleCicloSoNaoVendidos, abrirConferencia, abrirConferenciaCorrecao, salvarCorrecaoConferencia, renderConferencia, confMarcarDevolvido, confBuscaTeclas, confVerFoto, lightboxFotoNav, conferirFechamento, finalizarAposConferencia, baixarPdfMostruario, switchTab, toggleCadastros, toggleHistorico, toggleOrdemTroca, verGarantia, verItensBling, verRevendedora, verVenda, voltarCardsCiclo, voltarHistoricoCiclo, voltarListaBling, voltarLogin,
+  loadProdutos, produtoNovo, produtoEditar, produtoVoltarLista, produtoFiltrar, produtoFiltrarColecao, produtoFiltrarCategoria, produtoFiltrarFornecedor, produtoPagina, produtoToggleGrupo, produtoSalvar, produtoExcluir, produtoToggleVariacao, produtoVarAdicionar, produtoVarRemover, produtoVarSet, produtoNovoFornecedor, maskMoneyProduto, produtoImportarBling, produtoImportBlingPreview, produtoImportBlingRun, produtoImgAdd, produtoImgRemover, produtoImgPrincipal,
   loadCategorias, loadColecoes, loadFornecedores, cadNovo, cadEditar, cadSalvar, cadExcluir,
   toast, podeAcessarPanel, renderSidebar, toggleSnavGrupo,
   funcTab, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilSalvarPermissoes,
-  loadLancador, lancadorBipar, lancadorSetQtd, lancadorRemover, lancadorEnviar, lancadorCamera, fecharCamera, scanBarcodeInto, lancadorSelecionarRev, lancadorDestinoNova, lancadorDestinoExistente, lancadorTrocarDestino,
+  loadLancador, lancadorBipar, lancadorSetQtd, lancadorRemover, lancadorEnviar, lancadorCamera, fecharCamera, scanBarcodeInto, lancadorSelecionarRev, lancadorDestinoNova, lancadorDestinoExistente, lancadorTrocarDestino, lancadorAbrirBusca, lancadorFecharBusca, lancadorBuscaInput, lancadorBuscaTeclas, lancadorBuscaAdicionar,
   abrirDivulgarMaleta, copiarLinkMaleta, mostrarQrMaleta, regenerarLinkMaleta });
 
 // START

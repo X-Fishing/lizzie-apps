@@ -116,7 +116,7 @@ function render() {
     </tr></thead><tbody>${rows}</tbody></table></div>
 
     <div style="display:flex;gap:8px;margin:10px 0 18px">
-      <input type="text" id="lan-scan" class="form-control" placeholder="Bipe ou digite o código e tecle Enter" autocomplete="off"
+      <input type="text" id="lan-scan" class="form-control" placeholder="Bipe ou digite o código e tecle Enter · F3 busca por nome/preço" autocomplete="off"
         onkeydown="if(event.key==='Enter'){event.preventDefault();lancadorBipar(this.value);this.value='';}">
       <button class="btn-secondary" title="Bipar com a câmera" onclick="lancadorCamera()">${IC_CAM}</button>
     </div>
@@ -190,15 +190,20 @@ async function lookupProduto(code) {
   return null;
 }
 
+// Caminho ÚNICO de adição ao carrinho (bipe, câmera e busca F3 usam este).
+// Cada adição = nova linha, sempre 1 unidade (não soma): cada peça física é 1 do estoque.
+function carrinhoAdd(prod) {
+  carrinho.push({ produto_id: prod.id, descricao: prod.nome, referencia: prod.referencia || null, preco_venda: prod.preco_venda || 0, foto_url: prod.foto_url || null, qtd: 1 });
+  beep(true);
+  render();
+}
+
 export async function lancadorBipar(code) {
   const c = (code || '').trim();
   if (!c) return;
   const prod = await lookupProduto(c);
   if (!prod) { beep(false); toast('Código não encontrado: ' + c); return; }
-  // cada bipe = nova linha, sempre 1 unidade (não soma): cada peça física é 1 do estoque
-  carrinho.push({ produto_id: prod.id, descricao: prod.nome, referencia: prod.referencia || null, preco_venda: prod.preco_venda || 0, foto_url: prod.foto_url || null, qtd: 1 });
-  beep(true);
-  render();
+  carrinhoAdd(prod);
   focarCampoBipe();
 }
 
@@ -343,3 +348,141 @@ export function fecharCamera() {
 export function lancadorCamera() { abrirCamera('continuo', null); }
 // usado pelo formulário de produto (uma leitura preenche o input)
 export function scanBarcodeInto(inputId) { abrirCamera('single', inputId); }
+
+// ════════════════════════════════════════════════════════════════════
+// BUSCA DE PRODUTOS (F3) — pesquisa multi-critério e adiciona à maleta
+// pelo MESMO caminho do bipe (carrinhoAdd). Só ativa na tela do lançador.
+// ════════════════════════════════════════════════════════════════════
+let f3Resultados = [];
+let f3Sel = 0;
+let f3Timer = null;
+
+function f3ModalAberto() {
+  return document.getElementById('modal-busca-produto')?.classList.contains('show');
+}
+
+function lancadorVisivel() {
+  const p = panel();
+  return p && p.style.display !== 'none' && document.getElementById('app')?.style.display !== 'none';
+}
+
+// Atalho global: F3 abre/foca a busca APENAS com o lançador visível
+// (fora dele, o F3 nativo do navegador continua funcionando).
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'F3' && lancadorVisivel()) {
+    e.preventDefault();
+    lancadorAbrirBusca();
+  } else if (e.key === 'Escape' && f3ModalAberto()) {
+    lancadorFecharBusca();
+  }
+});
+
+export function lancadorAbrirBusca() {
+  const input = document.getElementById('f3-search');
+  input.value = '';
+  f3Resultados = []; f3Sel = 0;
+  document.getElementById('f3-results').innerHTML =
+    '<div class="loading" style="padding:20px 0"><div class="spinner">⟳</div></div>';
+  document.getElementById('modal-busca-produto').classList.add('show');
+  setTimeout(() => input.focus(), 60);
+  f3Buscar(); // já abre listando os primeiros produtos (sem precisar digitar)
+}
+
+export function lancadorFecharBusca() {
+  document.getElementById('modal-busca-produto').classList.remove('show');
+  focarCampoBipe(); // devolve o foco ao input de bipe
+}
+
+export function lancadorBuscaInput() {
+  clearTimeout(f3Timer);
+  f3Timer = setTimeout(f3Buscar, 250); // debounce
+}
+
+async function f3Buscar() {
+  const termo = (document.getElementById('f3-search').value || '').trim();
+
+  let q = sb.from('produtos')
+    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,foto_url')
+    .eq('ativo', true);
+  if (termo) {
+    // OR multi-critério. Aspas no padrão protegem vírgulas/caracteres do or().
+    const t = termo.replace(/"/g, '');
+    const ors = [`nome.ilike."%${t}%"`, `sku.ilike."%${t}%"`, `codigo_fornecedor.ilike."%${t}%"`, `codigo_barras.ilike."%${t}%"`];
+    const num = parseFloat(termo.replace(',', '.'));
+    if (!isNaN(num) && /^[\d.,]+$/.test(termo)) ors.push(`preco_venda.eq.${num}`);
+    q = q.or(ors.join(','));
+  }
+  // Sem termo: lista inicial (primeiros 50 por nome).
+  const { data, error } = await sbQ(q.order('nome').limit(50));
+  if (error) {
+    console.error('Busca de produtos (F3):', error);
+    toast(`Erro na busca: ${error.message || 'tente novamente'}`);
+    return;
+  }
+  f3Resultados = data || [];
+  f3Sel = 0;
+  f3Render(termo);
+}
+
+// Destaca o termo casado (em texto já escapado, com termo escapado).
+function f3Marca(valor, termo) {
+  const s = esc(valor || '');
+  const t = esc(termo);
+  if (!t) return s;
+  const re = new RegExp(t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+  return s.replace(re, m => `<b style="color:var(--rose)">${m}</b>`);
+}
+
+function f3Render(termo) {
+  const div = document.getElementById('f3-results');
+  if (!f3Resultados.length) {
+    div.innerHTML = `<div class="empty-state" style="padding:20px 0"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>${termo ? `Nenhum produto encontrado para "${esc(termo)}"` : 'Nenhum produto ativo cadastrado'}</p></div>`;
+    return;
+  }
+  const nota = f3Resultados.length >= 50
+    ? '<div style="font-size:11px;color:var(--muted);text-align:center;padding:8px 0">Mostrando os primeiros 50 — refine a busca para encontrar mais.</div>'
+    : '';
+  div.innerHTML = nota + f3Resultados.map((p, i) => `
+    <div class="f3-row${i === f3Sel ? ' sel' : ''}" onclick="lancadorBuscaAdicionar(${i})">
+      <div style="flex:1;min-width:0">
+        <div class="ciclo-desc">${f3Marca(p.nome, termo)}</div>
+        <div class="f3-meta">
+          <span>SKU ${f3Marca(p.sku || '—', termo)}</span>
+          <span>FORN ${f3Marca(p.codigo_fornecedor || '—', termo)}</span>
+        </div>
+      </div>
+      <span class="ciclo-preco" style="white-space:nowrap">${fmtBRL(p.preco_venda || 0)}</span>
+    </div>`).join('');
+  div.querySelector('.f3-row.sel')?.scrollIntoView({ block: 'nearest' });
+}
+
+export function lancadorBuscaTeclas(e) {
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (f3Resultados.length) { f3Sel = Math.min(f3Sel + 1, f3Resultados.length - 1); f3Render(e.target.value.trim()); }
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (f3Resultados.length) { f3Sel = Math.max(f3Sel - 1, 0); f3Render(e.target.value.trim()); }
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (f3Resultados.length) lancadorBuscaAdicionar(f3Sel);
+  } else if (e.key === 'Escape') {
+    e.preventDefault();
+    lancadorFecharBusca();
+  }
+}
+
+export function lancadorBuscaAdicionar(idx) {
+  const p = f3Resultados[idx];
+  if (!p) return;
+  // Mesmo caminho do bipe (quantidade, preço e total seguem a regra atual).
+  carrinhoAdd({ id: p.id, nome: p.nome, preco_venda: p.preco_venda, foto_url: p.foto_url, referencia: p.sku || p.codigo_barras });
+  toast(`Adicionado: ${p.nome}`);
+  // Modal fica aberto p/ adicionar várias em sequência; limpa a busca, volta
+  // à lista inicial e refoca (o render() do carrinho foca o bipe — retoma aqui).
+  const input = document.getElementById('f3-search');
+  input.value = '';
+  f3Sel = 0;
+  f3Buscar();
+  setTimeout(() => input.focus(), 0);
+}

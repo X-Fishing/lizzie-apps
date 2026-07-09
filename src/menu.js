@@ -54,10 +54,16 @@ export const MENU = [
   ]},
 ];
 
+// Ações especiais: permissões que NÃO são itens de menu (aparecem num
+// grupo próprio no checklist de perfis). Checagem: IS_ADMIN || PERMISSOES.has(chave).
+export const ACOES = [
+  { chave: 'acao_editar_maleta_finalizada', label: 'Editar/corrigir maleta finalizada' },
+];
+
 function todosItens() {
   return MENU.flatMap(m => m.filhos ? m.filhos : [m]);
 }
-export function todasChaves() { return todosItens().map(i => i.chave); }
+export function todasChaves() { return [...todosItens().map(i => i.chave), ...ACOES.map(a => a.chave)]; }
 
 // ── Permissões (carregadas 1x no login, mantidas em memória) ───────
 export let PERMISSOES = new Set();

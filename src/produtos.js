@@ -59,6 +59,9 @@ let filtroFornecedor = '';   // id do fornecedor ('' = todos)
 let paginaAtual = 1;         // paginação client-side da grid
 const POR_PAGINA = 50;
 let formVariacoes = [];   // variações em edição no formulário (client-side)
+let formImagens = [];     // imagens em edição: [{url|null, file|null, preview}] — a 1ª é a principal
+const MAX_IMAGENS = 5;
+const MAX_IMG_MB = 5;
 
 function panel() { return document.getElementById('panel-produtos'); }
 
@@ -508,6 +511,9 @@ async function abrirForm(p) {
   const editando = !!p;
   p = p || {};
   formVariacoes = []; // carregadas depois se editando
+  // imagens: array novo (imagens[1] = principal) com fallback pro foto_url legado
+  const urlsIniciais = (p.imagens && p.imagens.length) ? p.imagens : (p.foto_url ? [p.foto_url] : []);
+  formImagens = urlsIniciais.slice(0, MAX_IMAGENS).map(u => ({ url: u, file: null, preview: u }));
 
   panel().innerHTML = `
     <div class="section-header" style="display:flex;align-items:center;gap:10px">
@@ -554,12 +560,9 @@ async function abrirForm(p) {
         <input type="number" id="p-profundidade" class="form-control" value="${p.profundidade ?? ''}"></div>
     </div>
 
-    ${secHeader('Imagem')}
-    <div class="foto-upload" onclick="document.getElementById('p-foto-input').click()">
-      <img id="p-foto-preview" src="${esc(p.foto_url || '')}" style="display:${p.foto_url ? 'block' : 'none'};max-width:140px;max-height:140px;border-radius:10px;object-fit:cover">
-      <div id="p-foto-placeholder" style="display:${p.foto_url ? 'none' : 'block'};color:var(--muted)">${IC_CAM}<br>Toque para adicionar imagem</div>
-      <input type="file" id="p-foto-input" accept="image/*" style="display:none" onchange="previewFoto(this,'p-foto-preview','p-foto-placeholder')">
-    </div>
+    ${secHeader('Imagens', 'até 5 · a 1ª é a principal')}
+    <div id="p-imagens-grid"></div>
+    <input type="file" id="p-imagens-input" accept="image/jpeg,image/png,image/webp" multiple style="display:none" onchange="produtoImgAdd(this)">
 
     ${secHeader('Coleção e estoque')}
     <div class="form-grid">
@@ -595,7 +598,54 @@ async function abrirForm(p) {
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> ${editando ? 'Salvar alterações' : 'Salvar produto'}</button>`;
 
   produtoToggleVariacao();
+  renderImagens();
   if (editando) carregarVariacoes(p.id);
+}
+
+// ── Imagens do produto (até 5; a 1ª é a principal e vira o foto_url) ──
+function renderImagens() {
+  const grid = document.getElementById('p-imagens-grid');
+  if (!grid) return;
+  const thumbs = formImagens.map((img, i) => `
+    <div style="position:relative;width:110px">
+      <img src="${esc(img.preview)}" style="width:110px;height:110px;object-fit:cover;border-radius:10px;border:2px solid ${i === 0 ? 'var(--rose)' : 'var(--border)'}">
+      ${i === 0
+        ? '<span style="position:absolute;left:6px;bottom:6px;background:var(--rose);color:#fff;font-size:10px;font-weight:600;padding:2px 7px;border-radius:8px">★ principal</span>'
+        : `<button type="button" title="Definir como principal" onclick="produtoImgPrincipal(${i})" style="position:absolute;left:6px;bottom:6px;background:#fff;border:1px solid var(--border);color:var(--muted);font-size:10px;padding:2px 7px;border-radius:8px;cursor:pointer">★ principal</button>`}
+      <button type="button" title="Remover" onclick="produtoImgRemover(${i})" style="position:absolute;top:-7px;right:-7px;width:22px;height:22px;border-radius:50%;border:1px solid var(--border);background:#fff;color:var(--danger);cursor:pointer;font-size:12px;line-height:1">✕</button>
+    </div>`).join('');
+  const btnAdd = formImagens.length < MAX_IMAGENS
+    ? `<div class="foto-upload" style="width:110px;height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;margin:0" onclick="document.getElementById('p-imagens-input').click()">
+        <span style="color:var(--muted);font-size:11px;text-align:center">${IC_CAM}<br>Adicionar<br>(${formImagens.length}/${MAX_IMAGENS})</span></div>`
+    : '';
+  grid.innerHTML = `<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">${thumbs}${btnAdd}</div>`;
+}
+
+export function produtoImgAdd(input) {
+  const tipos = ['image/jpeg', 'image/png', 'image/webp'];
+  for (const file of [...(input.files || [])]) {
+    if (formImagens.length >= MAX_IMAGENS) { toast(`Máximo de ${MAX_IMAGENS} imagens por produto.`); break; }
+    if (!tipos.includes(file.type)) { toast(`"${file.name}" não é JPG/PNG/WebP — ignorada.`); continue; }
+    if (file.size > MAX_IMG_MB * 1024 * 1024) { toast(`"${file.name}" passa de ${MAX_IMG_MB}MB — ignorada.`); continue; }
+    const item = { url: null, file, preview: '' };
+    formImagens.push(item);
+    const reader = new FileReader();
+    reader.onload = e => { item.preview = e.target.result; renderImagens(); };
+    reader.readAsDataURL(file);
+  }
+  input.value = ''; // permite escolher o mesmo arquivo de novo
+  renderImagens();
+}
+
+export function produtoImgRemover(i) {
+  formImagens.splice(i, 1); // se era a principal, a próxima assume (índice 0)
+  renderImagens();
+}
+
+export function produtoImgPrincipal(i) {
+  const [img] = formImagens.splice(i, 1);
+  formImagens.unshift(img);
+  renderImagens();
 }
 
 export async function produtoNovo() { abrirForm(null); }
@@ -683,16 +733,25 @@ export async function produtoSalvar(id) {
   const btn = panel().querySelector('.btn-primary[onclick^="produtoSalvar"]');
   if (btn) { btn.disabled = true; btn.textContent = 'Salvando...'; }
 
-  // upload de imagem (se nova)
-  let foto_url = document.getElementById('p-foto-preview').getAttribute('src') || null;
-  const fileInput = document.getElementById('p-foto-input');
-  if (fileInput.files[0]) {
-    const file = fileInput.files[0];
-    const fname = `produtos/${Date.now()}.${file.name.split('.').pop()}`;
-    const { error: upErr } = await sb.storage.from('lizzie-fotos').upload(fname, file, { upsert: true });
-    if (!upErr) { foto_url = sb.storage.from('lizzie-fotos').getPublicUrl(fname).data.publicUrl; }
+  // Upload das imagens novas (as já salvas mantêm a URL). Erro aborta o
+  // salvar — nada de produto sem as fotos que o usuário escolheu.
+  const imagens = [];
+  for (let i = 0; i < formImagens.length; i++) {
+    const img = formImagens[i];
+    if (img.url) { imagens.push(img.url); continue; }
+    const fname = `produtos/${Date.now()}_${i}.${img.file.name.split('.').pop()}`;
+    const { error: upErr } = await sb.storage.from('lizzie-fotos').upload(fname, img.file, { upsert: true });
+    if (upErr) {
+      console.error('Upload de imagem:', upErr);
+      if (btn) { btn.disabled = false; btn.textContent = id ? 'Salvar alterações' : 'Salvar produto'; }
+      toast(`Erro ao enviar a imagem ${i + 1}: ${upErr.message || 'tente de novo'}`);
+      return;
+    }
+    const url = sb.storage.from('lizzie-fotos').getPublicUrl(fname).data.publicUrl;
+    img.url = url; // não re-envia se salvar de novo
+    imagens.push(url);
   }
-  if (foto_url === '') foto_url = null;
+  const foto_url = imagens[0] || null; // principal sincronizada (compat com o resto do app)
 
   const num = elId => { const v = document.getElementById(elId).value; return v.trim() === '' ? null : Number(v); };
   const formato = document.getElementById('p-formato').value;
@@ -714,17 +773,28 @@ export async function produtoSalvar(id) {
     profundidade: num('p-profundidade'),
     descricao_curta: document.getElementById('p-descricao').value.trim() || null,
     foto_url,
+    imagens,
     estoque_qtd: parseInt(document.getElementById('p-estoque').value) || 0,
     deposito: document.getElementById('p-deposito').value.trim() || 'Geral',
   };
 
   let produtoId = id;
   let error;
-  if (id) {
-    ({ error } = await sb.from('produtos').update(payload).eq('id', id));
-  } else {
-    const r = await sb.from('produtos').insert(payload).select('id').single();
-    error = r.error; produtoId = r.data?.id;
+  const gravar = async () => {
+    if (id) {
+      ({ error } = await sb.from('produtos').update(payload).eq('id', id));
+    } else {
+      const r = await sb.from('produtos').insert(payload).select('id').single();
+      error = r.error; produtoId = r.data?.id;
+    }
+  };
+  await gravar();
+  // Migração 0004 ainda não rodada: salva sem o array (foto_url principal fica).
+  if (error && /imagens/i.test(error.message || '') && /column|schema cache/i.test(error.message || '')) {
+    console.warn('Coluna imagens ausente (rode a migração 0004):', error.message);
+    delete payload.imagens;
+    await gravar();
+    if (!error) toast('Salvo só com a foto principal — rode a migração 0004 para múltiplas imagens.');
   }
   if (error) {
     if (btn) { btn.disabled = false; btn.textContent = 'Salvar produto'; }

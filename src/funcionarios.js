@@ -3,7 +3,7 @@
 // Aba 2: perfis com checklist das chaves do MENU (granularidade só-ver-menu).
 import { sb } from './supabase.js';
 import { esc, toast, sbQ, confirmarAcao, handleSupabaseError, openModal, closeModal } from './utils.js';
-import { MENU, IS_ADMIN } from './menu.js';
+import { MENU, ACOES, IS_ADMIN } from './menu.js';
 
 const IC_PLUS  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>';
 const IC_EDIT  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
@@ -194,6 +194,7 @@ function renderChecklist(perfil) {
     } else soltos.push(m);
   });
   if (soltos.length) grupos.push({ titulo: 'Geral', itens: soltos });
+  grupos.push({ titulo: 'Ações especiais', itens: ACOES });
 
   const check = i => `
     <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:4px 0">
