@@ -12,7 +12,8 @@ import { state } from './state.js';
 import { closeModal, openModal, fecharConfirma, hojeBR, maskDateBR, maskMoneyBR, previewFoto, showMsg, toast } from './utils.js';
 import { showPanel, toggleCadastros } from './nav.js';
 import { mostrarRecovery, ehAdmin, ehGestor, ehStaff, loadUser, maskTelBR, salvarComplemento, showSplash, switchTab, fazerLogin, mostrarRecuperar, voltarLogin, loginGoogle, enviarLinkRecuperacao, salvarNovaSenha, fazerCadastro } from './auth.js';
-import { loadDashboard, loadFinanceiro, loadCalculadora, loadClientes, loadMarketing, loadFormasPagamento, loadCategoriasFinanceiras } from './dashboard.js';
+import { loadDashboard, loadCalculadora, loadClientes, loadMarketing, loadFormasPagamento, loadCategoriasFinanceiras } from './dashboard.js';
+import { loadFinanceiro, abrirRecebimento, registrarRecebimento, recRecalc, recAtalho, copiarPixCola, pixConfigAbrir, pixConfigSalvar, zapCobranca, estornarRecebimento, estornarConfirmar } from './financeiro.js';
 import { podeAcessarPanel, renderSidebar, toggleSnavGrupo } from './menu.js';
 import { loadFuncionarios, funcTab, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilSalvarPermissoes } from './funcionarios.js';
 import { calcPrazoGarantia, loadGarantias, filtrarGarantias, sortGarantiasStaff, setGFilter, renderGarantiaCard, verGarantia, openNovaGarantia, editarGarantia, salvarGarantia, mudarStatus, atualizarStatusCard, excluirGarantia } from './garantias.js';
@@ -112,6 +113,7 @@ Object.assign(window, { renderAprovadas, renderGarantiaCard, ehAdmin, ehStaff, e
   loadProdutos, produtoNovo, produtoEditar, produtoVoltarLista, produtoFiltrar, produtoFiltrarColecao, produtoFiltrarCategoria, produtoFiltrarFornecedor, produtoPagina, produtoToggleGrupo, produtoSalvar, produtoExcluir, produtoToggleVariacao, produtoVarAdicionar, produtoVarRemover, produtoVarSet, produtoNovoFornecedor, maskMoneyProduto, produtoImportarBling, produtoImportBlingPreview, produtoImportBlingRun, produtoImgAdd, produtoImgRemover, produtoImgPrincipal,
   loadCategorias, loadColecoes, loadFornecedores, loadFaixasComissao, cadNovo, cadEditar, cadSalvar, cadExcluir,
   toast, podeAcessarPanel, renderSidebar, toggleSnavGrupo,
+  abrirRecebimento, registrarRecebimento, recRecalc, recAtalho, copiarPixCola, pixConfigAbrir, pixConfigSalvar, zapCobranca, estornarRecebimento, estornarConfirmar,
   funcTab, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilSalvarPermissoes,
   loadLancador, lancadorBipar, lancadorSetQtd, lancadorRemover, lancadorEnviar, lancadorCamera, fecharCamera, scanBarcodeInto, lancadorSelecionarRev, lancadorDestinoNova, lancadorDestinoExistente, lancadorTrocarDestino, lancadorAbrirBusca, lancadorFecharBusca, lancadorBuscaInput, lancadorBuscaTeclas, lancadorBuscaAdicionar,
   abrirDivulgarMaleta, copiarLinkMaleta, mostrarQrMaleta, regenerarLinkMaleta });

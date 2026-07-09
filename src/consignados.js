@@ -331,17 +331,18 @@ async function preencherComissaoHistorico(chave) {
   const el = document.getElementById('hist-comissao');
   if (!el || !ehStaff() || !state.cicloRevSelecionada) return;
   const { data, error } = await sbQ(sb.from('fechamentos_mostruario')
-    .select('comissao_percentual,comissao_valor,valor_a_receber,total_vendido_valor,corrigido_em')
+    .select('id,comissao_percentual,comissao_valor,valor_a_receber,total_vendido_valor,corrigido_em')
     .eq('revendedora_id', state.cicloRevSelecionada)
     .gte('created_at', chave + 'T00:00:00').lte('created_at', chave + 'T23:59:59.999')
     .order('created_at', { ascending: false }).limit(1));
   if (error) { console.error('Comissão do fechamento:', error); return; }
   const f = data?.[0];
   if (!f || f.comissao_percentual == null) return;
-  el.innerHTML = `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:var(--blush);font-size:13px;display:flex;gap:18px;flex-wrap:wrap">
+  el.innerHTML = `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:var(--blush);font-size:13px;display:flex;gap:18px;flex-wrap:wrap;align-items:center">
     <span>Comissão: <b style="color:var(--rose)">${String(Number(f.comissao_percentual)).replace('.', ',')}%</b> · <b style="color:var(--rose)">${fmtBRL(f.comissao_valor)}</b></span>
     <span>A receber: <b style="color:var(--success)">${fmtBRL(f.valor_a_receber)}</b></span>
     ${f.corrigido_em ? `<span style="color:var(--muted);font-size:11.5px">corrigido em ${formatDate(f.corrigido_em)}</span>` : ''}
+    ${ehGestor() ? `<button class="btn-secondary btn-sm" onclick="abrirRecebimento('${f.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg> Recebimento</button>` : ''}
   </div>`;
 }
 
@@ -1093,6 +1094,8 @@ async function aplicarCorrecaoConferencia() {
     ? `Correção salva. ${totalDiv} divergência${totalDiv !== 1 ? 's' : ''} registrada${totalDiv !== 1 ? 's' : ''} na auditoria.`
     : 'Conferência corrigida com sucesso!');
   loadConsignados();
+  // Financeiro: reabre o recebimento — o valor a receber pode ter mudado.
+  window.abrirRecebimento(fechId);
 }
 
 // Agrupa por quantidade_enviada para setar quantidade_devolvida/vendida =
@@ -1143,7 +1146,11 @@ async function executarFechamentoReconciliado() {
 
   // 2) Auditoria (cabeçalho + itens divergentes)
   const peds = pedidosDoCatalogo(base);
+  // ID próprio da maleta (Mostruário #) — o pedido Bling vira referência secundária.
+  const { data: mAtiva } = await sbQ(sb.from('maletas')
+    .select('numero_interno').eq('revendedora_id', revId).eq('status', 'ativa').maybeSingle());
   const cabecalho = {
+    numero_interno: mAtiva?.numero_interno ?? null,
     pedido_numero: peds.join(', ') || null,
     revendedora_id: revId,
     revendedora_nome: nome,
@@ -1156,10 +1163,10 @@ async function executarFechamentoReconciliado() {
     ...dadosComissao(),
   };
   let { data: fech, error: eFech } = await sbQ(sb.from('fechamentos_mostruario').insert(cabecalho).select('id').single());
-  // Colunas de comissão ausentes (migração 0007 não rodada): grava sem elas.
-  if (eFech && /comissao|total_vendido|a_receber/i.test(eFech.message || '') && /column|schema cache/i.test(eFech.message || '')) {
-    console.warn('Colunas de comissão ausentes (rode a migração 0007):', eFech.message);
-    ['total_vendido_valor', 'comissao_percentual', 'comissao_valor', 'valor_a_receber'].forEach(k => delete cabecalho[k]);
+  // Colunas das migrações 0007/0010 ausentes: grava sem elas.
+  if (eFech && /comissao|total_vendido|a_receber|numero_interno/i.test(eFech.message || '') && /column|schema cache/i.test(eFech.message || '')) {
+    console.warn('Colunas ausentes (rode as migrações 0007/0010):', eFech.message);
+    ['total_vendido_valor', 'comissao_percentual', 'comissao_valor', 'valor_a_receber', 'numero_interno'].forEach(k => delete cabecalho[k]);
     ({ data: fech, error: eFech } = await sbQ(sb.from('fechamentos_mostruario').insert(cabecalho).select('id').single()));
   }
   if (eFech) {
@@ -1186,7 +1193,9 @@ async function executarFechamentoReconciliado() {
   const msg = totalDiv > 0
     ? `Mostruário finalizado. ${divVendida.length} peça${divVendida.length !== 1 ? 's' : ''} marcada${divVendida.length !== 1 ? 's' : ''} como Vendido por Divergência (registrado).`
     : 'Fechamento do mostruário conferido com sucesso!';
-  await encerrarMostruarioCore(revId, msg);
+  const ok = await encerrarMostruarioCore(revId, msg);
+  // 4) Financeiro fase 1: abre o recebimento (QR PIX) com o valor a receber.
+  if (ok) window.abrirRecebimento(fech.id);
 }
 
 // Ação destrutiva: exclui SOMENTE a maleta AGUARDANDO (a próxima já montada).

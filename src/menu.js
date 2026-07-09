@@ -39,7 +39,7 @@ export const MENU = [
       { chave: 'vendas_lancar',   panel: 'lancador',    label: 'Lançar Mostruário',   icon: IC.columns },
       { chave: 'vendas_troca',    panel: 'trocas',      label: 'Troca de Mostruário', icon: IC.repeat },
   ]},
-  { chave: 'financeiro',  panel: 'financeiro',  label: 'Financeiro',  icon: IC.fin,  em_breve: true },
+  { chave: 'financeiro',  panel: 'financeiro',  label: 'Financeiro',  icon: IC.fin },
   { chave: 'calculadora', panel: 'calculadora', label: 'Calculadora', icon: IC.calc, em_breve: true },
   { chave: 'marketing',   panel: 'marketing',   label: 'Marketing',   icon: IC.mega, em_breve: true },
   { secao: 'Cadastros', grupo: 'grp_cadastros', filhos: [
@@ -60,6 +60,7 @@ export const MENU = [
 // grupo próprio no checklist de perfis). Checagem: IS_ADMIN || PERMISSOES.has(chave).
 export const ACOES = [
   { chave: 'acao_editar_maleta_finalizada', label: 'Editar/corrigir maleta finalizada' },
+  { chave: 'acao_estornar_recebimento',     label: 'Estornar recebimento (financeiro)' },
 ];
 
 function todosItens() {
