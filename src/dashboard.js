@@ -1,7 +1,7 @@
 // Dashboard (revendedora + staff/PC) e stubs 'Em breve' das secoes do PC.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { sbQ, fetchPaginado, fmtBRL, esc } from './utils.js';
+import { sbQ, fetchPaginado, fmtBRL, esc, ehRevTeste, marcarRevsTeste } from './utils.js';
 // ── Seções do dashboard PC (stubs "Em breve" — implementadas por etapa) ──
 export function emBreveHtml(titulo, descricao, icone) {
   return `<div class="section-header"><div><div class="section-title">${titulo} <span class="badge-soon">Em breve</span></div></div></div>
@@ -92,9 +92,15 @@ export async function loadDashboardStaff() {
   const [vRes, gRes, pRes] = await Promise.all([
     fetchPaginado(() => sb.from('vendas').select('valor_total,valor_pago,status,data_venda,revendedora_id')),
     sbQ(sb.from('garantias').select('status,prazo_maximo')),
-    sbQ(sb.from('profiles').select('id,nome,aprovada').eq('role', 'revendedora'))
+    sbQ(sb.from('profiles').select('*').eq('role', 'revendedora'))
   ]);
-  const vendas = vRes.data || [], garantias = gRes.data || [], revs = pRes.data || [];
+  // Métricas de faturamento IGNORAM revendedoras TESTE (profiles.teste).
+  const todasRevs = pRes.data || [];
+  marcarRevsTeste(todasRevs);
+  const vendas = (vRes.data || []).filter(v => !ehRevTeste(v.revendedora_id));
+  const garantias = gRes.data || [];
+  const revs = todasRevs.filter(r => !r.teste);
+  const temTeste = todasRevs.some(r => r.teste);
   const nomeDe = {}; revs.forEach(r => { nomeDe[r.id] = r.nome; });
 
   const num = v => Number(v) || 0;
@@ -141,7 +147,7 @@ export async function loadDashboardStaff() {
   panel.innerHTML = `
     <div class="section-header"><div>
       <div class="section-title">Dashboard</div>
-      <div class="section-subtitle">${mesLabel} · ${revsAtivas} revendedora${revsAtivas !== 1 ? 's' : ''} ativa${revsAtivas !== 1 ? 's' : ''}</div>
+      <div class="section-subtitle">${mesLabel} · ${revsAtivas} revendedora${revsAtivas !== 1 ? 's' : ''} ativa${revsAtivas !== 1 ? 's' : ''}${temTeste ? ' · <span style="font-size:11px">totais não incluem contas de teste</span>' : ''}</div>
     </div></div>
     <div class="dash-grid">
       <div class="dash-card">

@@ -261,6 +261,8 @@ export async function lancadorEnviar() {
   }
 
   // 2) Insere as peças vinculadas à maleta.
+  // ESTOQUE: hoje o envio NÃO baixa produtos.estoque_qtd. Quando a baixa
+  // central existir, checar utils.ehRevTeste(revId) e PULAR contas de teste.
   const linhas = carrinho.map(i => ({
     revendedora_id: revId,
     maleta_id: maletaId,

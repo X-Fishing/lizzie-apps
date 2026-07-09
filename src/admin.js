@@ -58,7 +58,7 @@ export function renderRevCard(r, pendente) {
     <div class="rev-header">
       <div class="rev-avatar">${inicial}</div>
       <div>
-        <div class="rev-nome">${esc(r.nome)}</div>
+        <div class="rev-nome">${esc(r.nome)}${r.teste ? ' <span class="badge-soon" style="background:var(--warning);color:#fff">TESTE</span>' : ''}</div>
         <div class="rev-cidade">${esc(r.cidade || 'Cidade não informada')} · ${esc(r.telefone || '—')}</div>
       </div>
       <div class="rev-status">
@@ -77,7 +77,7 @@ export async function verRevendedora(id) {
   document.getElementById('detalhe-rev-content').innerHTML = `
     <div style="text-align:center;margin-bottom:20px">
       <div class="rev-avatar" style="width:64px;height:64px;font-size:28px;margin:0 auto 12px">${r.nome.charAt(0)}</div>
-      <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">${esc(r.nome)}</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">${esc(r.nome)}${r.teste ? ' <span class="badge-soon" style="background:var(--warning);color:#fff;vertical-align:middle">TESTE</span>' : ''}</div>
       <div style="color:var(--muted);font-size:13px">${esc(r.email || '')}</div>
     </div>
     <div class="detail-grid">
@@ -101,6 +101,13 @@ export async function verRevendedora(id) {
         <button class="btn-secondary btn-sm" style="white-space:nowrap;font-size:11px" data-rev-nome="${esc(r.nome || '')}" onclick="detectarBlingId('${r.id}', this.dataset.revNome)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Detectar pelo Bling</button>
       </div>
       <div id="bling-candidatos" style="margin-top:10px"></div>
+    </div>
+    <div class="form-group" style="margin-top:10px">
+      <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+        <input type="checkbox" ${r.teste ? 'checked' : ''} style="width:auto" onchange="marcarRevTeste('${r.id}', this.checked)">
+        Conta de teste (não afeta faturamento/estoque)
+      </label>
+      <div style="font-size:11px;color:var(--muted)">Maletas e fechamentos continuam funcionando, mas nunca entram nos totais da empresa.</div>
     </div>` : ''}
     ${ehAdmin() ? `
     <div class="divider"></div>
@@ -144,6 +151,26 @@ export async function revogarRev(id) {
   toast('Acesso revogado');
   closeModal('modal-detalhe-rev');
   loadAdmin();
+}
+
+// Liga/desliga a conta de teste (só gestor/admin). O filtro das métricas
+// (utils.ehRevTeste) passa a valer no próximo carregamento das telas.
+export async function marcarRevTeste(id, teste) {
+  if (!ehGestor()) { toast('Sem permissão'); return; }
+  const { error } = await sbQ(sb.from('profiles').update({ teste }).eq('id', id));
+  if (error) {
+    console.error('Conta de teste:', error);
+    if (/teste/.test(error.message || '') && /column|schema cache/i.test(error.message || '')) {
+      toast('Coluna "teste" não existe — rode a migração 0008 no Supabase.');
+    } else if (await handleSupabaseError(error, `Erro ao salvar: ${error.message}`)) { /* já avisou */ }
+    loadAdmin();
+    return;
+  }
+  if (teste) state.revTesteSet.add(String(id)); else state.revTesteSet.delete(String(id));
+  const cache = state.aprovadasCache.find(r => String(r.id) === String(id));
+  if (cache) cache.teste = teste;
+  toast(teste ? 'Marcada como conta de TESTE — fora dos totais.' : 'Conta voltou a contar nos totais.');
+  renderAprovadas();
 }
 
 export async function definirPapel(id, novoPapel) {

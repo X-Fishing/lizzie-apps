@@ -25,6 +25,7 @@ const IC = {
   shield:    '<svg class="ico" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>',
   crachaFunc:'<svg class="ico" viewBox="0 0 24 24"><path d="M16 2v2"/><path d="M7 22v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/><path d="M8 2v2"/><circle cx="12" cy="11" r="3"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>',
   card:      '<svg class="ico" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>',
+  percent:   '<svg class="ico" viewBox="0 0 24 24"><line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>',
 };
 
 // ── Registry (fonte única do menu lateral) ─────────────────────────
@@ -49,6 +50,7 @@ export const MENU = [
       { chave: 'cad_revendedoras',     panel: 'admin',                  label: 'Revendedoras',           icon: IC.userCheck },
       { chave: 'cad_garantias',        panel: 'garantias',              label: 'Garantias',              icon: IC.shield },
       { chave: 'cad_funcionarios',     panel: 'funcionarios',           label: 'Funcionários',           icon: IC.crachaFunc, admin_only: true },
+      { chave: 'cad_faixas_comissao',  panel: 'faixas-comissao',        label: 'Faixas de Comissão',     icon: IC.percent },
       { chave: 'cad_formas_pagamento', panel: 'formas-pagamento',       label: 'Formas de Pagamento',    icon: IC.card, em_breve: true },
       { chave: 'cad_categorias_fin',   panel: 'categorias-financeiras', label: 'Categorias Financeiras', icon: IC.tag, em_breve: true },
   ]},

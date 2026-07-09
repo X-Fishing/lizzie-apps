@@ -9,6 +9,16 @@ export function esc(s) {
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
+// ── REGRA CENTRAL: métricas de faturamento/receita/ranking/estoque IGNORAM
+// revendedoras TESTE (profiles.teste = true). Toda agregação nova deve usar
+// este helper. As telas individuais da revendedora teste seguem funcionando.
+export function ehRevTeste(revId) {
+  return state.revTesteSet?.has(String(revId)) || false;
+}
+export function marcarRevsTeste(profiles) {
+  state.revTesteSet = new Set((profiles || []).filter(p => p.teste).map(p => String(p.id)));
+}
+
 // Quantidade disponivel de uma peca (trata campos null para nao gerar NaN).
 export function qtdDisp(c) {
   return (c.quantidade_enviada || 0) - (c.quantidade_vendida || 0) - (c.quantidade_devolvida || 0);

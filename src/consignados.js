@@ -1,7 +1,7 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, hojeBR } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 export async function loadConsignados() {
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
@@ -13,7 +13,7 @@ export async function loadConsignados() {
   };
   const queries = [fetchPaginado(makeQ)];
   if (isAdmin) {
-    queries.push(sbQ(sb.from('profiles').select('id,nome,bling_contato_id').eq('role','revendedora')));
+    queries.push(sbQ(sb.from('profiles').select('*').eq('role','revendedora')));
   } else {
     // revendedora: descobre a maleta ATIVA (o catálogo só mostra peças dela)
     queries.push(sbQ(sb.from('maletas').select('id').eq('revendedora_id', state.currentUser.id).eq('status', 'ativa').maybeSingle()));
@@ -32,6 +32,7 @@ export async function loadConsignados() {
     state.revNameMap = {};
     state.revBlingMap = {};
     revs.forEach(r => { state.revNameMap[r.id] = r.nome; state.revBlingMap[r.id] = r.bling_contato_id || ''; });
+    marcarRevsTeste(revs); // contas TESTE ficam fora dos totais agregados
   } else {
     state.maletaAtivaId = results[1].data?.id || null;
   }
@@ -51,6 +52,7 @@ export function renderCicloGrid() {
     const sb = document.getElementById('c-search-bar');
     if (sb) sb.style.display = 'none';
     div.innerHTML = renderHistoricoCicloDetalhe(state.historicoCicloSel);
+    preencherComissaoHistorico(state.historicoCicloSel); // async, preenche depois
     return;
   }
   const isAdmin = ehStaff();
@@ -319,8 +321,28 @@ export function renderHistoricoCicloDetalhe(chave) {
           <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--rose)">${fmtBRL(recv)}</div>
         </div>
       </div>
+      <div id="hist-comissao"></div>
       ${cicloTableHtml(pecas, true, true)}
     </div>`;
+}
+
+// Linha de comissão do fechamento (lida da auditoria; só staff enxerga).
+async function preencherComissaoHistorico(chave) {
+  const el = document.getElementById('hist-comissao');
+  if (!el || !ehStaff() || !state.cicloRevSelecionada) return;
+  const { data, error } = await sbQ(sb.from('fechamentos_mostruario')
+    .select('comissao_percentual,comissao_valor,valor_a_receber,total_vendido_valor,corrigido_em')
+    .eq('revendedora_id', state.cicloRevSelecionada)
+    .gte('created_at', chave + 'T00:00:00').lte('created_at', chave + 'T23:59:59.999')
+    .order('created_at', { ascending: false }).limit(1));
+  if (error) { console.error('Comissão do fechamento:', error); return; }
+  const f = data?.[0];
+  if (!f || f.comissao_percentual == null) return;
+  el.innerHTML = `<div style="margin-bottom:12px;padding:10px 14px;border:1px solid var(--border);border-radius:12px;background:var(--blush);font-size:13px;display:flex;gap:18px;flex-wrap:wrap">
+    <span>Comissão: <b style="color:var(--rose)">${String(Number(f.comissao_percentual)).replace('.', ',')}%</b> · <b style="color:var(--rose)">${fmtBRL(f.comissao_valor)}</b></span>
+    <span>A receber: <b style="color:var(--success)">${fmtBRL(f.valor_a_receber)}</b></span>
+    ${f.corrigido_em ? `<span style="color:var(--muted);font-size:11.5px">corrigido em ${formatDate(f.corrigido_em)}</span>` : ''}
+  </div>`;
 }
 
 export function abrirHistoricoCiclo(chave) {
@@ -362,7 +384,7 @@ export function renderCicloAdmin() {
     const nome = state.revNameMap[revId] || 'Revendedora desconhecida';
     const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
     return `<div class="rev-card${temAtivos ? '' : ' inativo'}" onclick="abrirCicloRev('${revId}')">
-      <div class="rev-card-nome">${esc(nome)}</div>
+      <div class="rev-card-nome">${esc(nome)}${ehRevTeste(revId) ? ' <span class="badge-soon" style="background:var(--warning);color:#fff">TESTE</span>' : ''}</div>
       ${pedidoLabelHtml(list, 11)}
       <div class="rev-card-status${temAtivos ? '' : ' inativo'}">${temAtivos ? `● ${ativos.length} ativa${ativos.length!==1?'s':''}` : '○ Sem catálogo ativo'}</div>
       <div class="rev-card-valor-label">Vendido até agora</div>
@@ -375,10 +397,11 @@ export function renderCicloAdmin() {
     </div>`;
   }).join('');
 
-  const ativosGlobal = soAtivos(state.allConsignados);
+  // Totais agregados IGNORAM revendedoras TESTE (os cards delas continuam visíveis).
+  const ativosGlobal = soAtivos(state.allConsignados).filter(c => !ehRevTeste(c.revendedora_id));
   const grandTotal = ativosGlobal.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
   const totalPecasVend = ativosGlobal.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
-  const totalRevsAtivas = Object.values(groups).filter(l => l.some(c => c.status === 'ativo')).length;
+  const totalRevsAtivas = Object.entries(groups).filter(([revId, l]) => !ehRevTeste(revId) && l.some(c => c.status === 'ativo')).length;
 
   return `<button class="btn-secondary" style="width:100%;margin-bottom:14px;border-color:var(--rose);color:var(--rose)" onclick="openBuscaPeca()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar peça — com quem está</button>
     <div class="rev-grid">${cards}</div>
@@ -434,7 +457,7 @@ export function renderCicloAdminDetalhe(revId, list) {
     <div class="card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
         <div>
-          <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">${esc(nome)}</div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:24px;color:var(--plum)">${esc(nome)}${ehRevTeste(revId) ? ' <span class="badge-soon" style="background:var(--warning);color:#fff;vertical-align:middle">TESTE — fora do faturamento</span>' : ''}</div>
           ${pedidoLabelHtml(ativos, 12)}
           <div style="font-size:12px;color:var(--muted);margin-top:2px">${ativos.length} peça${ativos.length!==1?'s':''} · ${totalVend}/${totalEnv} vendidas ${temAtivos ? `· <span style="color:var(--success)">${ativos.length} ativa${ativos.length!==1?'s':''}</span>` : ''}</div>
         </div>
@@ -640,15 +663,102 @@ export function podeCorrigirMaleta() {
   return IS_ADMIN || PERMISSOES.has('acao_editar_maleta_finalizada');
 }
 
-function abrirModalConferencia(titulo, acoesHtml) {
+async function abrirModalConferencia(titulo, acoesHtml) {
   document.getElementById('conf-title').innerHTML =
     `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> ${titulo}`;
   document.getElementById('conf-search').value = '';
   document.getElementById('conf-ver-devolvidos').checked = false;
   document.getElementById('conf-resultado').innerHTML = '';
   document.getElementById('conf-acoes').innerHTML = acoesHtml;
+  // Faixas de comissão (para sugerir a % pelo total vendido)
+  confPctManual = false;
+  confFaixas = null;
+  const { data, error } = await sbQ(sb.from('faixas_comissao')
+    .select('valor_min,valor_max,percentual').eq('ativo', true).order('valor_min'));
+  if (error) console.error('Faixas de comissão:', error);
+  confFaixas = data || [];
   renderConferencia();
   openModal('modal-conferencia');
+}
+
+// ── Comissão do fechamento (sugerida pela faixa do total vendido) ──
+let confFaixas = null;
+let confPctManual = false;
+
+function faixaPct(total) {
+  const f = (confFaixas || []).find(x => Number(x.valor_min) <= total
+    && (x.valor_max == null || total <= Number(x.valor_max)));
+  return f ? Number(f.percentual) : null;
+}
+
+// Total vendido pelo veredito atual da conferência (não voltou = vendida).
+function totalVendidoConferencia() {
+  return pecasConferencia().filter(c => !c.devolvido)
+    .reduce((s, c) => s + (c.quantidade_enviada || 1) * Number(c.preco_venda || 0), 0);
+}
+
+const r2 = n => Math.round(n * 100) / 100;
+
+function pctComissaoAtual() {
+  const el = document.getElementById('conf-comissao-pct');
+  return el ? (parseFloat((el.value || '').replace(',', '.')) || 0) : 0;
+}
+
+// Valores gravados na auditoria do fechamento/correção.
+function dadosComissao() {
+  const total = totalVendidoConferencia();
+  const pct = pctComissaoAtual();
+  return {
+    total_vendido_valor: r2(total),
+    comissao_percentual: pct,
+    comissao_valor: r2(total * pct / 100),
+    valor_a_receber: r2(total - total * pct / 100),
+  };
+}
+
+function renderConfComissao() {
+  const div = document.getElementById('conf-comissao');
+  if (!div) return;
+  const total = totalVendidoConferencia();
+  const sug = faixaPct(total);
+  // respeita a % digitada manualmente; senão, segue a sugestão da faixa
+  const pct = confPctManual ? pctComissaoAtual() : (sug ?? 0);
+  const dica = sug == null
+    ? '<span style="color:var(--warning)">⚠ Sem faixa definida para este total — cadastre em Cadastros → Faixas de Comissão.</span>'
+    : `Sugerido pela faixa: <b>${String(sug).replace('.', ',')}%</b>${confPctManual && pct !== sug
+        ? ' <button type="button" class="btn-secondary btn-sm" style="padding:2px 8px;font-size:11px" onclick="confComissaoUsarFaixa()">Usar faixa</button>' : ''}`;
+  div.innerHTML = `
+    <div style="margin-top:12px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--blush)">
+      <div style="display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap">
+        <div style="flex:1;min-width:120px"><div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Total vendido</div>
+          <b style="color:var(--plum);font-size:15px">${fmtBRL(total)}</b></div>
+        <div><div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Comissão (%)</div>
+          <input id="conf-comissao-pct" class="form-control" style="width:84px;padding:5px 10px;font-size:13px" inputmode="decimal"
+            value="${String(pct).replace('.', ',')}" oninput="confComissaoEditada()"></div>
+        <div><div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Comissão</div>
+          <b id="conf-com-valor" style="color:var(--rose)">${fmtBRL(total * pct / 100)}</b></div>
+        <div><div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">A receber</div>
+          <b id="conf-com-receber" style="color:var(--success)">${fmtBRL(total - total * pct / 100)}</b></div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px">${dica}</div>
+    </div>`;
+}
+
+// Usuário digitou a %: fixa o valor manual e recalcula ao vivo (sem
+// re-renderizar a caixa, para não perder o foco do input).
+export function confComissaoEditada() {
+  confPctManual = true;
+  const total = totalVendidoConferencia();
+  const pct = pctComissaoAtual();
+  const v = document.getElementById('conf-com-valor');
+  const rcb = document.getElementById('conf-com-receber');
+  if (v) v.textContent = fmtBRL(total * pct / 100);
+  if (rcb) rcb.textContent = fmtBRL(total - total * pct / 100);
+}
+
+export function confComissaoUsarFaixa() {
+  confPctManual = false;
+  renderConfComissao();
 }
 
 const CONF_BTN_CONFERIR = '<button class="btn-secondary" style="flex:1" onclick="conferirFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Conferir fechamento</button>';
@@ -731,6 +841,7 @@ export function renderConferencia() {
       (c.referencia || '').toLowerCase().includes(termo));
   }
 
+  renderConfComissao(); // total vendido muda conforme o veredito
   const div = document.getElementById('conf-list');
   if (!lista.length) {
     div.innerHTML = `<div class="empty-state" style="padding:20px 0"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></div><p>${verDevolvidos ? 'Nenhuma peça devolvida ainda' : (termo ? `Nada encontrado com "${termo}"` : 'Todas as peças foram conferidas!')}</p></div>`;
@@ -942,10 +1053,16 @@ async function aplicarCorrecaoConferencia() {
     finalizado_com_divergencia: totalDiv > 0,
     corrigido_em: new Date().toISOString(),
     corrigido_por: state.currentUser.id,
+    ...dadosComissao(),
   };
   let fechId = confFechamento?.id || null;
   if (fechId) {
-    const { error } = await sbQ(sb.from('fechamentos_mostruario').update(cab).eq('id', fechId));
+    let { error } = await sbQ(sb.from('fechamentos_mostruario').update(cab).eq('id', fechId));
+    if (error && /comissao|total_vendido|a_receber/i.test(error.message || '') && /column|schema cache/i.test(error.message || '')) {
+      console.warn('Colunas de comissão ausentes (rode a migração 0007):', error.message);
+      ['total_vendido_valor', 'comissao_percentual', 'comissao_valor', 'valor_a_receber'].forEach(k => delete cab[k]);
+      ({ error } = await sbQ(sb.from('fechamentos_mostruario').update(cab).eq('id', fechId)));
+    }
     if (error) { console.error('Auditoria (update):', error); toast(`Erro ao atualizar a auditoria: ${error.message}. Rode a migração 0005.`); return; }
   } else {
     const nome = state.revNameMap[confRevId] || 'Revendedora';
@@ -1007,6 +1124,9 @@ async function executarFechamentoReconciliado() {
 
   // 1) Veredito físico. Sequencial: no primeiro erro, aborta e avisa
   //    (reabra a conferência e finalize de novo — updates são idempotentes).
+  // ESTOQUE: a devolução vive em quantidade_devolvida (não movimenta
+  // produtos.estoque_qtd). Quando o retorno ao estoque central existir,
+  // checar utils.ehRevTeste(revId) e PULAR maletas de conta de teste.
   for (const [qtd, ids] of gruposPorQtd(devolvidas)) {
     const { error } = await sbQ(sb.from('consignados')
       .update({ quantidade_vendida: 0, quantidade_devolvida: qtd, vendido_por_divergencia: false })
@@ -1023,7 +1143,7 @@ async function executarFechamentoReconciliado() {
 
   // 2) Auditoria (cabeçalho + itens divergentes)
   const peds = pedidosDoCatalogo(base);
-  const { data: fech, error: eFech } = await sbQ(sb.from('fechamentos_mostruario').insert({
+  const cabecalho = {
     pedido_numero: peds.join(', ') || null,
     revendedora_id: revId,
     revendedora_nome: nome,
@@ -1033,7 +1153,15 @@ async function executarFechamentoReconciliado() {
     total_divergencias: totalDiv,
     finalizado_com_divergencia: totalDiv > 0,
     admin_user_id: state.currentUser.id,
-  }).select('id').single());
+    ...dadosComissao(),
+  };
+  let { data: fech, error: eFech } = await sbQ(sb.from('fechamentos_mostruario').insert(cabecalho).select('id').single());
+  // Colunas de comissão ausentes (migração 0007 não rodada): grava sem elas.
+  if (eFech && /comissao|total_vendido|a_receber/i.test(eFech.message || '') && /column|schema cache/i.test(eFech.message || '')) {
+    console.warn('Colunas de comissão ausentes (rode a migração 0007):', eFech.message);
+    ['total_vendido_valor', 'comissao_percentual', 'comissao_valor', 'valor_a_receber'].forEach(k => delete cabecalho[k]);
+    ({ data: fech, error: eFech } = await sbQ(sb.from('fechamentos_mostruario').insert(cabecalho).select('id').single()));
+  }
   if (eFech) {
     console.error('Auditoria do fechamento:', eFech);
     const dica = /fechamentos_mostruario|relation|schema cache/i.test(eFech.message || '')

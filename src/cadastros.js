@@ -2,7 +2,7 @@
 // Engine genérico CRUD inline (lista + formulário no próprio painel), no
 // padrão visual do app. Só gestor/admin grava (RLS reforça no banco).
 import { sb } from './supabase.js';
-import { esc, toast, sbQ, confirmarAcao, handleSupabaseError } from './utils.js';
+import { esc, toast, sbQ, confirmarAcao, handleSupabaseError, fmtBRL } from './utils.js';
 
 // ── ícones de linha reutilizados (mesma família Lucide do app) ──
 const IC_PLUS  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>';
@@ -45,11 +45,62 @@ const CFG = {
     ],
     colunas: ['nome', 'telefone', 'contato'],
   },
+  faixas_comissao: {
+    panel: 'faixas-comissao', titulo: 'Faixas de Comissão', singular: 'faixa de comissão',
+    subtitulo: 'Comissão por valor de venda',
+    order: 'valor_min',
+    campos: [
+      { key: 'valor_min',  label: 'De (R$) — início da faixa (inclusive)', type: 'number', required: true },
+      { key: 'valor_max',  label: 'Até (R$) — deixe vazio para "acima de"', type: 'number' },
+      { key: 'percentual', label: 'Comissão (%)', type: 'number', required: true },
+      { key: 'ativo',      label: 'Ativo', type: 'bool', default: true },
+    ],
+    colunas: ['valor_min', 'valor_max', 'percentual'],
+    fmt: {
+      valor_min:  v => fmtBRL(v),
+      valor_max:  v => v == null ? 'sem limite (acima de)' : fmtBRL(v),
+      percentual: v => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) + '%',
+    },
+    validar: p => {
+      if (p.valor_min == null || p.valor_min < 0) return 'Informe o início da faixa (R$).';
+      if (p.percentual == null || p.percentual < 0 || p.percentual > 100) return 'Percentual deve estar entre 0 e 100.';
+      if (p.valor_max != null && Number(p.valor_min) > Number(p.valor_max)) return 'O início da faixa deve ser menor ou igual ao fim.';
+      return null;
+    },
+    avisos: linhas => avisoFaixasComissao(linhas),
+  },
 };
 
 const LABEL_COL = {
   nome: 'Nome', ano: 'Ano', telefone: 'Telefone', contato: 'Contato',
+  valor_min: 'De', valor_max: 'Até', percentual: 'Comissão',
 };
+
+// Alerta (não bloqueia) sobreposição e lacuna entre faixas ATIVAS.
+function avisoFaixasComissao(linhas) {
+  const ativas = (linhas || []).filter(f => f.ativo !== false)
+    .slice().sort((a, b) => Number(a.valor_min) - Number(b.valor_min));
+  // Comparações em CENTAVOS inteiros (evita falso positivo de ponto
+  // flutuante: 7000 - 6999.99 = 0.0100000000002 em float).
+  const cent = v => Math.round(Number(v) * 100);
+  const problemas = [];
+  for (let i = 1; i < ativas.length; i++) {
+    const ant = ativas[i - 1], cur = ativas[i];
+    if (ant.valor_max == null) {
+      problemas.push(`"${fmtBRL(ant.valor_min)} em diante" é sem limite, mas existe faixa começando em ${fmtBRL(cur.valor_min)} (sobreposição).`);
+    } else if (cent(cur.valor_min) <= cent(ant.valor_max)) {
+      problemas.push(`Sobreposição: até ${fmtBRL(ant.valor_max)} e a próxima começa em ${fmtBRL(cur.valor_min)}.`);
+    } else if (cent(cur.valor_min) - cent(ant.valor_max) > 1) {
+      problemas.push(`Lacuna sem faixa: entre ${fmtBRL(ant.valor_max)} e ${fmtBRL(cur.valor_min)}.`);
+    }
+  }
+  const dicaTeto = ativas.length && ativas[ativas.length - 1].valor_max != null
+    ? `<div style="font-size:11.5px;color:var(--muted);margin-bottom:12px">Dica: acima de ${fmtBRL(ativas[ativas.length - 1].valor_max)} a comissão fica 0% — se quiser cobrir qualquer valor, deixe o "Até" da última faixa em branco (sem limite).</div>`
+    : '';
+  if (!problemas.length) return dicaTeto;
+  return `<div class="alert alert-warning" style="margin-bottom:12px;font-size:12.5px">
+    <b>Atenção à configuração das faixas:</b><br>${problemas.map(esc).join('<br>')}</div>${dicaTeto}`;
+}
 
 // Cache simples para alimentar os <select> do cadastro de produto.
 export const cadastroCache = { categorias: [], colecoes: [], fornecedores: [] };
@@ -72,11 +123,12 @@ function render(tabela, linhas) {
   const cols = cfg.colunas;
   const thead = cols.map(c => `<th class="pag-th">${LABEL_COL[c] || c}</th>`).join('') +
     '<th class="pag-th" style="text-align:right">Ações</th>';
+  const val = (it, c) => cfg.fmt?.[c] ? cfg.fmt[c](it[c]) : esc(it[c] ?? '—');
   const rows = linhas.length ? linhas.map(it => `
     <tr class="ciclo-row">
       ${cols.map((c, i) => `<td class="ciclo-td">${i === 0
-        ? `<span class="ciclo-desc">${esc(it[c] ?? '—')}</span>${it.ativo === false ? ' <span class="badge badge-aberta" style="font-size:10px">inativo</span>' : ''}`
-        : esc(it[c] ?? '—')}</td>`).join('')}
+        ? `<span class="ciclo-desc">${val(it, c)}</span>${it.ativo === false ? ' <span class="badge badge-aberta" style="font-size:10px">inativo</span>' : ''}`
+        : val(it, c)}</td>`).join('')}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         <button class="btn-icon" title="Editar" onclick="cadEditar('${tabela}','${it.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="cadExcluir('${tabela}','${it.id}')" style="color:var(--danger)">${IC_TRASH}</button>
@@ -88,10 +140,11 @@ function render(tabela, linhas) {
     <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
       <div>
         <div class="section-title">${cfg.titulo}</div>
-        <div class="section-subtitle">${linhas.length} registro${linhas.length !== 1 ? 's' : ''}</div>
+        <div class="section-subtitle">${cfg.subtitulo ? cfg.subtitulo + ' · ' : ''}${linhas.length} registro${linhas.length !== 1 ? 's' : ''}</div>
       </div>
       <button class="btn-primary btn-sm" onclick="cadNovo('${tabela}')">${IC_PLUS} Novo</button>
     </div>
+    ${cfg.avisos ? cfg.avisos(linhas) : ''}
     <div class="pag-wrap"><table class="pag-table"><thead><tr>${thead}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
@@ -140,8 +193,13 @@ export async function cadSalvar(tabela, id) {
     else if (f.type === 'number') payload[f.key] = elf.value.trim() === '' ? null : Number(elf.value);
     else payload[f.key] = elf.value.trim() || null;
   }
-  const obrig = cfg.campos.find(f => f.required && !payload[f.key]);
+  // == null (e não !valor): 0 é válido em campos numéricos (ex.: faixa "De R$ 0")
+  const obrig = cfg.campos.find(f => f.required && (payload[f.key] == null || payload[f.key] === ''));
   if (obrig) { toast(obrig.label + ' é obrigatório'); return; }
+  if (cfg.validar) {
+    const errMsg = cfg.validar(payload);
+    if (errMsg) { toast(errMsg); return; }
+  }
 
   const btn = document.getElementById('cad-modal-salvar');
   btn.disabled = true;
@@ -179,9 +237,10 @@ export function cadExcluir(tabela, id) {
 }
 
 // Loaders chamados pela navegação (showPanel).
-export function loadCategorias()   { carregar('categorias'); }
-export function loadColecoes()     { carregar('colecoes'); }
-export function loadFornecedores() { carregar('fornecedores'); }
+export function loadCategorias()      { carregar('categorias'); }
+export function loadColecoes()        { carregar('colecoes'); }
+export function loadFornecedores()    { carregar('fornecedores'); }
+export function loadFaixasComissao()  { carregar('faixas_comissao'); }
 
 // Carrega os 3 cadastros para alimentar selects do produto (uma vez por abertura).
 export async function carregarCadastrosParaSelect() {

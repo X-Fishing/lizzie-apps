@@ -10,6 +10,7 @@ export const state = {
   vendaItensCache: {},
   revNameMap: {},
   revBlingMap: {},
+  revTesteSet: new Set(),   // ids de revendedoras TESTE (fora de faturamento/estoque)
   gFilter: 'todas',
   gSort: { col: 'prazo_maximo', dir: 'asc' },
   pFilter: 'todos',
