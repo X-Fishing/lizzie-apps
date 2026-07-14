@@ -299,6 +299,7 @@ function renderLista() {
       <div class="section-subtitle">${produtosCache.length} produto${produtosCache.length !== 1 ? 's' : ''} no catálogo</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-secondary btn-sm" onclick="produtoImportarBling()">${IC_BARCODE} Importar do Bling</button>
+        <button class="btn-secondary btn-sm" onclick="produtoImportFotos()">${IC_CAM} Importar fotos em lote</button>
         <button class="btn-primary btn-sm" onclick="produtoNovo()">${IC_PLUS} Novo produto</button>
       </div>
     </div>
@@ -491,6 +492,212 @@ export async function produtoImportBlingRun() {
     <div style="color:var(--success);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Importação concluída</div>
     <div style="font-size:13px;margin-top:6px">Bling: ${totalBling} · Novos: ${gravados} · Completados (custo/foto que faltava): ${completados} · Já completos: ${pulados}${foraDoFiltro ? ` · Fora do filtro (inativos): ${foraDoFiltro}` : ''}</div>
     <button class="btn-primary btn-sm" style="margin-top:10px" onclick="produtoVoltarLista()">Ver produtos</button>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// IMPORTAR FOTOS EM LOTE (casa foto ↔ produto pelo SKU no nome do arquivo)
+// ════════════════════════════════════════════════════════════════════
+// Nome do arquivo: "{SKU} - {descrição} - R$ {preço}.jpg". Só o SKU (dígitos
+// iniciais) é usado; descrição/preço já vieram do Bling. Vários arquivos do
+// mesmo SKU viram as imagens do produto (ordem natural; a 1ª = principal).
+const IC_UPLOAD = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>';
+const IC_CHECK = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+const IC_WARN  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>';
+
+const FOTO_TIPOS = ['image/jpeg', 'image/png', 'image/webp'];
+let fotosLote = null;   // { receberao:[], jaComFoto:[], naoCasou:[] } — resultado da análise
+
+function produtoTemFoto(p) {
+  return !!p.foto_url || (Array.isArray(p.imagens) && p.imagens.length > 0);
+}
+
+export function produtoImportFotos() {
+  fotosLote = null;
+  panel().innerHTML = `
+    <div class="section-header" style="display:flex;align-items:center;gap:10px">
+      <button class="btn-voltar-ciclo" onclick="produtoVoltarLista()">← Voltar</button>
+      <div class="section-title" style="font-size:19px">Importar fotos em lote</div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <p style="font-size:13px;color:var(--muted);margin:0">Selecione várias fotos de uma vez. O sistema casa cada foto com o produto pelo <b>SKU no início do nome do arquivo</b> (ex.: <code>21800 - Brinco ... - R$ 42,00.jpg</code>). Fotos do mesmo SKU viram as imagens desse produto (a primeira, em ordem, é a principal). Nada é enviado antes de você conferir o relatório.</p>
+      <input type="file" id="fotos-lote-input" accept="image/jpeg,image/png,image/webp" multiple style="display:none" onchange="produtoFotosSelecionar(this)">
+      <button class="btn-primary btn-sm" style="margin-top:12px" onclick="document.getElementById('fotos-lote-input').click()">${IC_UPLOAD} Selecionar fotos</button>
+    </div>
+    <div id="fotos-lote-area"></div>`;
+}
+
+export async function produtoFotosSelecionar(input) {
+  const files = [...(input.files || [])];
+  input.value = '';   // permite reescolher os mesmos arquivos
+  if (!files.length) return;
+  const area = document.getElementById('fotos-lote-area');
+  area.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Analisando arquivos e casando por SKU...</div>';
+
+  const { data: produtos, error } = await fetchPaginado(() => sb.from('produtos')
+    .select('id,nome,sku,codigo_barras,foto_url,imagens').order('id'));
+  if (error) { area.innerHTML = impErro('Erro ao carregar produtos: ' + (error.message || '')); return; }
+
+  // Índices de busca: SKU exato, SKU sem zeros à esquerda, e código de barras.
+  const porSku = new Map(), porSkuNorm = new Map(), porBarras = new Map();
+  for (const p of (produtos || [])) {
+    if (p.sku) { const s = String(p.sku).trim(); porSku.set(s, p); porSkuNorm.set(s.replace(/^0+/, ''), p); }
+    if (p.codigo_barras) porBarras.set(String(p.codigo_barras).trim(), p);
+  }
+  const acharProduto = (sku) => porSku.get(sku) || porSkuNorm.get(sku.replace(/^0+/, '')) || porBarras.get(sku) || null;
+
+  const grupos = new Map();      // produto.id -> { produto, sku, files:[] }
+  const naoCasou = [];           // { name, motivo }
+  for (const file of files) {
+    const nome = file.name.trim();
+    const m = nome.match(/^(\d+)/);
+    if (!m) { naoCasou.push({ name: file.name, motivo: 'sem dígitos no início do nome' }); continue; }
+    if (!FOTO_TIPOS.includes(file.type)) { naoCasou.push({ name: file.name, motivo: 'tipo inválido' }); continue; }
+    if (file.size > MAX_IMG_MB * 1024 * 1024) { naoCasou.push({ name: file.name, motivo: `maior que ${MAX_IMG_MB}MB` }); continue; }
+    const sku = m[1];
+    const prod = acharProduto(sku);
+    if (!prod) { naoCasou.push({ name: file.name, motivo: 'SKU não encontrado no catálogo' }); continue; }
+    const k = String(prod.id);
+    if (!grupos.has(k)) grupos.set(k, { produto: prod, sku, files: [] });
+    grupos.get(k).files.push(file);
+  }
+
+  // Ordena por nome (ordem natural) e aplica o teto de MAX_IMAGENS por produto;
+  // o excedente vira "não casou" (ignorado), como pede o relatório.
+  for (const g of grupos.values()) {
+    g.files.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }));
+    if (g.files.length > MAX_IMAGENS) {
+      for (const extra of g.files.slice(MAX_IMAGENS)) naoCasou.push({ name: extra.name, motivo: `passou do limite de ${MAX_IMAGENS} imagens` });
+      g.files = g.files.slice(0, MAX_IMAGENS);
+    }
+  }
+
+  const receberao = [], jaComFoto = [];
+  for (const g of grupos.values()) (produtoTemFoto(g.produto) ? jaComFoto : receberao).push(g);
+  receberao.sort((a, b) => a.produto.nome.localeCompare(b.produto.nome, 'pt-BR'));
+  jaComFoto.sort((a, b) => a.produto.nome.localeCompare(b.produto.nome, 'pt-BR'));
+
+  fotosLote = { receberao, jaComFoto, naoCasou };
+  renderRelatorioFotos();
+}
+
+function linhaGrupoFoto(g) {
+  return `<tr class="ciclo-row">
+    <td class="ciclo-td"><div class="ciclo-desc">${esc(g.produto.nome)}</div></td>
+    <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${esc(g.produto.sku || g.sku)}</td>
+    <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${g.files.length}</span></td></tr>`;
+}
+
+function renderRelatorioFotos() {
+  const area = document.getElementById('fotos-lote-area');
+  const { receberao, jaComFoto, naoCasou } = fotosLote;
+  const arqReceber = receberao.reduce((s, g) => s + g.files.length, 0);
+  const totalAImportar = receberao.length;   // "já têm foto" só entra se marcar substituir
+
+  const blocoReceber = `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--success);margin-bottom:8px;display:flex;align-items:center;gap:6px">${IC_CHECK} Vão receber foto — ${receberao.length} produto${receberao.length !== 1 ? 's' : ''} (${arqReceber} arquivo${arqReceber !== 1 ? 's' : ''})</div>
+      ${receberao.length ? `<div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">Produto</th><th class="pag-th">SKU</th><th class="pag-th" style="text-align:center">Fotos</th></tr></thead><tbody>${receberao.map(linhaGrupoFoto).join('')}</tbody></table></div>` : '<p style="font-size:12px;color:var(--muted);margin:0">Nenhum produto novo para receber foto.</p>'}
+    </div>`;
+
+  const blocoJaTem = jaComFoto.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--gold);margin-bottom:8px;display:flex;align-items:center;gap:6px">${IC_WARN} Já têm foto — ${jaComFoto.length} produto${jaComFoto.length !== 1 ? 's' : ''} (pulados por padrão)</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--plum);cursor:pointer;margin-bottom:10px">
+        <input type="checkbox" id="fotos-substituir" onchange="produtoFotosToggleSubstituir()"> Substituir fotos existentes desses produtos</label>
+      <div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">Produto</th><th class="pag-th">SKU</th><th class="pag-th" style="text-align:center">Fotos</th></tr></thead><tbody>${jaComFoto.map(linhaGrupoFoto).join('')}</tbody></table></div>
+    </div>` : '';
+
+  const blocoNaoCasou = naoCasou.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--danger);margin-bottom:8px;display:flex;align-items:center;gap:6px">${IC_WARN} Não casaram — ${naoCasou.length} arquivo${naoCasou.length !== 1 ? 's' : ''}</div>
+      <div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">Arquivo</th><th class="pag-th">Motivo</th></tr></thead><tbody>${naoCasou.map(f => `<tr class="ciclo-row"><td class="ciclo-td" style="font-size:12px">${esc(f.name)}</td><td class="ciclo-td" style="font-size:12px;color:var(--muted)">${esc(f.motivo)}</td></tr>`).join('')}</tbody></table></div>
+    </div>` : '';
+
+  area.innerHTML = blocoReceber + blocoJaTem + blocoNaoCasou + `
+    <div class="card">
+      <button class="btn-primary" id="fotos-btn-importar" ${totalAImportar ? '' : 'disabled style="opacity:.5"'} onclick="produtoFotosImportar()">${IC_UPLOAD} <span id="fotos-btn-label">Importar ${arqReceber} foto${arqReceber !== 1 ? 's' : ''} em ${totalAImportar} produto${totalAImportar !== 1 ? 's' : ''}</span></button>
+      <p style="font-size:11.5px;color:var(--muted);margin:8px 0 0">Enviar pode levar alguns minutos — <b>não feche esta aba</b> durante o envio. Rodar de novo é seguro: produtos que já têm foto são pulados (a menos que você marque substituir).</p>
+    </div>`;
+}
+
+// Recalcula o rótulo/estado do botão quando marca/desmarca "substituir".
+export function produtoFotosToggleSubstituir() {
+  if (!fotosLote) return;
+  const substituir = document.getElementById('fotos-substituir')?.checked;
+  const alvos = substituir ? [...fotosLote.receberao, ...fotosLote.jaComFoto] : fotosLote.receberao;
+  const arquivos = alvos.reduce((s, g) => s + g.files.length, 0);
+  const btn = document.getElementById('fotos-btn-importar');
+  const label = document.getElementById('fotos-btn-label');
+  if (label) label.textContent = `Importar ${arquivos} foto${arquivos !== 1 ? 's' : ''} em ${alvos.length} produto${alvos.length !== 1 ? 's' : ''}`;
+  if (btn) { btn.disabled = !alvos.length; btn.style.opacity = alvos.length ? '' : '.5'; }
+}
+
+// Envia os arquivos de um produto e grava as URLs numa única atualização.
+async function subirGrupoFotos(g) {
+  const urls = [];
+  const falhas = [];
+  for (let i = 0; i < g.files.length; i++) {
+    const file = g.files[i];
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const fname = `produtos/${g.sku}_${Date.now()}_${i}.${ext}`;
+    const { error: upErr } = await sb.storage.from('lizzie-fotos').upload(fname, file, { upsert: true });
+    if (upErr) { falhas.push({ name: file.name, motivo: upErr.message || 'erro no upload' }); continue; }
+    urls.push(sb.storage.from('lizzie-fotos').getPublicUrl(fname).data.publicUrl);
+  }
+  if (!urls.length) return { enviadas: 0, atualizado: false, falhas };
+  const imagens = urls.slice(0, MAX_IMAGENS);
+  let { error } = await sb.from('produtos').update({ imagens, foto_url: imagens[0] }).eq('id', g.produto.id);
+  // Migração 0004 (coluna imagens) não rodada: grava só a foto principal.
+  if (error && /imagens/i.test(error.message || '') && /column|schema cache/i.test(error.message || '')) {
+    ({ error } = await sb.from('produtos').update({ foto_url: imagens[0] }).eq('id', g.produto.id));
+  }
+  if (error) return { enviadas: urls.length, atualizado: false, falhas: [...falhas, { name: g.produto.nome, motivo: error.message || 'erro ao salvar' }] };
+  return { enviadas: urls.length, atualizado: true, falhas };
+}
+
+export async function produtoFotosImportar() {
+  if (!fotosLote) return;
+  const substituir = document.getElementById('fotos-substituir')?.checked;
+  const alvos = substituir ? [...fotosLote.receberao, ...fotosLote.jaComFoto] : fotosLote.receberao;
+  if (!alvos.length) { toast('Nada para importar'); return; }
+
+  const area = document.getElementById('fotos-lote-area');
+  area.innerHTML = `<div class="card"><div id="fotos-prog" style="font-size:13px">Iniciando envio...</div>
+    <p style="font-size:11.5px;color:var(--danger);margin:8px 0 0">Não feche esta aba até terminar.</p></div>`;
+  const prog = () => document.getElementById('fotos-prog');
+
+  let prodOk = 0, fotosEnviadas = 0, done = 0;
+  const falhas = [];
+
+  // Concorrência baixa (máx. 3 produtos simultâneos): são ~120 produtos, não
+  // dispara centenas de uploads de uma vez. Um erro num arquivo/produto NÃO
+  // aborta o lote — registra e segue.
+  const LIMITE = 3;
+  let idx = 0;
+  async function worker() {
+    while (idx < alvos.length) {
+      const g = alvos[idx++];
+      let r;
+      try { r = await subirGrupoFotos(g); }
+      catch (e) { r = { enviadas: 0, atualizado: false, falhas: [{ name: g.produto.nome, motivo: e.message || 'erro inesperado' }] }; }
+      if (r.atualizado) prodOk++;
+      fotosEnviadas += r.enviadas;
+      if (r.falhas.length) falhas.push(...r.falhas);
+      done++;
+      if (prog()) prog().textContent = `Enviando ${done} de ${alvos.length} produtos... (${fotosEnviadas} foto${fotosEnviadas !== 1 ? 's' : ''} enviada${fotosEnviadas !== 1 ? 's' : ''})`;
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(LIMITE, alvos.length) }, worker));
+
+  const listaFalhas = falhas.length ? `
+    <div style="margin-top:10px"><div style="font-size:12.5px;font-weight:600;color:var(--danger)">Falhas (${falhas.length}):</div>
+    <div class="pag-wrap" style="margin-top:6px"><table class="pag-table"><thead><tr><th class="pag-th">Arquivo/Produto</th><th class="pag-th">Motivo</th></tr></thead><tbody>${falhas.map(f => `<tr class="ciclo-row"><td class="ciclo-td" style="font-size:12px">${esc(f.name)}</td><td class="ciclo-td" style="font-size:12px;color:var(--muted)">${esc(f.motivo)}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+
+  if (prog()) prog().parentElement.innerHTML = `
+    <div style="color:var(--success);font-weight:600;display:flex;align-items:center;gap:6px">${IC_CHECK} Importação concluída</div>
+    <div style="font-size:13px;margin-top:6px">${prodOk} produto${prodOk !== 1 ? 's' : ''} atualizado${prodOk !== 1 ? 's' : ''} · ${fotosEnviadas} foto${fotosEnviadas !== 1 ? 's' : ''} enviada${fotosEnviadas !== 1 ? 's' : ''} · ${falhas.length} falha${falhas.length !== 1 ? 's' : ''}</div>
+    ${listaFalhas}
+    <button class="btn-primary btn-sm" style="margin-top:12px" onclick="produtoVoltarLista()">Ver produtos</button>`;
 }
 
 // ════════════════════════════════════════════════════════════════════
