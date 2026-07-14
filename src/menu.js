@@ -56,6 +56,7 @@ export const MENU = [
       // chave 'vendas_entrada_mercadoria' mantida (só mudou de grupo)
       { chave: 'vendas_entrada_mercadoria', panel: 'entrada-mercadoria', label: 'Entrada de Mercadoria', icon: IC.cart },
       { chave: 'cad_precificacao', panel: 'precificacao', label: 'Precificação', icon: IC.percent },
+      { chave: 'calculadora',      panel: 'calculadora',  label: 'Calculadora',  icon: IC.calc },
   ]},
   { grupo: 'grp_financeiro', label: 'Financeiro', icon: IC.fin, filhos: [
       // chave 'financeiro' mantida (item solto virou "Lançamentos" dentro do grupo)
@@ -63,7 +64,6 @@ export const MENU = [
       { chave: 'cad_formas_pagamento', panel: 'formas-pagamento',       label: 'Formas de Pagamento',    icon: IC.card, em_breve: true },
       { chave: 'cad_categorias_fin',   panel: 'categorias-financeiras', label: 'Categorias Financeiras', icon: IC.tag, em_breve: true },
   ]},
-  { chave: 'calculadora', panel: 'calculadora', label: 'Calculadora', icon: IC.calc },
   { grupo: 'grp_marketing', label: 'Marketing', icon: IC.mega, filhos: [
       { chave: 'cad_raspadinha',  panel: 'config-raspadinha', label: 'Raspadinha', icon: IC.tag, admin_only: true },
       { chave: 'marketing_bonus', panel: 'bonus',             label: 'Bônus',      icon: IC.gift, em_breve: true },

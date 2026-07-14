@@ -787,13 +787,24 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .snav-item.active { background: rgba(201,116,138,0.12); color: var(--rose); font-weight:600; }
 .snav-ic { font-size:17px; width:22px; flex:none; display:inline-flex; align-items:center; justify-content:center; }
 .snav-ic svg { width:18px; height:18px; display:block; }
-.snav-group-label { display:flex; align-items:center; gap:6px; cursor:pointer; user-select:none;
-  font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted);
-  padding:16px 14px 6px; }
-.snav-group-label .snav-caret { transition: transform .2s; font-size:9px; }
+
+/* Menu-pai (grupo): destacado, clicável, com a seta à direita */
+.snav-group-label { display:flex; align-items:center; gap:10px; cursor:pointer; user-select:none;
+  font-size:13px; font-weight:600; color:var(--plum);
+  padding:11px 14px; border-radius:10px; margin-top:2px; transition: background .15s; }
+.snav-group-label:hover { background: rgba(0,0,0,0.035); }
+.snav-group-label .snav-caret { order:99; margin-left:auto; transition: transform .2s; font-size:10px; color:var(--muted); }
 .snav-group.collapsed .snav-caret { transform: rotate(-90deg); }
 .snav-group.collapsed .snav-sub { display:none; }
-.snav-sub .snav-item { font-size:12.5px; padding:9px 14px 9px 22px; }
+
+/* Submenu: recuado com guia vertical; itens menores e mais suaves que o pai */
+.snav-sub { margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid var(--border);
+  display:flex; flex-direction:column; gap:1px; }
+.snav-sub .snav-item { font-size:12px; padding:7px 12px; gap:9px; color:var(--muted); }
+.snav-sub .snav-item:hover { color:var(--text); }
+.snav-sub .snav-item.active { color:var(--rose); background: rgba(201,116,138,0.10); }
+.snav-sub .snav-ic { width:18px; font-size:15px; }
+.snav-sub .snav-ic svg { width:15px; height:15px; }
 
 /* ── Cards do dashboard PC (estilo Zenply) ── */
 .dash-grid { display:grid; grid-template-columns: 1fr; gap:16px; }
