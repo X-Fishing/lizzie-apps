@@ -4,6 +4,7 @@ import { sb, SUPABASE_URL, SUPABASE_KEY } from './supabase.js';
 import { esc, toast, sbQ, fetchPaginado, fmtBRL, confirmarAcao, handleSupabaseError,
          maskMoneyBR, parseMoneyBR, moneyToInput } from './utils.js';
 import { cadastroCache, carregarCadastrosParaSelect, cadNovo } from './cadastros.js';
+import { carregarPrecificacao, calcularPrecificacao } from './precificacao.js';
 
 // ── Importação do Bling (Edge Function bling-produtos) ──
 const BLING_PRODUTOS_FN = `${SUPABASE_URL}/functions/v1/bling-produtos`;
@@ -506,8 +507,11 @@ function secHeader(txt, badge) {
   return `<div style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;color:var(--plum);margin:22px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--border)">${txt}${badge ? ` <span class="badge-soon">${badge}</span>` : ''}</div>`;
 }
 
+let precifCfg = null; // parâmetros/cotações p/ o preview do formulário
+
 async function abrirForm(p) {
   await carregarCadastrosParaSelect();
+  precifCfg = await carregarPrecificacao(); // null = migração 0013 ausente
   const editando = !!p;
   p = p || {};
   formVariacoes = []; // carregadas depois se editando
@@ -531,7 +535,7 @@ async function abrirForm(p) {
         <input type="text" id="p-venda" class="form-control" inputmode="numeric" placeholder="0,00"
           value="${p.preco_venda ? moneyToInput(p.preco_venda) : ''}" oninput="maskMoneyProduto(this)"></div>
       <div class="form-group"><label class="form-label">Categoria</label>
-        <select id="p-categoria" class="form-control">${optsSelect('categorias', p.categoria_id)}</select></div>
+        <select id="p-categoria" class="form-control" onchange="produtoCategoriaBanho()">${optsSelect('categorias', p.categoria_id)}</select></div>
       <div class="form-group"><label class="form-label">Formato</label>
         <select id="p-formato" class="form-control" onchange="produtoToggleVariacao()">
           <option value="simples" ${p.formato !== 'variacao' ? 'selected' : ''}>Simples</option>
@@ -581,12 +585,41 @@ async function abrirForm(p) {
     <div class="form-grid">
       <div class="form-group"><label class="form-label">Fornecedor</label>
         <div style="display:flex;gap:8px">
-          <select id="p-fornecedor" class="form-control">${optsSelect('fornecedores', p.fornecedor_id)}</select>
+          <select id="p-fornecedor" class="form-control" onchange="produtoPrecifPreview()">${optsSelect('fornecedores', p.fornecedor_id)}</select>
           <button type="button" class="btn-secondary btn-sm" title="Cadastrar fornecedor" onclick="produtoNovoFornecedor()">${IC_PLUS}</button>
         </div></div>
       <div class="form-group"><label class="form-label">Código no fornecedor</label>
         <input type="text" id="p-cod-fornecedor" class="form-control" placeholder="código da peça no fornecedor" value="${esc(p.codigo_fornecedor || '')}"></div>
     </div>
+
+    ${secHeader('Precificação', precifCfg ? '' : 'rode a migração 0013')}
+    ${precifCfg ? `
+    <div class="form-grid">
+      <div class="form-group"><label class="form-label">Modelo</label>
+        <input type="text" id="p-modelo" class="form-control" value="${esc(p.modelo || '')}"></div>
+      <div class="form-group"><label class="form-label">Tipo de banho</label>
+        <select id="p-tipo-banho" class="form-control" onchange="produtoPrecifPreview()">
+          <option value="">— sem precificação —</option>
+          ${precifCfg.banhos.filter(b => b.ativo).map(b =>
+            `<option value="${esc(b.codigo)}" data-cotacao="${b.cotacao}" ${p.tipo_banho === b.codigo ? 'selected' : ''}>${esc(b.nome)}</option>`).join('')}
+        </select></div>
+      <div class="form-group"><label class="form-label">Banho (milésimos — só ouro)</label>
+        <input type="number" step="0.01" id="p-banho" class="form-control" value="${p.banho ?? 0}" oninput="produtoPrecifPreview()"></div>
+      <div class="form-group"><label class="form-label">Peso p/ cálculo (g)</label>
+        <input type="number" step="0.01" id="p-peso" class="form-control" value="${p.peso ?? ''}" oninput="produtoPrecifPreview()"></div>
+      <div class="form-group"><label class="form-label">Peça bruta (R$)</label>
+        <input type="text" id="p-preco-bruto" class="form-control" inputmode="numeric" placeholder="0,00"
+          value="${p.preco_bruto ? moneyToInput(p.preco_bruto) : ''}" oninput="maskMoneyBR(this);produtoPrecifPreview()"></div>
+      <div class="form-group"><label class="form-label">Verniz</label>
+        <input type="number" step="0.01" id="p-verniz" class="form-control" value="${p.verniz ?? 0}" oninput="produtoPrecifPreview()"></div>
+    </div>
+    <div id="p-precif-preview" style="margin-top:4px;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--blush);display:none;gap:22px;flex-wrap:wrap;align-items:flex-end">
+      <span style="font-size:12px;color:var(--muted)">Custo<br><b id="p-prev-custo" style="font-size:16px;color:var(--plum)">—</b></span>
+      <span style="font-size:12px;color:var(--muted)">Custo c/ verniz<br><b id="p-prev-verniz" style="font-size:16px;color:var(--plum)">—</b></span>
+      <span style="font-size:12px;color:var(--muted)">Preço sugerido<br><b id="p-prev-sugerido" style="font-size:16px;color:var(--rose)">—</b></span>
+      <button type="button" class="btn-secondary btn-sm" onclick="produtoUsarSugerido()">Usar sugerido no preço de venda</button>
+      ${p.precificado_em ? `<span style="font-size:11px;color:var(--muted)">Snapshot atual: cotação ${p.cotacao_usada ?? '—'} · desconto ${p.desconto_usado ?? 0}%</span>` : ''}
+    </div>` : `<div style="font-size:12.5px;color:var(--muted);padding:6px 0 2px">Cálculo de custo/preço indisponível — rode a migração <b>0013_precificacao.sql</b> no Supabase.</div>`}
 
     ${secHeader('Tributação', 'Em breve')}
     <div class="empty-state" style="padding:14px 0"><p style="font-size:12px;color:var(--muted)">Dados fiscais (NCM, CEST, ICMS) chegam em breve.</p></div>
@@ -599,7 +632,49 @@ async function abrirForm(p) {
 
   produtoToggleVariacao();
   renderImagens();
+  produtoPrecifPreview();
   if (editando) carregarVariacoes(p.id);
+}
+
+// ── Preview de precificação no formulário (motor em precificacao.js) ──
+let formPrecif = null; // último cálculo — vira snapshot ao salvar
+
+export function produtoPrecifPreview() {
+  const box = document.getElementById('p-precif-preview');
+  if (!box || !precifCfg) return;
+  const sel = document.getElementById('p-tipo-banho');
+  const tipo = sel?.value || '';
+  if (!tipo) { box.style.display = 'none'; formPrecif = null; return; }
+  const cotacao = parseFloat(sel.selectedOptions[0]?.dataset.cotacao) || 0;
+  const forn = (cadastroCache.fornecedores || []).find(f => String(f.id) === String(document.getElementById('p-fornecedor').value));
+  const descontoPct = Number(forn?.desconto) || 0;
+  const r = calcularPrecificacao({
+    tipoBanho: tipo, cotacao,
+    banho: parseFloat(document.getElementById('p-banho').value) || 0,
+    peso: parseFloat(document.getElementById('p-peso').value) || 0,
+    precoBruto: parseMoneyBR(document.getElementById('p-preco-bruto').value),
+    verniz: parseFloat(document.getElementById('p-verniz').value) || 0,
+    descontoPct, params: precifCfg.params,
+  });
+  formPrecif = { ...r, cotacao, descontoPct };
+  box.style.display = 'flex';
+  document.getElementById('p-prev-custo').textContent = fmtBRL(r.custo);
+  document.getElementById('p-prev-verniz').textContent = fmtBRL(r.custoVerniz);
+  document.getElementById('p-prev-sugerido').textContent = fmtBRL(r.precoSugerido);
+}
+
+// Categoria escolhida → preenche o Banho com a milesimagem padrão dela.
+export function produtoCategoriaBanho() {
+  const cat = (cadastroCache.categorias || []).find(c => String(c.id) === String(document.getElementById('p-categoria').value));
+  const el = document.getElementById('p-banho');
+  if (el && cat && Number(cat.banho_padrao)) el.value = Number(cat.banho_padrao);
+  produtoPrecifPreview();
+}
+
+export function produtoUsarSugerido() {
+  if (!formPrecif) { toast('Preencha os campos de precificação primeiro.'); return; }
+  document.getElementById('p-venda').value = moneyToInput(formPrecif.precoSugerido);
+  toast('Preço de venda preenchido com o sugerido — ajuste o arredondamento se quiser.');
 }
 
 // ── Imagens do produto (até 5; a 1ª é a principal e vira o foto_url) ──
@@ -778,6 +853,26 @@ export async function produtoSalvar(id) {
     deposito: document.getElementById('p-deposito').value.trim() || 'Geral',
   };
 
+  // Precificação: entradas + SNAPSHOT do cálculo (cotação do ouro muda;
+  // o histórico do produto guarda o valor usado no momento do cadastro).
+  if (precifCfg) {
+    produtoPrecifPreview(); // garante cálculo atualizado com os campos atuais
+    payload.modelo = document.getElementById('p-modelo').value.trim() || null;
+    payload.tipo_banho = document.getElementById('p-tipo-banho').value || null;
+    payload.banho = parseFloat(document.getElementById('p-banho').value) || 0;
+    payload.verniz = parseFloat(document.getElementById('p-verniz').value) || 0;
+    payload.peso = num('p-peso');
+    payload.preco_bruto = parseMoneyBR(document.getElementById('p-preco-bruto').value) || null;
+    if (payload.tipo_banho && formPrecif) {
+      payload.custo = formPrecif.custo;
+      payload.custo_verniz = formPrecif.custoVerniz;
+      payload.preco_sugerido = formPrecif.precoSugerido;
+      payload.cotacao_usada = formPrecif.cotacao;
+      payload.desconto_usado = formPrecif.descontoPct;
+      payload.precificado_em = new Date().toISOString();
+    }
+  }
+
   let produtoId = id;
   let error;
   const gravar = async () => {
@@ -795,6 +890,14 @@ export async function produtoSalvar(id) {
     delete payload.imagens;
     await gravar();
     if (!error) toast('Salvo só com a foto principal — rode a migração 0004 para múltiplas imagens.');
+  }
+  // Migração 0013 ausente: salva sem os campos de precificação.
+  if (error && /tipo_banho|preco_bruto|precificado|cotacao_usada|desconto_usado|custo_verniz|preco_sugerido|modelo|verniz|banho|peso/i.test(error.message || '') && /column|schema cache/i.test(error.message || '')) {
+    console.warn('Colunas de precificação ausentes (rode a migração 0013):', error.message);
+    ['modelo', 'tipo_banho', 'banho', 'verniz', 'peso', 'preco_bruto', 'custo', 'custo_verniz',
+      'preco_sugerido', 'cotacao_usada', 'desconto_usado', 'precificado_em'].forEach(k => delete payload[k]);
+    await gravar();
+    if (!error) toast('Salvo sem a precificação — rode a migração 0013 no Supabase.');
   }
   if (error) {
     if (btn) { btn.disabled = false; btn.textContent = 'Salvar produto'; }

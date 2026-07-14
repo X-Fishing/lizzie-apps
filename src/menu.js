@@ -26,6 +26,7 @@ const IC = {
   crachaFunc:'<svg class="ico" viewBox="0 0 24 24"><path d="M16 2v2"/><path d="M7 22v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/><path d="M8 2v2"/><circle cx="12" cy="11" r="3"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>',
   card:      '<svg class="ico" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>',
   percent:   '<svg class="ico" viewBox="0 0 24 24"><line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>',
+  cart:      '<svg class="ico" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>',
 };
 
 // ── Registry (fonte única do menu lateral) ─────────────────────────
@@ -41,8 +42,13 @@ export const MENU = [
       // chave 'cad_garantias' mantida: perfis existentes seguem valendo
       { chave: 'cad_garantias',   panel: 'garantias',   label: 'Garantias',           icon: IC.shield },
   ]},
+  { grupo: 'grp_compras', label: 'Compras', icon: IC.cart, filhos: [
+      // chave 'vendas_entrada_mercadoria' mantida (só mudou de grupo):
+      // perfis já configurados continuam com acesso, sem migration.
+      { chave: 'vendas_entrada_mercadoria', panel: 'entrada-mercadoria', label: 'Entrada de Mercadoria', icon: IC.fabrica },
+  ]},
   { chave: 'financeiro',  panel: 'financeiro',  label: 'Financeiro',  icon: IC.fin },
-  { chave: 'calculadora', panel: 'calculadora', label: 'Calculadora', icon: IC.calc, em_breve: true },
+  { chave: 'calculadora', panel: 'calculadora', label: 'Calculadora', icon: IC.calc },
   { chave: 'marketing',   panel: 'marketing',   label: 'Marketing',   icon: IC.mega, em_breve: true },
   { secao: 'Cadastros', grupo: 'grp_cadastros', filhos: [
       { chave: 'cad_categorias',       panel: 'categorias',             label: 'Categorias',             icon: IC.tag },
@@ -53,6 +59,7 @@ export const MENU = [
       { chave: 'cad_funcionarios',     panel: 'funcionarios',           label: 'Funcionários',           icon: IC.crachaFunc, admin_only: true },
       { chave: 'cad_faixas_comissao',  panel: 'faixas-comissao',        label: 'Faixas de Comissão',     icon: IC.percent },
       { chave: 'cad_raspadinha',       panel: 'config-raspadinha',      label: 'Raspadinha',             icon: IC.tag, admin_only: true },
+      { chave: 'cad_precificacao',     panel: 'precificacao',           label: 'Precificação',           icon: IC.percent },
       { chave: 'cad_formas_pagamento', panel: 'formas-pagamento',       label: 'Formas de Pagamento',    icon: IC.card, em_breve: true },
       { chave: 'cad_categorias_fin',   panel: 'categorias-financeiras', label: 'Categorias Financeiras', icon: IC.tag, em_breve: true },
   ]},
@@ -135,6 +142,10 @@ export function renderSidebar() {
   const el = document.getElementById('snav-menu');
   if (!el) return;
   if (!ehStaff()) { el.innerHTML = ''; return; }
+  // restaura o estado recolhido/aberto da sidebar
+  try {
+    document.getElementById('app').classList.toggle('snav-fechada', localStorage.getItem('lizzie-snav-fechada') === '1');
+  } catch { /* ok */ }
   const html = MENU.map(m => {
     if (m.filhos) {
       const filhos = m.filhos.filter(podeVer);
@@ -151,4 +162,11 @@ export function renderSidebar() {
 
 export function toggleSnavGrupo(elLabel) {
   elLabel.closest('.snav-group').classList.toggle('collapsed');
+}
+
+// Sidebar retrátil (estado lembrado entre sessões)
+export function toggleSidebarLateral() {
+  const app = document.getElementById('app');
+  const fechada = app.classList.toggle('snav-fechada');
+  try { localStorage.setItem('lizzie-snav-fechada', fechada ? '1' : ''); } catch { /* ok */ }
 }

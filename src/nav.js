@@ -1,5 +1,5 @@
 // Navegacao entre paineis. Chama loaders/papeis via window (cross-module).
-export const PANEIS_STAFF = ['financeiro','calculadora','clientes','marketing','funcionarios','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','faixas-comissao','config-raspadinha','lancador'];
+export const PANEIS_STAFF = ['financeiro','calculadora','clientes','marketing','funcionarios','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','faixas-comissao','config-raspadinha','precificacao','entrada-mercadoria','lancador'];
 
 export function showPanel(name) {
   if (name === 'trocas' && !ehStaff()) name = 'dashboard';
@@ -18,6 +18,8 @@ export function showPanel(name) {
   // Sincroniza o estado ativo na barra lateral do dashboard PC.
   document.querySelectorAll('.staff-nav [data-panel]').forEach(b =>
     b.classList.toggle('active', b.dataset.panel === name));
+  // Entrada de Mercadoria usa a largura total da tela (grade larga).
+  document.querySelector('.content')?.classList.toggle('tela-full', name === 'entrada-mercadoria');
 
   if (name === 'dashboard') loadDashboard();
   if (name === 'garantias') loadGarantias();
@@ -39,6 +41,8 @@ export function showPanel(name) {
   if (name === 'fornecedores') loadFornecedores();
   if (name === 'faixas-comissao') loadFaixasComissao();
   if (name === 'config-raspadinha') loadConfigRaspadinha();
+  if (name === 'precificacao') loadPrecificacao();
+  if (name === 'entrada-mercadoria') loadEntradaMercadoria();
   if (name === 'lancador') loadLancador();
 }
 
