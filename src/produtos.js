@@ -104,6 +104,8 @@ const IC_TRASH = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path 
 const IC_GEM   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg>';
 const IC_BARCODE = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg>';
 const IC_CAM   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>';
+const IC_SHEET = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>';
+const IC_DOWN  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>';
 
 let produtosCache = [];
 let filtroProdutos = '';
@@ -203,6 +205,17 @@ function grupoAnel(nome) {
   return m ? { base: `Anel ${m[2].trim()}`, tamanho: m[1] } : null;
 }
 
+// Célula de custo (só admin, editável inline). Grupos/variações usam a "vazia"
+// (o custo vive no produto/aro, não no cabeçalho).
+function custoCellHTML(p) {
+  if (!ehAdmin()) return '';
+  const v = Number(p.custo_compra) > 0 ? fmtBRL(p.custo_compra) : '—';
+  return `<td class="ciclo-td" style="text-align:right;white-space:nowrap;cursor:pointer" title="Clique para editar o custo" onclick="event.stopPropagation();produtoCustoEditar('${p.id}',this)">${v}</td>`;
+}
+function custoCellVazia() {
+  return ehAdmin() ? '<td class="ciclo-td" style="text-align:right;color:var(--muted)">—</td>' : '';
+}
+
 // Linha padrão de produto (sub=true = membro de grupo, com recuo)
 function linhaProdutoHTML(p, sub = false) {
   return `
@@ -217,6 +230,7 @@ function linhaProdutoHTML(p, sub = false) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${p.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(p.preco_venda)}</span></td>
+      ${custoCellHTML(p)}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
@@ -235,6 +249,7 @@ function linhaVariacaoHTML(p, v) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${v.sku ? esc(v.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${v.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(v.preco_venda ?? p.preco_venda)}</span></td>
+      ${custoCellVazia()}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         <button class="btn-icon" title="Editar (abre o produto)" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
       </td>
@@ -260,6 +275,7 @@ function linhaVarProdHTML(p, vars, aberto) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
+      ${custoCellVazia()}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
         <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
@@ -289,6 +305,7 @@ function linhaGrupoHTML(g, aberto) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">—</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
+      ${custoCellVazia()}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap;font-size:11px;color:var(--muted)">${aberto ? 'fechar' : 'ver aros'}</td>
     </tr>`;
 }
@@ -297,6 +314,7 @@ function linhaGrupoHTML(g, aberto) {
 // da toolbar: re-renderizar o painel inteiro a cada tecla destruía o input de
 // busca e derrubava o foco do teclado.
 function tabelaHTML() {
+  const admin = ehAdmin();
   const f = filtroProdutos.trim().toLowerCase();
   let lista = produtosCache;
   if (filtroColecao) lista = lista.filter(p => String(p.colecao_id) === String(filtroColecao));
@@ -354,7 +372,7 @@ function tabelaHTML() {
       .map(m => linhaProdutoHTML(m.p, true)).join('');
     return html;
   }).join('') :
-    `<tr><td colspan="5"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
+    `<tr><td colspan="${admin ? 6 : 5}"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor || filtroCaract) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
 
   const pager = totalFiltrado > POR_PAGINA ? `
     <div style="display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px">
@@ -369,6 +387,7 @@ function tabelaHTML() {
       <th class="pag-th">SKU</th>
       <th class="pag-th" style="text-align:center">Estoque</th>
       <th class="pag-th">Preço</th>
+      ${admin ? '<th class="pag-th" style="text-align:right">Custo</th>' : ''}
       <th class="pag-th" style="text-align:right">Ações</th>
     </tr></thead><tbody>${linhas}</tbody></table></div>
     ${pager}`;
@@ -389,6 +408,7 @@ function renderLista() {
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-secondary btn-sm" onclick="produtoImportarBling()">${IC_BARCODE} Importar do Bling</button>
         <button class="btn-secondary btn-sm" onclick="produtoImportFotos()">${IC_CAM} Importar fotos em lote</button>
+        ${ehGestor() ? `<button class="btn-secondary btn-sm" onclick="produtoPlanilha()">${IC_SHEET} Planilha</button>` : ''}
         <button class="btn-primary btn-sm" onclick="produtoNovo()">${IC_PLUS} Novo produto</button>
       </div>
     </div>
@@ -420,6 +440,38 @@ export function produtoFiltrarColecao(v) { filtroColecao = v; paginaAtual = 1; r
 export function produtoFiltrarCategoria(v) { filtroCategoria = v; paginaAtual = 1; renderTabela(); }
 export function produtoFiltrarFornecedor(v) { filtroFornecedor = v; paginaAtual = 1; renderTabela(); }
 export function produtoFiltrarCaracteristica(v) { filtroCaract = v; paginaAtual = 1; renderTabela(); }
+
+// ── Custo editável inline na grid (só admin) ──
+let custoCancelado = false;
+export function produtoCustoEditar(id, td) {
+  if (!ehAdmin()) return;
+  const p = produtosCache.find(x => String(x.id) === String(id));
+  if (!p) return;
+  const atual = Number(p.custo_compra) > 0 ? moneyToInput(p.custo_compra) : '';
+  custoCancelado = false;
+  td.onclick = null;
+  td.innerHTML = `<input type="text" inputmode="numeric" value="${atual}" placeholder="0,00"
+    style="width:90px;padding:4px 6px;font-size:12.5px;text-align:right;border:1px solid var(--rose);border-radius:6px"
+    oninput="maskMoneyProduto(this)" onkeydown="produtoCustoTecla(event,this)" onblur="produtoCustoSalvar('${id}',this)">`;
+  const inp = td.querySelector('input');
+  inp.focus(); inp.select();
+}
+export function produtoCustoTecla(ev, input) {
+  if (ev.key === 'Enter') input.blur();
+  else if (ev.key === 'Escape') { custoCancelado = true; input.blur(); }
+}
+export async function produtoCustoSalvar(id, input) {
+  if (custoCancelado) { custoCancelado = false; renderTabela(); return; }
+  const p = produtosCache.find(x => String(x.id) === String(id));
+  if (!p) { renderTabela(); return; }
+  const novo = parseMoneyBR(input.value) || 0;
+  if (novo === Number(p.custo_compra || 0)) { renderTabela(); return; }   // sem mudança
+  const { error } = await sbQ(sb.from('produtos').update({ custo_compra: novo }).eq('id', id));
+  if (error) { toast('Erro ao salvar o custo'); renderTabela(); return; }
+  p.custo_compra = novo;
+  toast('Custo atualizado');
+  renderTabela();
+}
 export function produtoPagina(delta) { paginaAtual += delta; renderTabela(); }
 export function produtoToggleGrupo(chave) {
   const base = decodeURIComponent(chave);
@@ -798,6 +850,287 @@ export async function produtoFotosImportar() {
   if (prog()) prog().parentElement.innerHTML = `
     <div style="color:var(--success);font-weight:600;display:flex;align-items:center;gap:6px">${IC_CHECK} Importação concluída</div>
     <div style="font-size:13px;margin-top:6px">${prodOk} produto${prodOk !== 1 ? 's' : ''} atualizado${prodOk !== 1 ? 's' : ''} · ${fotosEnviadas} foto${fotosEnviadas !== 1 ? 's' : ''} enviada${fotosEnviadas !== 1 ? 's' : ''} · ${falhas.length} falha${falhas.length !== 1 ? 's' : ''}</div>
+    ${listaFalhas}
+    <button class="btn-primary btn-sm" style="margin-top:12px" onclick="produtoVoltarLista()">Ver produtos</button>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// PLANILHA (CSV): exportar / modelo / importar. Chave = SKU. Célula em
+// branco NÃO altera nada. Categoria/Coleção/Fornecedor casam pelo NOME.
+// ════════════════════════════════════════════════════════════════════
+const PLANILHA_COLS = ['sku', 'nome', 'codigo_barras', 'preco_venda', 'custo_compra', 'estoque_qtd', 'descricao_curta', 'categoria', 'colecao', 'fornecedor', 'codigo_fornecedor', 'peso_liquido', 'peso_bruto', 'largura', 'altura', 'profundidade', 'ativo'];
+let planilhaAnalise = null;
+
+// nome do cadastro a partir do id (categorias/colecoes/fornecedores)
+function nomeCadastro(tabela, id) {
+  const c = (cadastroCache[tabela] || []).find(x => String(x.id) === String(id));
+  return c ? c.nome : '';
+}
+// mapa nome(minúsculo) -> id, para casar cadastro pela planilha
+function mapaCadastroPorNome(tabela) {
+  const m = new Map();
+  for (const x of (cadastroCache[tabela] || [])) m.set(String(x.nome).trim().toLowerCase(), x.id);
+  return m;
+}
+const ptNum = v => (v == null || v === '') ? '' : String(v).replace('.', ',');
+const moneyOut = v => Number(v) > 0 ? moneyToInput(v) : '';
+
+// ── Download CSV (separador ; + BOM p/ Excel abrir com acento certo) ──
+function csvCelula(v) {
+  const s = v == null ? '' : String(v);
+  return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function baixarCSV(nomeArquivo, matriz) {
+  const conteudo = '﻿' + matriz.map(l => l.map(csvCelula).join(';')).join('\r\n');
+  const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nomeArquivo;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+// ── Parser CSV (aspas, separador auto ; ou , pela 1ª linha) ──
+function parseCSV(texto) {
+  const primeira = (texto.split(/\r?\n/)[0] || '');
+  const sep = primeira.split(';').length >= primeira.split(',').length ? ';' : ',';
+  const linhas = [];
+  let campo = '', linha = [], aspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const ch = texto[i];
+    if (aspas) {
+      if (ch === '"') { if (texto[i + 1] === '"') { campo += '"'; i++; } else aspas = false; }
+      else campo += ch;
+    } else if (ch === '"') aspas = true;
+    else if (ch === sep) { linha.push(campo); campo = ''; }
+    else if (ch === '\n') { linha.push(campo); linhas.push(linha); linha = []; campo = ''; }
+    else if (ch !== '\r') campo += ch;
+  }
+  if (campo.length || linha.length) { linha.push(campo); linhas.push(linha); }
+  return linhas;
+}
+// Excel pt-BR às vezes salva ANSI (windows-1252): se UTF-8 quebrar, redecodifica.
+async function lerTextoCSV(file) {
+  const buf = await file.arrayBuffer();
+  let txt = new TextDecoder('utf-8').decode(buf);
+  if (txt.includes('�')) txt = new TextDecoder('windows-1252').decode(buf);
+  if (txt.charCodeAt(0) === 0xFEFF) txt = txt.slice(1);
+  return txt;
+}
+
+export function produtoPlanilha() {
+  planilhaAnalise = null;
+  panel().innerHTML = `
+    <div class="section-header" style="display:flex;align-items:center;gap:10px">
+      <button class="btn-voltar-ciclo" onclick="produtoVoltarLista()">← Voltar</button>
+      <div class="section-title" style="font-size:19px">Planilha de produtos</div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:13px;color:var(--text);line-height:1.7">
+        <b>Como funciona:</b>
+        <ul style="margin:8px 0 0;padding-left:18px;color:var(--muted)">
+          <li>A chave é o <b>SKU</b> — é por ele que cada linha encontra o produto.</li>
+          <li><b>Célula em branco não altera nada</b> — só os campos preenchidos são gravados.</li>
+          <li>Categoria, Coleção e Fornecedor casam <b>pelo nome</b> (têm que existir em Cadastros; nome que não existe é ignorado com aviso).</li>
+          <li>Fotos não entram por aqui — use <b>Importar fotos em lote</b>.</li>
+          <li>SKU que não existe no catálogo só é criado se você marcar a opção no relatório (precisa de nome).</li>
+        </ul>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn-secondary btn-sm" onclick="produtoPlanilhaModelo()">${IC_DOWN} Baixar planilha modelo</button>
+        <button class="btn-secondary btn-sm" onclick="produtoPlanilhaExportar(this)">${IC_DOWN} Exportar produtos atuais</button>
+        <button class="btn-primary btn-sm" onclick="document.getElementById('planilha-input').click()">${IC_SHEET} Importar planilha</button>
+        <input type="file" id="planilha-input" accept=".csv,text/csv" style="display:none" onchange="produtoPlanilhaArquivo(this)">
+      </div>
+    </div>
+    <div id="planilha-area"></div>`;
+}
+
+export function produtoPlanilhaModelo() {
+  const exemplo = ['21800', 'Brinco Exemplo Ouro 18k', '7891234567890', '42,00', '18,50', '10', 'Brinco leve para o dia a dia', 'Brinco', 'Verão', 'Fornecedor X', 'FORN-123', '', '', '', '', '', 'sim'];
+  baixarCSV('modelo-produtos-lizzie.csv', [PLANILHA_COLS, exemplo]);
+  toast('Modelo baixado');
+}
+
+export async function produtoPlanilhaExportar(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Exportando...'; }
+  await carregarCadastrosParaSelect();
+  const { data, error } = await fetchPaginado(() => sb.from('produtos').select('*').order('nome'));
+  if (btn) { btn.disabled = false; btn.innerHTML = `${IC_DOWN} Exportar produtos atuais`; }
+  if (error) { toast('Erro ao exportar'); return; }
+  const linhas = [PLANILHA_COLS];
+  for (const p of (data || [])) {
+    linhas.push([
+      p.sku || '', p.nome || '', p.codigo_barras || '',
+      moneyOut(p.preco_venda), moneyOut(p.custo_compra),
+      p.estoque_qtd ?? '', p.descricao_curta || '',
+      nomeCadastro('categorias', p.categoria_id), nomeCadastro('colecoes', p.colecao_id), nomeCadastro('fornecedores', p.fornecedor_id),
+      p.codigo_fornecedor || '',
+      ptNum(p.peso_liquido), ptNum(p.peso_bruto), ptNum(p.largura), ptNum(p.altura), ptNum(p.profundidade),
+      p.ativo === false ? 'não' : 'sim',
+    ]);
+  }
+  baixarCSV('produtos-lizzie.csv', linhas);
+  toast(`${(data || []).length} produtos exportados`);
+}
+
+export async function produtoPlanilhaArquivo(input) {
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  const area = document.getElementById('planilha-area');
+  area.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Lendo a planilha e comparando com o catálogo...</div>';
+
+  await carregarCadastrosParaSelect();
+  const { data: produtos, error } = await fetchPaginado(() => sb.from('produtos').select('*').order('id'));
+  if (error) { area.innerHTML = impErro('Erro ao carregar produtos: ' + (error.message || '')); return; }
+
+  const porSku = new Map(), porSkuNorm = new Map();
+  for (const p of (produtos || [])) {
+    if (p.sku) { const s = String(p.sku).trim(); porSku.set(s, p); porSkuNorm.set(s.replace(/^0+/, ''), p); }
+  }
+  const acharProduto = sku => porSku.get(sku) || porSkuNorm.get(sku.replace(/^0+/, '')) || null;
+  const catMap = mapaCadastroPorNome('categorias'), colMap = mapaCadastroPorNome('colecoes'), fornMap = mapaCadastroPorNome('fornecedores');
+
+  let linhas;
+  try { linhas = parseCSV(await lerTextoCSV(file)).filter(l => l.some(c => (c || '').trim() !== '')); }
+  catch (e) { area.innerHTML = impErro('Não consegui ler o arquivo: ' + (e.message || e)); return; }
+  if (linhas.length < 2) { area.innerHTML = impErro('Planilha vazia ou só com o cabeçalho.'); return; }
+
+  const header = linhas[0].map(h => (h || '').trim().toLowerCase());
+  const idx = {};
+  PLANILHA_COLS.forEach(c => { const i = header.indexOf(c); if (i >= 0) idx[c] = i; });
+  if (idx.sku == null) { area.innerHTML = impErro('Falta a coluna "sku" no cabeçalho. Baixe a planilha modelo e use o mesmo cabeçalho.'); return; }
+
+  const atualizar = [], criar = [], avisos = [];
+  let semMudanca = 0;
+  for (let r = 1; r < linhas.length; r++) {
+    const row = linhas[r];
+    const get = c => idx[c] != null ? String(row[idx[c]] ?? '').trim() : '';
+    const sku = get('sku');
+    if (!sku) { avisos.push({ linha: r + 1, msg: 'sem SKU — linha ignorada' }); continue; }
+
+    const campos = {}, avisosLinha = [];
+    for (const c of ['nome', 'codigo_barras', 'descricao_curta', 'codigo_fornecedor']) { const v = get(c); if (v !== '') campos[c] = v; }
+    for (const c of ['preco_venda', 'custo_compra']) {
+      const v = get(c); if (v === '') continue;
+      const n = parseMoneyBR(v);
+      if (n != null && !isNaN(n)) campos[c] = n; else avisosLinha.push(`${c} inválido ("${v}")`);
+    }
+    { const v = get('estoque_qtd'); if (v !== '') { const n = parseInt(v.replace(/[^\d-]/g, ''), 10); if (!isNaN(n)) campos.estoque_qtd = n; else avisosLinha.push('estoque inválido'); } }
+    for (const c of ['peso_liquido', 'peso_bruto', 'largura', 'altura', 'profundidade']) {
+      const v = get(c); if (v === '') continue;
+      const n = parseFloat(v.replace(',', '.'));
+      if (!isNaN(n)) campos[c] = n; else avisosLinha.push(`${c} inválido`);
+    }
+    const nomeCampo = { categoria: ['categoria_id', catMap], colecao: ['colecao_id', colMap], fornecedor: ['fornecedor_id', fornMap] };
+    for (const [col, [campo, mapa]] of Object.entries(nomeCampo)) {
+      const v = get(col); if (v === '') continue;
+      const id = mapa.get(v.toLowerCase());
+      if (id) campos[campo] = id; else avisosLinha.push(`${col} "${v}" não existe em Cadastros — ignorado`);
+    }
+    { const v = get('ativo').toLowerCase(); if (v !== '') {
+      if (['sim', 's', '1', 'true', 'ativo'].includes(v)) campos.ativo = true;
+      else if (['não', 'nao', 'n', '0', 'false', 'inativo'].includes(v)) campos.ativo = false;
+      else avisosLinha.push(`ativo "${v}" inválido`);
+    } }
+    avisosLinha.forEach(m => avisos.push({ linha: r + 1, msg: `SKU ${sku}: ${m}` }));
+
+    const prod = acharProduto(sku);
+    if (!prod) { criar.push({ sku, campos, nome: campos.nome || '', faltaNome: !campos.nome }); continue; }
+    const diff = {}, resumo = [];
+    for (const [k, v] of Object.entries(campos)) {
+      const atual = prod[k];
+      const igual = (typeof v === 'number') ? Number(atual || 0) === v : String(atual ?? '') === String(v);
+      if (!igual) { diff[k] = v; resumo.push(k); }
+    }
+    if (Object.keys(diff).length) atualizar.push({ produto: prod, campos: diff, resumo });
+    else semMudanca++;
+  }
+
+  planilhaAnalise = { atualizar, criar, avisos, semMudanca, total: linhas.length - 1 };
+  renderPlanilhaRelatorio();
+}
+
+function renderPlanilhaRelatorio() {
+  const area = document.getElementById('planilha-area');
+  const { atualizar, criar, avisos, semMudanca, total } = planilhaAnalise;
+  const podeCriar = criar.filter(c => !c.faltaNome).length;
+  const semNome = criar.length - podeCriar;
+
+  const blocoAtualizar = `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--success);margin-bottom:8px">Vão ser atualizados — ${atualizar.length} produto${atualizar.length !== 1 ? 's' : ''}</div>
+      ${atualizar.length ? `<div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">SKU</th><th class="pag-th">Produto</th><th class="pag-th">Campos que mudam</th></tr></thead><tbody>${atualizar.slice(0, 200).map(a => `<tr class="ciclo-row"><td class="ciclo-td" style="font-size:12px">${esc(a.produto.sku || '')}</td><td class="ciclo-td"><div class="ciclo-desc">${esc(a.produto.nome)}</div></td><td class="ciclo-td" style="font-size:12px;color:var(--muted)">${esc(a.resumo.join(', '))}</td></tr>`).join('')}</tbody></table></div>${atualizar.length > 200 ? `<div style="font-size:11px;color:var(--muted);margin-top:6px">Mostrando 200 de ${atualizar.length}.</div>` : ''}` : '<p style="font-size:12px;color:var(--muted);margin:0">Nenhuma alteração encontrada.</p>'}
+    </div>`;
+
+  const blocoCriar = criar.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--plum);margin-bottom:8px">SKUs não encontrados — ${criar.length}</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--plum);cursor:pointer;margin-bottom:10px">
+        <input type="checkbox" id="planilha-criar" onchange="produtoPlanilhaToggleCriar()"> Criar produtos para esses SKUs${podeCriar !== criar.length ? ` (${podeCriar} com nome; ${semNome} sem nome serão ignorados)` : ''}</label>
+      <div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">SKU</th><th class="pag-th">Nome (obrigatório p/ criar)</th></tr></thead><tbody>${criar.slice(0, 200).map(c => `<tr class="ciclo-row"><td class="ciclo-td" style="font-size:12px">${esc(c.sku)}</td><td class="ciclo-td" style="font-size:12px${c.faltaNome ? ';color:var(--danger)' : ''}">${c.faltaNome ? 'faltando nome' : esc(c.nome)}</td></tr>`).join('')}</tbody></table></div>
+    </div>` : '';
+
+  const blocoAvisos = avisos.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--gold);margin-bottom:8px">Avisos — ${avisos.length} (campo pulado, resto da linha vale)</div>
+      <div class="pag-wrap" style="max-height:220px;overflow:auto"><table class="pag-table"><tbody>${avisos.slice(0, 300).map(a => `<tr class="ciclo-row"><td class="ciclo-td" style="font-size:12px;color:var(--muted)">Linha ${a.linha}: ${esc(a.msg)}</td></tr>`).join('')}</tbody></table></div>
+    </div>` : '';
+
+  const nada = !atualizar.length && !podeCriar;
+  area.innerHTML = blocoAtualizar + blocoCriar + blocoAvisos + `
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Linhas na planilha: ${total} · Atualizar: ${atualizar.length} · Sem mudança: ${semMudanca} · Novos: ${criar.length}</div>
+      <button class="btn-primary" id="planilha-btn-aplicar" ${nada ? 'disabled style="opacity:.5"' : ''} onclick="produtoPlanilhaAplicar()">Aplicar ${atualizar.length} alteraç${atualizar.length !== 1 ? 'ões' : 'ão'}</button>
+    </div>`;
+}
+
+export function produtoPlanilhaToggleCriar() {
+  if (!planilhaAnalise) return;
+  const criar = document.getElementById('planilha-criar')?.checked;
+  const novos = criar ? planilhaAnalise.criar.filter(c => !c.faltaNome).length : 0;
+  const btn = document.getElementById('planilha-btn-aplicar');
+  const totalAcoes = planilhaAnalise.atualizar.length + novos;
+  if (btn) {
+    btn.textContent = `Aplicar ${planilhaAnalise.atualizar.length} alteraç${planilhaAnalise.atualizar.length !== 1 ? 'ões' : 'ão'}${novos ? ` + criar ${novos}` : ''}`;
+    btn.disabled = !totalAcoes; btn.style.opacity = totalAcoes ? '' : '.5';
+  }
+}
+
+export async function produtoPlanilhaAplicar() {
+  if (!planilhaAnalise) return;
+  const criarNovos = document.getElementById('planilha-criar')?.checked;
+  const alvos = planilhaAnalise.atualizar;
+  const novos = criarNovos ? planilhaAnalise.criar.filter(c => !c.faltaNome) : [];
+  const total = alvos.length + novos.length;
+  if (!total) { toast('Nada para aplicar'); return; }
+
+  const area = document.getElementById('planilha-area');
+  area.innerHTML = `<div class="card"><div id="planilha-prog" style="font-size:13px">Aplicando alterações...</div>
+    <p style="font-size:11.5px;color:var(--danger);margin:8px 0 0">Não feche esta aba até terminar.</p></div>`;
+  const prog = () => document.getElementById('planilha-prog');
+
+  let atualizados = 0, criados = 0, done = 0;
+  const falhas = [];
+  for (const a of alvos) {
+    const { error } = await sbQ(sb.from('produtos').update(a.campos).eq('id', a.produto.id));
+    if (error) falhas.push({ item: a.produto.sku || a.produto.nome, msg: error.message || 'erro' }); else atualizados++;
+    done++;
+    if (prog()) prog().textContent = `Aplicando ${done} de ${total}...`;
+  }
+  for (const c of novos) {
+    const { error } = await sbQ(sb.from('produtos').insert({ ...c.campos, sku: c.sku }));
+    if (error) falhas.push({ item: c.sku, msg: error.message || 'erro' }); else criados++;
+    done++;
+    if (prog()) prog().textContent = `Aplicando ${done} de ${total}...`;
+  }
+
+  const listaFalhas = falhas.length ? `<div style="margin-top:10px"><div style="font-size:12.5px;font-weight:600;color:var(--danger)">Falhas (${falhas.length}):</div><div class="pag-wrap" style="margin-top:6px"><table class="pag-table"><tbody>${falhas.map(f => `<tr class="ciclo-row"><td class="ciclo-td" style="font-size:12px">${esc(f.item)}</td><td class="ciclo-td" style="font-size:12px;color:var(--muted)">${esc(f.msg)}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+  if (prog()) prog().parentElement.innerHTML = `
+    <div style="color:var(--success);font-weight:600;display:flex;align-items:center;gap:6px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Planilha aplicada</div>
+    <div style="font-size:13px;margin-top:6px">${atualizados} atualizado${atualizados !== 1 ? 's' : ''} · ${criados} criado${criados !== 1 ? 's' : ''} · ${planilhaAnalise.semMudanca} sem mudança · ${falhas.length} falha${falhas.length !== 1 ? 's' : ''}</div>
     ${listaFalhas}
     <button class="btn-primary btn-sm" style="margin-top:12px" onclick="produtoVoltarLista()">Ver produtos</button>`;
 }
