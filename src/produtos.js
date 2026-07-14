@@ -418,18 +418,32 @@ function impErro(msg) {
 }
 
 export async function produtoImportBlingPreview() {
-  const area = document.getElementById('import-bling-area');
   const { skuDe, skuAte } = impFaixaSku();
+  const semFaixa = skuDe == null && skuAte == null;
+  // Guarda: sem faixa varre e traz o catálogo INTEIRO — confirma pra não fazer
+  // isso por engano (ex.: DOM antigo após hot-reload leu os campos vazios).
+  if (semFaixa) {
+    confirmarAcao('Importar catálogo inteiro?',
+      'Você não definiu a faixa de SKU (SKU de / SKU até) — a busca vai varrer e trazer TODOS os produtos do Bling. Se era pra importar só um lote, cancele e preencha a faixa.',
+      'Trazer tudo', () => rodarVarreduraBling(null, null));
+    return;
+  }
+  rodarVarreduraBling(skuDe, skuAte);
+}
+
+async function rodarVarreduraBling(skuDe, skuAte) {
+  const area = document.getElementById('import-bling-area');
   const soAtivos = impSoAtivos();
+  const faixaLabel = (skuDe != null || skuAte != null) ? `faixa ${skuDe ?? '…'}–${skuAte ?? '…'}` : 'SEM faixa (todos)';
   blingScan = null;
-  area.innerHTML = `<div class="card"><div id="imp-prog" style="font-size:13px">Iniciando varredura do Bling...</div>
+  area.innerHTML = `<div class="card"><div id="imp-prog" style="font-size:13px">Iniciando varredura do Bling (${faixaLabel})...</div>
     <button class="btn-secondary btn-sm" style="margin-top:10px" onclick="produtoImportBlingParar(this)">Parar</button></div>`;
   const prog = () => document.getElementById('imp-prog');
 
   let res;
   try {
     res = await varrerBling(skuDe, skuAte, soAtivos, ({ pagina, matched, totalVarridos }) => {
-      if (prog()) prog().textContent = `Varrendo página ${pagina} · ${matched} no intervalo · ${totalVarridos} varridos`;
+      if (prog()) prog().textContent = `Varrendo página ${pagina} · ${faixaLabel} · ${matched} no intervalo · ${totalVarridos} varridos`;
     });
   } catch (e) { area.innerHTML = impErro(e.message || 'Erro na varredura'); return; }
 
