@@ -251,6 +251,7 @@
     <div id="panel-colecoes" style="display:none"></div>
     <div id="panel-fornecedores" style="display:none"></div>
     <div id="panel-faixas-comissao" style="display:none"></div>
+    <div id="panel-config-raspadinha" style="display:none"></div>
     <div id="panel-lancador" style="display:none"></div>
 
   </div><!-- /content -->
@@ -650,6 +651,27 @@
     <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Atualizar itens da maleta</div>
     <div id="maleta-content"></div>
     <button class="btn-secondary" style="width:100%;margin-top:12px" onclick="closeModal('modal-maleta')">Fechar</button>
+  </div>
+</div>
+
+<!-- MODAL FOTO DE PERFIL (selfie ou upload) -->
+<div class="modal-overlay" id="modal-foto-perfil" data-lock-outside>
+  <div class="modal">
+    <button type="button" class="modal-close-x" aria-label="Fechar" onclick="perfilFecharFoto()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg> Foto de perfil</div>
+    <div id="fp-video-wrap" style="display:none;margin-bottom:12px">
+      <video id="fp-video" autoplay playsinline muted style="width:100%;border-radius:12px;background:#000"></video>
+      <button class="btn-primary" style="width:100%;margin-top:8px" onclick="perfilCapturar()">Capturar</button>
+    </div>
+    <img id="fp-preview" alt="Prévia" style="display:none;width:180px;height:180px;object-fit:cover;border-radius:50%;border:3px solid var(--rose);margin:0 auto 14px;display:none">
+    <div id="fp-msg" style="font-size:12px;color:var(--danger);margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button class="btn-secondary" style="flex:1" onclick="perfilTirarSelfie()">Tirar selfie</button>
+      <button class="btn-secondary" style="flex:1" onclick="document.getElementById('fp-arquivo').click()">Enviar arquivo</button>
+      <input type="file" id="fp-arquivo" accept="image/*" style="display:none" onchange="perfilArquivo(this)">
+    </div>
+    <button class="btn-primary" id="fp-salvar" style="width:100%" disabled onclick="perfilSalvarFoto(this)">Salvar foto</button>
   </div>
 </div>
 

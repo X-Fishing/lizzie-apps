@@ -268,3 +268,63 @@ $$;
 
 revoke all on function public.regenerar_share_token() from public;
 grant execute on function public.regenerar_share_token() to authenticated;
+
+-- ════════════════════════════════════════════════════════════════════
+-- DASHBOARD DA REVENDEDORA — foto de perfil, raspadinha e RLS das faixas
+-- ════════════════════════════════════════════════════════════════════
+
+-- Foto de perfil (caminho do arquivo no bucket privado fotos-revendedoras).
+alter table public.profiles
+  add column if not exists foto_url text;
+
+-- Configuração da raspadinha: a cada X reais vendidos, ganha 1 raspadinha.
+-- Parametrizável pelo admin em Cadastros (não hardcode no JS).
+create table if not exists public.config_raspadinha (
+  id uuid primary key default gen_random_uuid(),
+  valor_por_raspadinha numeric not null,
+  ativo boolean not null default true,
+  created_at timestamptz default now()
+);
+
+-- RLS: leitura para qualquer autenticado (a revendedora precisa das faixas
+-- e da raspadinha para a régua); escrita só gestor/admin.
+alter table public.faixas_comissao enable row level security;
+drop policy if exists faixas_comissao_select on public.faixas_comissao;
+drop policy if exists faixas_comissao_write  on public.faixas_comissao;
+create policy faixas_comissao_select on public.faixas_comissao
+  for select to authenticated using ( true );
+create policy faixas_comissao_write on public.faixas_comissao
+  for all to authenticated using ( public.is_gestor() ) with check ( public.is_gestor() );
+
+alter table public.config_raspadinha enable row level security;
+drop policy if exists config_raspadinha_select on public.config_raspadinha;
+drop policy if exists config_raspadinha_write  on public.config_raspadinha;
+create policy config_raspadinha_select on public.config_raspadinha
+  for select to authenticated using ( true );
+create policy config_raspadinha_write on public.config_raspadinha
+  for all to authenticated using ( public.is_gestor() ) with check ( public.is_gestor() );
+
+-- ── Storage: bucket PRIVADO para fotos de perfil ─────────────────────
+-- Path: {revendedora_id}/perfil.jpg — cada usuária só mexe na própria pasta;
+-- staff pode ler todas (exibir avatar no painel). Exibição via URL assinada.
+insert into storage.buckets (id, name, public)
+values ('fotos-revendedoras', 'fotos-revendedoras', false)
+on conflict (id) do nothing;
+
+drop policy if exists "fotos_rev_own_select" on storage.objects;
+drop policy if exists "fotos_rev_own_insert" on storage.objects;
+drop policy if exists "fotos_rev_own_update" on storage.objects;
+drop policy if exists "fotos_rev_staff_select" on storage.objects;
+create policy "fotos_rev_own_select" on storage.objects
+  for select to authenticated
+  using ( bucket_id = 'fotos-revendedoras' and (storage.foldername(name))[1] = auth.uid()::text );
+create policy "fotos_rev_own_insert" on storage.objects
+  for insert to authenticated
+  with check ( bucket_id = 'fotos-revendedoras' and (storage.foldername(name))[1] = auth.uid()::text );
+create policy "fotos_rev_own_update" on storage.objects
+  for update to authenticated
+  using ( bucket_id = 'fotos-revendedoras' and (storage.foldername(name))[1] = auth.uid()::text )
+  with check ( bucket_id = 'fotos-revendedoras' and (storage.foldername(name))[1] = auth.uid()::text );
+create policy "fotos_rev_staff_select" on storage.objects
+  for select to authenticated
+  using ( bucket_id = 'fotos-revendedoras' and public.is_staff() );

@@ -52,6 +52,7 @@ export const MENU = [
       { chave: 'cad_revendedoras',     panel: 'admin',                  label: 'Revendedoras',           icon: IC.userCheck },
       { chave: 'cad_funcionarios',     panel: 'funcionarios',           label: 'Funcionários',           icon: IC.crachaFunc, admin_only: true },
       { chave: 'cad_faixas_comissao',  panel: 'faixas-comissao',        label: 'Faixas de Comissão',     icon: IC.percent },
+      { chave: 'cad_raspadinha',       panel: 'config-raspadinha',      label: 'Raspadinha',             icon: IC.tag, admin_only: true },
       { chave: 'cad_formas_pagamento', panel: 'formas-pagamento',       label: 'Formas de Pagamento',    icon: IC.card, em_breve: true },
       { chave: 'cad_categorias_fin',   panel: 'categorias-financeiras', label: 'Categorias Financeiras', icon: IC.tag, em_breve: true },
   ]},

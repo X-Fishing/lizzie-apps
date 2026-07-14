@@ -2,6 +2,7 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { sbQ, fetchPaginado, fmtBRL, esc, ehRevTeste, marcarRevsTeste } from './utils.js';
+import { avatarHtml, urlFotoPerfil } from './perfil.js';
 // ── Seções do dashboard PC (stubs "Em breve" — implementadas por etapa) ──
 export function emBreveHtml(titulo, descricao, icone) {
   return `<div class="section-header"><div><div class="section-title">${titulo} <span class="badge-soon">Em breve</span></div></div></div>
@@ -33,49 +34,140 @@ export function loadCategoriasFinanceiras() {
     'Cadastro de categorias de Despesas e Recebimentos — em construção.', '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>');
 }
 
+// Dashboard da REVENDEDORA: foto de perfil, régua de vendas (faixas de
+// comissão + raspadinha), comissão estimada e resumo de garantias.
+// SEMPRE rebusca do Supabase ao montar (nada de cache local de vendas).
 export async function loadDashboard() {
   if (ehStaff()) return loadDashboardStaff();   // dashboard PC (vendas/operação)
-  const isAdmin = ehStaff();
-  // Sem .limit(): os contadores (abertas/conserto/prontas/vencendo) precisam
-  // de TODAS as garantias. Seleciona so os campos usados nos cards/contadores.
-  let q = sb.from('garantias').select('id,status,prazo_maximo,created_at,descricao_item,nome_cliente,foto_url,data_entrada');
-  if (!isAdmin) q = q.eq('revendedora_id', state.currentUser.id);
-  const { data, error } = await sbQ(q.order('created_at', { ascending: false }));
+  const panel = document.getElementById('panel-dashboard');
+  panel.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
+  const uid = state.currentUser.id;
 
-  if (error) {
-    const msg = error.message === 'timeout' ? 'Conexão lenta. Aguarde e tente novamente.' : 'Erro ao carregar dados.';
-    document.getElementById('dash-recentes').innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
+  // Buscas em paralelo (garantias, maleta ativa, faixas, raspadinha, peças).
+  const [gRes, mRes, fxRes, rspRes, cRes] = await Promise.all([
+    sbQ(sb.from('garantias').select('id,status,prazo_maximo,created_at,descricao_item,nome_cliente,foto_url,data_entrada')
+      .eq('revendedora_id', uid).order('created_at', { ascending: false })),
+    sbQ(sb.from('maletas').select('id').eq('revendedora_id', uid).eq('status', 'ativa').maybeSingle()),
+    sbQ(sb.from('faixas_comissao').select('valor_min,valor_max,percentual').eq('ativo', true).order('valor_min')),
+    sbQ(sb.from('config_raspadinha').select('valor_por_raspadinha').eq('ativo', true).limit(1)),
+    sbQ(sb.from('consignados').select('quantidade_vendida,preco_venda,maleta_id')
+      .eq('revendedora_id', uid).eq('status', 'ativo')),
+  ]);
+
+  if (gRes.error || cRes.error) {
+    const err = gRes.error || cRes.error;
+    const msg = err.message === 'timeout' ? 'Conexão lenta. Aguarde e tente novamente.' : 'Erro ao carregar dados.';
+    panel.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
     return;
   }
-  if (!data) return;
-  const hoje = new Date(); hoje.setHours(0,0,0,0);
 
-  const abertas = data.filter(g => g.status === 'aberta').length;
-  const conserto = data.filter(g => g.status === 'em_conserto').length;
-  const prontas = data.filter(g => g.status === 'pronta').length;
-  const vencendo = data.filter(g => {
-    const prazo = new Date(g.prazo_maximo + 'T00:00:00');
-    const diff = Math.ceil((prazo - hoje) / 86400000);
+  const garantias = gRes.data || [];
+  const maletaId = mRes.data?.id || null;
+  const faixas = fxRes.data || [];               // pode falhar se SQL não rodou -> régua se adapta
+  const valorRaspadinha = Number(rspRes.data?.[0]?.valor_por_raspadinha || 0);
+
+  // ── Faturamento da maleta vigente (mesma base do fechamento) ──
+  const pecas = (cRes.data || []).filter(c => !maletaId || c.maleta_id === maletaId);
+  const fat = pecas.reduce((s, c) => s + (c.quantidade_vendida || 0) * Number(c.preco_venda || 0), 0);
+
+  // ── Faixa atual / próxima ──
+  const dentro = f => Number(f.valor_min) <= fat && (f.valor_max == null || fat <= Number(f.valor_max));
+  const faixaAtual = [...faixas].reverse().find(dentro) || null;
+  const proxFaixa = faixas.find(f => Number(f.valor_min) > fat) || null;
+  const pctAtual = faixaAtual ? Number(faixaAtual.percentual) : 0;
+  const comissao = fat * pctAtual / 100;
+
+  // ── Régua (escala: do zero ao início da última faixa, ou além se já passou) ──
+  const topoEscala = Math.max(fat, ...faixas.map(f => Number(f.valor_min)), 1) * 1.05;
+  const pctBarra = Math.min(100, fat / topoEscala * 100);
+  const marcadores = faixas.filter(f => Number(f.valor_min) > 0).map(f => {
+    const left = Math.min(100, Number(f.valor_min) / topoEscala * 100);
+    const atingida = fat >= Number(f.valor_min);
+    return `<div class="regua-marker${atingida ? ' ok' : ''}" style="left:${left}%" title="${fmtBRL(f.valor_min)} · ${Number(f.percentual)}%"></div>`;
+  }).join('');
+
+  const txtProxima = !faixas.length
+    ? '<span style="color:var(--muted)">Faixas de comissão ainda não configuradas.</span>'
+    : (proxFaixa
+      ? `Faltam <b>${fmtBRL(Number(proxFaixa.valor_min) - fat)}</b> para a faixa de <b>${Number(proxFaixa.percentual).toLocaleString('pt-BR')}%</b> (a partir de ${fmtBRL(proxFaixa.valor_min)})`
+      : '<b style="color:var(--success)">Você está na faixa máxima!</b>');
+
+  // ── Raspadinha (a cada X vendidos, ganha 1) ──
+  let htmlRaspadinha = '';
+  if (valorRaspadinha > 0) {
+    const ganhas = Math.floor(fat / valorRaspadinha);
+    const resto = fat % valorRaspadinha;
+    const falta = resto === 0 ? valorRaspadinha : valorRaspadinha - resto;
+    htmlRaspadinha = `<div class="regua-rasp">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10"/><path d="m4.93 10.93 1.41 1.41"/><path d="M2 18h2"/><path d="M20 18h2"/><path d="m19.07 10.93-1.41 1.41"/><path d="M22 22H2"/><path d="m16 6-4 4-4-4"/><path d="M16 18a4 4 0 0 0-8 0"/></svg>
+      Faltam <b>${fmtBRL(falta)}</b> para sua próxima raspadinha!
+      <span class="regua-rasp-count">${ganhas} conquistada${ganhas !== 1 ? 's' : ''}</span>
+    </div>`;
+  }
+
+  // ── Garantias (contadores + alerta + recentes) ──
+  const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
+  const abertas = garantias.filter(g => g.status === 'aberta').length;
+  const conserto = garantias.filter(g => g.status === 'em_conserto').length;
+  const prontas = garantias.filter(g => g.status === 'pronta').length;
+  const vencendo = garantias.filter(g => {
+    const diff = Math.ceil((new Date(g.prazo_maximo + 'T00:00:00') - hoje) / 86400000);
     return diff <= 7 && diff >= 0 && g.status !== 'entregue';
   }).length;
+  const alertaHtml = vencendo > 0
+    ? `<div class="alert alert-warning"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> ${vencendo} garantia${vencendo > 1 ? 's' : ''} vencendo em até 7 dias</div>`
+    : '';
+  const recentes = garantias.slice(0, 5);
+  const recentesHtml = recentes.length
+    ? recentes.map(g => renderGarantiaCard(g)).join('')
+    : '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></div><p>Nenhuma garantia ainda</p></div>';
 
-  document.getElementById('s-abertas').textContent = abertas;
-  document.getElementById('s-conserto').textContent = conserto;
-  document.getElementById('s-prontas').textContent = prontas;
-  document.getElementById('s-vencendo').textContent = vencendo;
+  // ── Foto de perfil (URL assinada; bucket privado) ──
+  const fotoUrl = await urlFotoPerfil();
+  const nome = state.currentProfile.nome || '';
 
-  const sub = isAdmin ? 'Todas as revendedoras' : state.currentProfile.nome.split(' ')[0];
-  document.getElementById('dash-subtitle').textContent = sub;
+  panel.innerHTML = `
+    <div class="section-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <div style="position:relative;cursor:pointer" onclick="perfilAbrirFoto()" title="Alterar foto de perfil">
+          ${avatarHtml(nome, fotoUrl, 54)}
+          <span class="avatar-edit"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg></span>
+        </div>
+        <div>
+          <div class="section-title">Olá, ${esc(nome.split(' ')[0])}!</div>
+          <div class="section-subtitle">${maletaId ? 'Sua maleta atual' : 'Sem maleta ativa no momento'}</div>
+        </div>
+      </div>
+    </div>
 
-  const alertDiv = document.getElementById('dash-alertas');
-  if (vencendo > 0) {
-    alertDiv.innerHTML = `<div class="alert alert-warning"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> ${vencendo} garantia${vencendo>1?'s':''} vencendo em até 7 dias</div>`;
-  } else alertDiv.innerHTML = '';
+    <div class="card regua-card">
+      <div class="regua-topo">
+        <div>
+          <div class="regua-label">Vendas nesta maleta</div>
+          <div class="regua-valor">${fmtBRL(fat)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="regua-label">Comissão estimada${pctAtual ? ` (${pctAtual.toLocaleString('pt-BR')}%)` : ''}</div>
+          <div class="regua-valor" style="color:var(--success)">${fmtBRL(comissao)}</div>
+        </div>
+      </div>
+      <div class="regua-bar"><div class="regua-fill" style="width:${pctBarra}%"></div>${marcadores}</div>
+      <div class="regua-texto">${txtProxima}</div>
+      ${htmlRaspadinha}
+      <div class="regua-obs">Valores aproximados, sujeitos ao fechamento da maleta.</div>
+    </div>
 
-  const recentes = data.slice(0, 5);
-  const recentDiv = document.getElementById('dash-recentes');
-  if (!recentes.length) { recentDiv.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></div><p>Nenhuma garantia ainda</p></div>'; return; }
-  recentDiv.innerHTML = recentes.map(g => renderGarantiaCard(g)).join('');
+    <div class="stats-grid" id="dash-stats">
+      <div class="stat-card"><div class="stat-num stat-info">${abertas}</div><div class="stat-label">Em aberto</div></div>
+      <div class="stat-card"><div class="stat-num stat-gold">${conserto}</div><div class="stat-label">Em conserto</div></div>
+      <div class="stat-card stat-green"><div class="stat-num" style="color:var(--success)">${prontas}</div><div class="stat-label">Prontas</div></div>
+      <div class="stat-card"><div class="stat-num" style="color:var(--danger)">${vencendo}</div><div class="stat-label">Vencendo</div></div>
+    </div>
+    ${alertaHtml}
+    <div class="section-header" style="margin-top:4px">
+      <div class="section-title" style="font-size:18px">Garantias recentes</div>
+    </div>
+    <div id="dash-recentes">${recentesHtml}</div>`;
 }
 
 // Dashboard PC (staff) estilo Zenply — vendas/operação. Cards de despesa/DRE

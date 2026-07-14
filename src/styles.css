@@ -391,6 +391,43 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   font-family: 'DM Sans', sans-serif;
 }
 .modal-close-x:active { background: var(--blush); }
+
+/* ── Dashboard da revendedora: avatar + régua de vendas ── */
+.avatar-edit {
+  position: absolute; right: -4px; bottom: -4px;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--rose); color: #fff; font-size: 11px;
+  display: flex; align-items: center; justify-content: center;
+  border: 2px solid var(--cream);
+}
+.regua-card { padding: 18px; }
+.regua-topo { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.regua-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.regua-valor { font-family: 'Cormorant Garamond', serif; font-size: 26px; color: var(--rose); line-height: 1.15; }
+.regua-bar {
+  position: relative; height: 12px; border-radius: 7px;
+  background: var(--blush); overflow: visible; margin: 6px 0 12px;
+}
+.regua-fill {
+  height: 100%; border-radius: 7px;
+  background: linear-gradient(90deg, var(--rose), #b5526a);
+  transition: width 0.6s ease;
+}
+.regua-marker {
+  position: absolute; top: -3px; width: 3px; height: 18px; border-radius: 2px;
+  background: var(--muted); opacity: 0.55; transform: translateX(-50%);
+}
+.regua-marker.ok { background: var(--gold); opacity: 1; }
+.regua-texto { font-size: 13px; color: var(--text); }
+.regua-rasp {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 10px; padding: 9px 12px; border-radius: 10px;
+  background: rgba(212,168,75,0.10); border: 1px solid rgba(212,168,75,0.35);
+  font-size: 12.5px; color: var(--text);
+}
+.regua-rasp .ico { color: var(--gold); flex: none; }
+.regua-rasp-count { margin-left: auto; font-size: 11px; color: var(--gold); font-weight: 600; }
+.regua-obs { font-size: 10.5px; color: var(--muted); margin-top: 10px; }
 @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
 /* Modal de LISTA com tamanho estático: altura fixa independente do conteúdo
    (sem "pulos" entre poucos e muitos itens); só a área .modal-body rola. */

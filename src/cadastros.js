@@ -69,6 +69,27 @@ const CFG = {
     },
     avisos: linhas => avisoFaixasComissao(linhas),
   },
+  config_raspadinha: {
+    panel: 'config-raspadinha', titulo: 'Raspadinha', singular: 'configuração de raspadinha',
+    subtitulo: 'A cada X reais vendidos na maleta, a revendedora ganha 1 raspadinha',
+    order: 'valor_por_raspadinha',
+    campos: [
+      { key: 'valor_por_raspadinha', label: 'Valor por raspadinha (R$) — ex.: 300', type: 'number', required: true },
+      { key: 'ativo', label: 'Ativo', type: 'bool', default: true },
+    ],
+    colunas: ['valor_por_raspadinha'],
+    fmt: { valor_por_raspadinha: v => fmtBRL(v) },
+    validar: p => {
+      if (p.valor_por_raspadinha == null || Number(p.valor_por_raspadinha) <= 0) return 'Informe um valor maior que zero.';
+      return null;
+    },
+    avisos: linhas => {
+      const ativas = linhas.filter(l => l.ativo);
+      return ativas.length > 1
+        ? '<div class="alert alert-warning" style="margin-bottom:12px"><b>Atenção:</b> há mais de uma configuração ativa — a régua usa a primeira. Deixe só uma ativa.</div>'
+        : '';
+    },
+  },
 };
 
 const LABEL_COL = {
@@ -241,6 +262,7 @@ export function loadCategorias()      { carregar('categorias'); }
 export function loadColecoes()        { carregar('colecoes'); }
 export function loadFornecedores()    { carregar('fornecedores'); }
 export function loadFaixasComissao()  { carregar('faixas_comissao'); }
+export function loadConfigRaspadinha() { carregar('config_raspadinha'); }
 
 // Carrega os 3 cadastros para alimentar selects do produto (uma vez por abertura).
 export async function carregarCadastrosParaSelect() {
