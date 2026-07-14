@@ -110,6 +110,20 @@ let filtroProdutos = '';
 let filtroColecao = '';      // id da coleção selecionada no filtro ('' = todas)
 let filtroCategoria = '';    // id da categoria ('' = todas)
 let filtroFornecedor = '';   // id do fornecedor ('' = todos)
+let filtroCaract = '';       // característica: com/sem foto, sem descrição, sem preço... ('' = todas)
+
+// Filtros de "estado" do produto — úteis pra achar o que falta completar
+// (ex.: "sem foto" antes de usar o importador de fotos em lote).
+const CARACT_FILTROS = {
+  com_foto:      { label: 'Com foto',            teste: p => !!p.foto_url },
+  sem_foto:      { label: 'Sem foto',            teste: p => !p.foto_url },
+  sem_descricao: { label: 'Sem descrição',       teste: p => !(p.descricao_curta || '').trim() },
+  sem_custo:     { label: 'Sem preço de custo',  teste: p => !(Number(p.custo_compra) > 0) },
+  sem_venda:     { label: 'Sem preço de venda',  teste: p => !(Number(p.preco_venda) > 0) },
+  sem_sku:       { label: 'Sem SKU',             teste: p => !(p.sku || '').trim() },
+  sem_barras:    { label: 'Sem código de barras', teste: p => !(p.codigo_barras || '').trim() },
+  sem_estoque:   { label: 'Sem estoque',         teste: p => !(Number(p.estoque_qtd) > 0) },
+};
 let paginaAtual = 1;         // paginação client-side da grid
 const POR_PAGINA = 50;
 let formVariacoes = [];   // variações em edição no formulário (client-side)
@@ -133,7 +147,7 @@ export async function loadProdutos() {
   // fetchPaginado: o PostgREST devolve no máx. 1000 linhas por chamada — sem
   // isso, catálogo acima de 1000 produtos aparece truncado na grid.
   const { data, error } = await fetchPaginado(() => sb.from('produtos')
-    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,estoque_qtd,foto_url,ativo,categoria_id,colecao_id,fornecedor_id,formato')
+    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,custo_compra,estoque_qtd,foto_url,descricao_curta,ativo,categoria_id,colecao_id,fornecedor_id,formato')
     .order('nome', { ascending: true }));
   if (error) { if (await handleSupabaseError(error, 'Erro ao carregar produtos')) return; }
   produtosCache = data || [];
@@ -268,6 +282,7 @@ function tabelaHTML() {
   if (filtroColecao) lista = lista.filter(p => String(p.colecao_id) === String(filtroColecao));
   if (filtroCategoria) lista = lista.filter(p => String(p.categoria_id) === String(filtroCategoria));
   if (filtroFornecedor) lista = lista.filter(p => String(p.fornecedor_id) === String(filtroFornecedor));
+  if (filtroCaract && CARACT_FILTROS[filtroCaract]) lista = lista.filter(CARACT_FILTROS[filtroCaract].teste);
   if (f) lista = lista.filter(p => {
     if ([p.nome, p.sku, p.codigo_barras, p.codigo_fornecedor, nomeColecao(p.colecao_id)]
       .some(v => (v || '').toLowerCase().includes(f))) return true;
@@ -372,6 +387,10 @@ function renderLista() {
         <option value="">Todos os fornecedores</option>
         ${(cadastroCache.fornecedores || []).map(c => `<option value="${c.id}" ${String(c.id) === String(filtroFornecedor) ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}
       </select>
+      <select class="form-control" style="max-width:200px" onchange="produtoFiltrarCaracteristica(this.value)">
+        <option value="">Todas as características</option>
+        ${Object.entries(CARACT_FILTROS).map(([k, v]) => `<option value="${k}" ${k === filtroCaract ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}
+      </select>
     </div>
     <div id="prod-lista">${tabelaHTML()}</div>`;
 }
@@ -380,6 +399,7 @@ export function produtoFiltrar(v) { filtroProdutos = v; paginaAtual = 1; renderT
 export function produtoFiltrarColecao(v) { filtroColecao = v; paginaAtual = 1; renderTabela(); }
 export function produtoFiltrarCategoria(v) { filtroCategoria = v; paginaAtual = 1; renderTabela(); }
 export function produtoFiltrarFornecedor(v) { filtroFornecedor = v; paginaAtual = 1; renderTabela(); }
+export function produtoFiltrarCaracteristica(v) { filtroCaract = v; paginaAtual = 1; renderTabela(); }
 export function produtoPagina(delta) { paginaAtual += delta; renderTabela(); }
 export function produtoToggleGrupo(chave) {
   const base = decodeURIComponent(chave);
