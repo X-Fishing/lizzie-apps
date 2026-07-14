@@ -133,6 +133,26 @@ const MAX_IMG_MB = 5;
 
 function panel() { return document.getElementById('panel-produtos'); }
 
+// Miniatura da grade: com foto vira clicável (zoom); sem foto mostra o ícone.
+// stopPropagation p/ não disparar o toggle do grupo/edição ao clicar na foto.
+function thumbHTML(url) {
+  return url
+    ? `<span class="ciclo-emoji" style="cursor:zoom-in" onclick="event.stopPropagation();produtoZoomFoto('${esc(url)}')"><img src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px"></span>`
+    : `<span class="ciclo-emoji">${IC_GEM}</span>`;
+}
+
+// Zoom da foto: overlay em tela cheia; clique em qualquer lugar fecha.
+export function produtoZoomFoto(url) {
+  if (!url) return;
+  document.getElementById('produto-zoom')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'produto-zoom';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,8,30,.85);display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out';
+  ov.onclick = () => ov.remove();
+  ov.innerHTML = `<img src="${esc(url)}" alt="Foto do produto" style="max-width:92vw;max-height:92vh;object-fit:contain;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.5)">`;
+  document.body.appendChild(ov);
+}
+
 // Nome da coleção a partir do id (usa o cache de cadastros).
 function nomeColecao(id) {
   const c = (cadastroCache.colecoes || []).find(x => String(x.id) === String(id));
@@ -189,7 +209,7 @@ function linhaProdutoHTML(p, sub = false) {
     <tr class="ciclo-row"${sub ? ' style="background:rgba(201,116,138,0.045)"' : ''}>
       <td class="ciclo-td"${sub ? ' style="padding-left:34px"' : ''}>
         <div style="display:flex;align-items:center;gap:10px">
-          <span class="ciclo-emoji">${p.foto_url ? `<img src="${esc(p.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
+          ${thumbHTML(p.foto_url)}
           <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}</div>
           ${p.codigo_barras ? `<div style="font-size:11px;color:var(--muted)">${esc(p.codigo_barras)}</div>` : ''}</div>
         </div>
@@ -232,7 +252,7 @@ function linhaVarProdHTML(p, vars, aberto) {
       <td class="ciclo-td">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="width:14px;color:var(--rose);font-size:12px">${aberto ? '▾' : '▸'}</span>
-          <span class="ciclo-emoji">${p.foto_url ? `<img src="${esc(p.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
+          ${thumbHTML(p.foto_url)}
           <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}</div>
           <div style="font-size:11px;color:var(--muted)">${vars.length} variaç${vars.length !== 1 ? 'ões' : 'ão'}: ${vars.map(v => esc(v.valor)).join(' · ')}</div></div>
         </div>
@@ -261,7 +281,7 @@ function linhaGrupoHTML(g, aberto) {
       <td class="ciclo-td">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="width:14px;color:var(--rose);font-size:12px">${aberto ? '▾' : '▸'}</span>
-          <span class="ciclo-emoji">${foto ? `<img src="${esc(foto)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
+          ${thumbHTML(foto)}
           <div><div class="ciclo-desc">${esc(g.base)}</div>
           <div style="font-size:11px;color:var(--muted)">${g.membros.length} tamanhos · aros ${tams.join(' · ')}</div></div>
         </div>
