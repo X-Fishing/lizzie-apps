@@ -8,11 +8,6 @@ export function emBreveHtml(titulo, descricao, icone) {
     <div class="empty-state"><div class="empty-icon">${icone}</div><p>${descricao}</p></div>`;
 }
 
-export function loadCalculadora() {
-  document.getElementById('panel-calculadora').innerHTML = emBreveHtml('Calculadora de custo',
-    'Cálculo de custo das peças, leitura de foto por IA e envio ao Bling — em construção.', '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>');
-}
-
 export function loadClientes() {
   document.getElementById('panel-clientes').innerHTML = emBreveHtml('Clientes finais',
     'Base de clientes (aniversários, garantias e contato) — em construção.', '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>');

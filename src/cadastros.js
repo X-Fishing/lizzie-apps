@@ -17,9 +17,11 @@ const CFG = {
     order: 'nome',
     campos: [
       { key: 'nome', label: 'Nome', type: 'text', required: true },
+      { key: 'banho_padrao', label: 'Banho padrão (milésimos — só ouro)', type: 'number' },
       { key: 'ativo', label: 'Ativo', type: 'bool', default: true },
     ],
-    colunas: ['nome'],
+    colunas: ['nome', 'banho_padrao'],
+    fmt: { banho_padrao: v => (Number(v) || 0) + ' mil.' },
   },
   colecoes: {
     panel: 'colecoes', titulo: 'Coleções', singular: 'coleção',
@@ -40,10 +42,13 @@ const CFG = {
       { key: 'telefone',   label: 'Telefone', type: 'text' },
       { key: 'email',      label: 'E-mail', type: 'text' },
       { key: 'contato',    label: 'Pessoa de contato', type: 'text' },
+      { key: 'desconto',   label: 'Desconto na peça bruta (%)', type: 'number' },
       { key: 'observacao', label: 'Observação', type: 'textarea' },
       { key: 'ativo',      label: 'Ativo', type: 'bool', default: true },
     ],
-    colunas: ['nome', 'telefone', 'contato'],
+    colunas: ['nome', 'telefone', 'desconto'],
+    fmt: { desconto: v => (Number(v) || 0) + '%' },
+    validar: p => (p.desconto != null && (p.desconto < 0 || p.desconto > 100)) ? 'Desconto deve estar entre 0 e 100.' : null,
   },
   faixas_comissao: {
     panel: 'faixas-comissao', titulo: 'Faixas de Comissão', singular: 'faixa de comissão',
@@ -73,7 +78,8 @@ const CFG = {
 
 const LABEL_COL = {
   nome: 'Nome', ano: 'Ano', telefone: 'Telefone', contato: 'Contato',
-  valor_min: 'De', valor_max: 'Até', percentual: 'Comissão',
+  valor_min: 'De', valor_max: 'Até', percentual: 'Comissão', desconto: 'Desconto',
+  banho_padrao: 'Banho padrão',
 };
 
 // Alerta (não bloqueia) sobreposição e lacuna entre faixas ATIVAS.
@@ -245,9 +251,9 @@ export function loadFaixasComissao()  { carregar('faixas_comissao'); }
 // Carrega os 3 cadastros para alimentar selects do produto (uma vez por abertura).
 export async function carregarCadastrosParaSelect() {
   const [c1, c2, c3] = await Promise.all([
-    sbQ(sb.from('categorias').select('id,nome,ativo').order('nome')),
+    sbQ(sb.from('categorias').select('*').order('nome')), // * = inclui banho_padrao (0014)
     sbQ(sb.from('colecoes').select('id,nome,ativo').order('nome')),
-    sbQ(sb.from('fornecedores').select('id,nome,ativo').order('nome')),
+    sbQ(sb.from('fornecedores').select('*').order('nome')), // * = inclui desconto quando a 0012 existir
   ]);
   cadastroCache.categorias   = c1.data || [];
   cadastroCache.colecoes     = c2.data || [];
