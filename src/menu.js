@@ -69,8 +69,9 @@ export const MENU = [
       { chave: 'marketing_bonus', panel: 'bonus',             label: 'Bônus',      icon: IC.gift, em_breve: true },
   ]},
   { secao: 'Configurações', grupo: 'grp_cadastros', filhos: [
-      { chave: 'cad_funcionarios',    panel: 'funcionarios',    label: 'Funcionários',       icon: IC.crachaFunc, admin_only: true },
-      { chave: 'cad_faixas_comissao', panel: 'faixas-comissao', label: 'Faixas de Comissão', icon: IC.percent },
+      { chave: 'cad_funcionarios',    panel: 'funcionarios',    label: 'Funcionários',        icon: IC.crachaFunc, admin_only: true },
+      { chave: 'cad_perfis',          panel: 'perfis',          label: 'Perfis & Permissões', icon: IC.shield, admin_only: true },
+      { chave: 'cad_faixas_comissao', panel: 'faixas-comissao', label: 'Faixas de Comissão',  icon: IC.percent },
   ]},
 ];
 

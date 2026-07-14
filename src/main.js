@@ -16,7 +16,7 @@ import { loadDashboard, loadClientes, loadMarketing, loadFormasPagamento, loadCa
 import { loadCalculadora, calcularSimulacao, loadPrecificacao, precifSalvarParams, precifSalvarBanhos, loadEntradaMercadoria, loteAdd, loteRemover, loteSet, loteRecalcTudo, loteLancar, loteDuplicar, loteTecla, loteArredondarTodos, entradaColarAbrir, entradaColarProcessar, entradaLimparLote } from './precificacao.js';
 import { loadFinanceiro, abrirRecebimento, registrarRecebimento, recRecalc, recAtalho, copiarPixCola, pixConfigAbrir, pixConfigSalvar, zapCobranca, estornarRecebimento, estornarConfirmar } from './financeiro.js';
 import { podeAcessarPanel, renderSidebar, toggleSnavGrupo, toggleSidebarLateral } from './menu.js';
-import { loadFuncionarios, funcTab, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilSalvarPermissoes } from './funcionarios.js';
+import { loadFuncionarios, loadPerfis, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilFechar, perfilSalvarPermissoes } from './funcionarios.js';
 import { calcPrazoGarantia, loadGarantias, filtrarGarantias, sortGarantiasStaff, setGFilter, renderGarantiaCard, verGarantia, openNovaGarantia, editarGarantia, salvarGarantia, mudarStatus, atualizarStatusCard, excluirGarantia } from './garantias.js';
 import { openBlingSync, buscarBling, filtrarBling, verItensBling, voltarListaBling, importarItensBling, atualizarMaleta, previewMaletaPorId, confirmarMaleta, salvarBlingId, detectarBlingId, escolherBlingCandidato } from './bling.js';
 import { loadVendas, setPFilter, verVenda, excluirVenda, registrarPagamento } from './pagamentos.js';
@@ -118,7 +118,7 @@ Object.assign(window, { renderAprovadas, renderGarantiaCard, ehAdmin, ehStaff, e
   perfilAbrirFoto, perfilFecharFoto, perfilTirarSelfie, perfilCapturar, perfilArquivo, perfilSalvarFoto,
   toast, podeAcessarPanel, renderSidebar, toggleSnavGrupo,
   abrirRecebimento, registrarRecebimento, recRecalc, recAtalho, copiarPixCola, pixConfigAbrir, pixConfigSalvar, zapCobranca, estornarRecebimento, estornarConfirmar,
-  funcTab, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilSalvarPermissoes,
+  loadPerfis, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilFechar, perfilSalvarPermissoes,
   loadLancador, lancadorBipar, lancadorSetQtd, lancadorRemover, lancadorEnviar, lancadorCamera, fecharCamera, scanBarcodeInto, lancadorSelecionarRev, lancadorDestinoNova, lancadorDestinoExistente, lancadorTrocarDestino, lancadorAbrirBusca, lancadorFecharBusca, lancadorBuscaInput, lancadorBuscaTeclas, lancadorBuscaAdicionar,
   abrirDivulgarMaleta, copiarLinkMaleta, mostrarQrMaleta, regenerarLinkMaleta });
 

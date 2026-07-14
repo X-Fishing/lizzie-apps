@@ -1,5 +1,5 @@
 // Navegacao entre paineis. Chama loaders/papeis via window (cross-module).
-export const PANEIS_STAFF = ['financeiro','calculadora','clientes','bonus','funcionarios','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','faixas-comissao','config-raspadinha','precificacao','entrada-mercadoria','lancador'];
+export const PANEIS_STAFF = ['financeiro','calculadora','clientes','bonus','funcionarios','perfis','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','faixas-comissao','config-raspadinha','precificacao','entrada-mercadoria','lancador'];
 
 export function showPanel(name) {
   if (name === 'trocas' && !ehStaff()) name = 'dashboard';
@@ -33,6 +33,7 @@ export function showPanel(name) {
   if (name === 'clientes') loadClientes();
   if (name === 'marketing') loadMarketing();
   if (name === 'funcionarios') loadFuncionarios();
+  if (name === 'perfis') loadPerfis();
   if (name === 'formas-pagamento') loadFormasPagamento();
   if (name === 'categorias-financeiras') loadCategoriasFinanceiras();
   if (name === 'produtos') loadProdutos();

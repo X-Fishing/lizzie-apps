@@ -25,51 +25,67 @@ async function surfarErro(error, contexto) {
 }
 
 let FUNCS = [], PERFIS = [];
-let tabAtual = 'func';
 let perfilAberto = null;          // id do perfil com checklist aberto
 let permsPerfil = new Set();      // chaves marcadas do perfil aberto
 
 const panel = () => document.getElementById('panel-funcionarios');
+const panelPerfis = () => document.getElementById('panel-perfis');
 
-export async function loadFuncionarios() {
-  if (!IS_ADMIN) {
-    panel().innerHTML = '<div class="empty-state"><div class="empty-icon">' + IC_LOCK + '</div><p>Área restrita ao administrador.</p></div>';
-    return;
-  }
-  panel().innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
+const HTML_RESTRITO = '<div class="empty-state"><div class="empty-icon">' + IC_LOCK + '</div><p>Área restrita ao administrador.</p></div>';
+const HTML_LOADING = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
+const HTML_ERRO = '<div class="empty-state"><div class="empty-icon">' + IC_EMPTY + '</div><p>Erro ao carregar. Já rodou a migração <b>0001_perfis_permissoes.sql</b> no Supabase?</p></div>';
+
+// Funcionários e Perfis compartilham os dois datasets (o dropdown de perfil na
+// tela de funcionários e o "em uso" na de perfis).
+async function carregarDados() {
   const [fRes, pRes] = await Promise.all([
     sbQ(sb.from('funcionarios').select('*').order('nome')),
     sbQ(sb.from('perfis').select('*').order('nome')),
   ]);
-  if (fRes.error || pRes.error) {
-    panel().innerHTML = '<div class="empty-state"><div class="empty-icon">' + IC_EMPTY + '</div><p>Erro ao carregar. Já rodou a migração <b>0001_perfis_permissoes.sql</b> no Supabase?</p></div>';
-    return;
-  }
+  if (fRes.error || pRes.error) return false;
   FUNCS = fRes.data || [];
   PERFIS = pRes.data || [];
-  render();
+  return true;
 }
 
-export function funcTab(tab) { tabAtual = tab; perfilAberto = null; render(); }
+export async function loadFuncionarios() {
+  if (!IS_ADMIN) { panel().innerHTML = HTML_RESTRITO; return; }
+  panel().innerHTML = HTML_LOADING;
+  if (!await carregarDados()) { panel().innerHTML = HTML_ERRO; return; }
+  renderFuncionarios();
+}
 
-function render() {
-  const tabs = `
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button class="btn-sm ${tabAtual === 'func' ? 'btn-primary' : 'btn-secondary'}" onclick="funcTab('func')">Funcionários</button>
-      <button class="btn-sm ${tabAtual === 'perfis' ? 'btn-primary' : 'btn-secondary'}" onclick="funcTab('perfis')">Perfis &amp; Permissões</button>
-    </div>`;
+// Perfis & Permissões: item de menu próprio (panel-perfis), não mais uma aba.
+export async function loadPerfis() {
+  if (!IS_ADMIN) { panelPerfis().innerHTML = HTML_RESTRITO; return; }
+  panelPerfis().innerHTML = HTML_LOADING;
+  perfilAberto = null;
+  if (!await carregarDados()) { panelPerfis().innerHTML = HTML_ERRO; return; }
+  renderPerfisPanel();
+}
+
+function renderFuncionarios() {
   panel().innerHTML = `
     <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
       <div>
         <div class="section-title">Funcionários</div>
         <div class="section-subtitle">Cadastro de funcionários e níveis de acesso</div>
       </div>
-      ${tabAtual === 'func'
-        ? `<button class="btn-primary btn-sm" onclick="funcNovo()">${IC_PLUS} Novo funcionário</button>`
-        : `<button class="btn-primary btn-sm" onclick="perfilNovo()">${IC_PLUS} Novo perfil</button>`}
+      <button class="btn-primary btn-sm" onclick="funcNovo()">${IC_PLUS} Novo funcionário</button>
     </div>
-    ${tabs}
-    ${tabAtual === 'func' ? renderFuncs() : renderPerfis()}`;
+    ${renderFuncs()}`;
+}
+
+function renderPerfisPanel() {
+  panelPerfis().innerHTML = `
+    <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div>
+        <div class="section-title">Perfis &amp; Permissões</div>
+        <div class="section-subtitle">Cargos e o que cada um enxerga no menu</div>
+      </div>
+      <button class="btn-primary btn-sm" onclick="perfilNovo()">${IC_PLUS} Novo perfil</button>
+    </div>
+    ${renderPerfis()}`;
 }
 
 // ── Aba Funcionários ─────────────────────────────────────────────────
@@ -147,7 +163,7 @@ export async function funcUpdate(id, campo, valor) {
   if (error) { if (await surfarErro(error, 'Erro ao salvar')) { loadFuncionarios(); return; } }
   const f = FUNCS.find(x => x.id === id);
   if (f) f[campo] = valor;
-  if (campo === 'is_admin') render();   // trava/destrava o select de perfil
+  if (campo === 'is_admin') renderFuncionarios();   // trava/destrava o select de perfil
   toast('Salvo!');
 }
 
@@ -212,16 +228,18 @@ function renderChecklist(perfil) {
       </div>
       ${bloqueado ? '' : `<div style="margin-top:14px;display:flex;gap:8px">
         <button class="btn-primary btn-sm" onclick="perfilSalvarPermissoes('${perfil.id}')">Salvar permissões</button>
-        <button class="btn-secondary btn-sm" onclick="funcTab('perfis')">Fechar</button>
+        <button class="btn-secondary btn-sm" onclick="perfilFechar()">Fechar</button>
       </div>`}
     </div>`;
 }
+
+export function perfilFechar() { perfilAberto = null; renderPerfisPanel(); }
 
 export async function perfilAbrir(id) {
   perfilAberto = id;
   const perfil = PERFIS.find(p => p.id === id);
   if (!perfil) return;
-  if (!document.getElementById('perfil-checklist')) render();
+  if (!document.getElementById('perfil-checklist')) renderPerfisPanel();
   const { data, error } = await sbQ(sb.from('perfil_permissoes').select('chave_menu').eq('perfil_id', id));
   if (error) { if (await surfarErro(error, 'Erro ao carregar permissões')) return; }
   permsPerfil = new Set((data || []).map(r => r.chave_menu));
@@ -277,7 +295,7 @@ export async function perfilSalvar(id) {
   }
   toast('Salvo!');
   closeModal('modal-cadastro');
-  loadFuncionarios();
+  loadPerfis();
 }
 
 export function perfilExcluir(id) {
@@ -291,6 +309,6 @@ export function perfilExcluir(id) {
     const { error } = await sbQ(sb.from('perfis').delete().eq('id', id).eq('is_sistema', false));
     if (error) { if (await surfarErro(error, 'Erro ao excluir')) return; }
     toast('Excluído.');
-    loadFuncionarios();
+    loadPerfis();
   });
 }
