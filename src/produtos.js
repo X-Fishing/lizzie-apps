@@ -18,12 +18,66 @@ async function fetchBlingProdutos(pagina, filtros = {}) {
   return r.json();
 }
 
-// Lê os filtros escolhidos na tela de importação
-function impFiltros() {
-  const desde = document.getElementById('imp-desde')?.value || '';
-  return desde ? { dataInclusaoInicial: desde } : {};
+// Faixa de SKU escolhida na tela (o Bling v3 ignora o filtro de data, então
+// filtramos por SKU no cliente). Campos vazios => sem limite naquele lado.
+function impFaixaSku() {
+  const de  = document.getElementById('imp-sku-de')?.value.trim();
+  const ate = document.getElementById('imp-sku-ate')?.value.trim();
+  return { skuDe: de ? parseInt(de, 10) : null, skuAte: ate ? parseInt(ate, 10) : null };
 }
 function impSoAtivos() { return document.getElementById('imp-ativos')?.checked ?? true; }
+
+// SKU numérico "puro" -> Number; qualquer coisa com letra/vazio -> NaN (fica fora
+// da faixa). Evita casar "ABC123" como 123.
+function skuNumero(sku) {
+  const s = String(sku ?? '').trim();
+  return /^\d+$/.test(s) ? parseInt(s, 10) : NaN;
+}
+
+// Resultado da última varredura (a prévia varre; o "Importar" reusa isto sem
+// varrer de novo — a varredura completa leva minutos).
+let blingScan = null;
+let blingCancelar = false;
+export function produtoImportBlingParar(btn) {
+  blingCancelar = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Parando...'; }
+}
+
+// Varre TODAS as páginas do Bling (o lote novo fica nas últimas) e mantém só os
+// produtos com SKU dentro de [skuDe, skuAte]. onProgress atualiza a tela; o
+// usuário pode cancelar via produtoImportBlingParar().
+async function varrerBling(skuDe, skuAte, soAtivos, onProgress) {
+  const matched = [];
+  let pagina = 1, totalVarridos = 0, foraIntervalo = 0;
+  const temFaixa = skuDe != null || skuAte != null;
+  blingCancelar = false;
+  while (pagina <= 500) {
+    if (blingCancelar) break;
+    let resp;
+    try { resp = await fetchBlingProdutos(pagina, {}); }
+    catch (e) { throw new Error('Erro na página ' + pagina + ': ' + (e.message || e)); }
+    if (resp?.error) throw new Error('Bling: ' + resp.error);
+    const arr = resp?.data || [];
+    if (!arr.length) break;
+    totalVarridos += arr.length;
+    for (const p of arr) {
+      if (soAtivos && (p.situacao ?? 'A') !== 'A') { foraIntervalo++; continue; }
+      const m = mapProdutoBling(p);
+      let dentro;
+      if (!temFaixa) dentro = true;
+      else {
+        const n = skuNumero(m.sku);
+        dentro = Number.isFinite(n) && (skuDe == null || n >= skuDe) && (skuAte == null || n <= skuAte);
+      }
+      if (dentro) matched.push(m); else foraIntervalo++;
+    }
+    onProgress && onProgress({ pagina, matched: matched.length, totalVarridos });
+    if (arr.length < 100) break;   // última página do catálogo
+    pagina++;
+    await sleep(350);              // respeita ~3 req/s do Bling
+  }
+  return { matched, totalVarridos, foraIntervalo, parado: blingCancelar };
+}
 
 // Mapeia um produto do Bling v3 -> colunas de `produtos` (defensivo: os campos
 // variam; se algo nao vier na lista, a previa mostra e a gente ajusta/usa detalhe).
@@ -51,12 +105,28 @@ const IC_TRASH = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path 
 const IC_GEM   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg>';
 const IC_BARCODE = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg>';
 const IC_CAM   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>';
+const IC_SHEET = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>';
+const IC_DOWN  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>';
 
 let produtosCache = [];
 let filtroProdutos = '';
 let filtroColecao = '';      // id da coleção selecionada no filtro ('' = todas)
 let filtroCategoria = '';    // id da categoria ('' = todas)
 let filtroFornecedor = '';   // id do fornecedor ('' = todos)
+let filtroCaract = '';       // característica: com/sem foto, sem descrição, sem preço... ('' = todas)
+
+// Filtros de "estado" do produto — úteis pra achar o que falta completar
+// (ex.: "sem foto" antes de usar o importador de fotos em lote).
+const CARACT_FILTROS = {
+  com_foto:      { label: 'Com foto',            teste: p => !!p.foto_url },
+  sem_foto:      { label: 'Sem foto',            teste: p => !p.foto_url },
+  sem_descricao: { label: 'Sem descrição',       teste: p => !(p.descricao_curta || '').trim() },
+  sem_custo:     { label: 'Sem preço de custo',  teste: p => !(Number(p.custo_compra) > 0) },
+  sem_venda:     { label: 'Sem preço de venda',  teste: p => !(Number(p.preco_venda) > 0) },
+  sem_sku:       { label: 'Sem SKU',             teste: p => !(p.sku || '').trim() },
+  sem_barras:    { label: 'Sem código de barras', teste: p => !(p.codigo_barras || '').trim() },
+  sem_estoque:   { label: 'Sem estoque',         teste: p => !(Number(p.estoque_qtd) > 0) },
+};
 let paginaAtual = 1;         // paginação client-side da grid
 const POR_PAGINA = 50;
 let formVariacoes = [];   // variações em edição no formulário (client-side)
@@ -65,6 +135,26 @@ const MAX_IMAGENS = 5;
 const MAX_IMG_MB = 5;
 
 function panel() { return document.getElementById('panel-produtos'); }
+
+// Miniatura da grade: com foto vira clicável (zoom); sem foto mostra o ícone.
+// stopPropagation p/ não disparar o toggle do grupo/edição ao clicar na foto.
+function thumbHTML(url) {
+  return url
+    ? `<span class="ciclo-emoji" style="cursor:zoom-in" onclick="event.stopPropagation();produtoZoomFoto('${esc(url)}')"><img src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px"></span>`
+    : `<span class="ciclo-emoji">${IC_GEM}</span>`;
+}
+
+// Zoom da foto: overlay em tela cheia; clique em qualquer lugar fecha.
+export function produtoZoomFoto(url) {
+  if (!url) return;
+  document.getElementById('produto-zoom')?.remove();
+  const ov = document.createElement('div');
+  ov.id = 'produto-zoom';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:1000;background:rgba(20,8,30,.85);display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out';
+  ov.onclick = () => ov.remove();
+  ov.innerHTML = `<img src="${esc(url)}" alt="Foto do produto" style="max-width:92vw;max-height:92vh;object-fit:contain;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.5)">`;
+  document.body.appendChild(ov);
+}
 
 // Nome da coleção a partir do id (usa o cache de cadastros).
 function nomeColecao(id) {
@@ -80,7 +170,7 @@ export async function loadProdutos() {
   // fetchPaginado: o PostgREST devolve no máx. 1000 linhas por chamada — sem
   // isso, catálogo acima de 1000 produtos aparece truncado na grid.
   const { data, error } = await fetchPaginado(() => sb.from('produtos')
-    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,estoque_qtd,foto_url,ativo,categoria_id,colecao_id,fornecedor_id,formato')
+    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,custo_compra,estoque_qtd,foto_url,descricao_curta,ativo,categoria_id,colecao_id,fornecedor_id,formato')
     .order('nome', { ascending: true }));
   if (error) { if (await handleSupabaseError(error, 'Erro ao carregar produtos')) return; }
   produtosCache = data || [];
@@ -116,13 +206,24 @@ function grupoAnel(nome) {
   return m ? { base: `Anel ${m[2].trim()}`, tamanho: m[1] } : null;
 }
 
+// Célula de custo (só admin, editável inline). Grupos/variações usam a "vazia"
+// (o custo vive no produto/aro, não no cabeçalho).
+function custoCellHTML(p) {
+  if (!ehAdmin()) return '';
+  const v = Number(p.custo_compra) > 0 ? fmtBRL(p.custo_compra) : '—';
+  return `<td class="ciclo-td" style="text-align:right;white-space:nowrap;cursor:pointer" title="Clique para editar o custo" onclick="event.stopPropagation();produtoCustoEditar('${p.id}',this)">${v}</td>`;
+}
+function custoCellVazia() {
+  return ehAdmin() ? '<td class="ciclo-td" style="text-align:right;color:var(--muted)">—</td>' : '';
+}
+
 // Linha padrão de produto (sub=true = membro de grupo, com recuo)
 function linhaProdutoHTML(p, sub = false) {
   return `
     <tr class="ciclo-row"${sub ? ' style="background:rgba(201,116,138,0.045)"' : ''}>
       <td class="ciclo-td"${sub ? ' style="padding-left:34px"' : ''}>
         <div style="display:flex;align-items:center;gap:10px">
-          <span class="ciclo-emoji">${p.foto_url ? `<img src="${esc(p.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
+          ${thumbHTML(p.foto_url)}
           <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}</div>
           ${p.codigo_barras ? `<div style="font-size:11px;color:var(--muted)">${esc(p.codigo_barras)}</div>` : ''}</div>
         </div>
@@ -130,6 +231,7 @@ function linhaProdutoHTML(p, sub = false) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${p.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(p.preco_venda)}</span></td>
+      ${custoCellHTML(p)}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
@@ -148,6 +250,7 @@ function linhaVariacaoHTML(p, v) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${v.sku ? esc(v.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${v.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(v.preco_venda ?? p.preco_venda)}</span></td>
+      ${custoCellVazia()}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         <button class="btn-icon" title="Editar (abre o produto)" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
       </td>
@@ -165,7 +268,7 @@ function linhaVarProdHTML(p, vars, aberto) {
       <td class="ciclo-td">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="width:14px;color:var(--rose);font-size:12px">${aberto ? '▾' : '▸'}</span>
-          <span class="ciclo-emoji">${p.foto_url ? `<img src="${esc(p.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
+          ${thumbHTML(p.foto_url)}
           <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}</div>
           <div style="font-size:11px;color:var(--muted)">${vars.length} variaç${vars.length !== 1 ? 'ões' : 'ão'}: ${vars.map(v => esc(v.valor)).join(' · ')}</div></div>
         </div>
@@ -173,6 +276,7 @@ function linhaVarProdHTML(p, vars, aberto) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
+      ${custoCellVazia()}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
         <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
@@ -194,7 +298,7 @@ function linhaGrupoHTML(g, aberto) {
       <td class="ciclo-td">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="width:14px;color:var(--rose);font-size:12px">${aberto ? '▾' : '▸'}</span>
-          <span class="ciclo-emoji">${foto ? `<img src="${esc(foto)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
+          ${thumbHTML(foto)}
           <div><div class="ciclo-desc">${esc(g.base)}</div>
           <div style="font-size:11px;color:var(--muted)">${g.membros.length} tamanhos · aros ${tams.join(' · ')}</div></div>
         </div>
@@ -202,6 +306,7 @@ function linhaGrupoHTML(g, aberto) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">—</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
+      ${custoCellVazia()}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap;font-size:11px;color:var(--muted)">${aberto ? 'fechar' : 'ver aros'}</td>
     </tr>`;
 }
@@ -210,11 +315,13 @@ function linhaGrupoHTML(g, aberto) {
 // da toolbar: re-renderizar o painel inteiro a cada tecla destruía o input de
 // busca e derrubava o foco do teclado.
 function tabelaHTML() {
+  const admin = ehAdmin();
   const f = filtroProdutos.trim().toLowerCase();
   let lista = produtosCache;
   if (filtroColecao) lista = lista.filter(p => String(p.colecao_id) === String(filtroColecao));
   if (filtroCategoria) lista = lista.filter(p => String(p.categoria_id) === String(filtroCategoria));
   if (filtroFornecedor) lista = lista.filter(p => String(p.fornecedor_id) === String(filtroFornecedor));
+  if (filtroCaract && CARACT_FILTROS[filtroCaract]) lista = lista.filter(CARACT_FILTROS[filtroCaract].teste);
   if (f) lista = lista.filter(p => {
     if ([p.nome, p.sku, p.codigo_barras, p.codigo_fornecedor, nomeColecao(p.colecao_id)]
       .some(v => (v || '').toLowerCase().includes(f))) return true;
@@ -266,7 +373,7 @@ function tabelaHTML() {
       .map(m => linhaProdutoHTML(m.p, true)).join('');
     return html;
   }).join('') :
-    `<tr><td colspan="5"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
+    `<tr><td colspan="${admin ? 6 : 5}"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor || filtroCaract) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
 
   const pager = totalFiltrado > POR_PAGINA ? `
     <div style="display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px">
@@ -281,6 +388,7 @@ function tabelaHTML() {
       <th class="pag-th">SKU</th>
       <th class="pag-th" style="text-align:center">Estoque</th>
       <th class="pag-th">Preço</th>
+      ${admin ? '<th class="pag-th" style="text-align:right">Custo</th>' : ''}
       <th class="pag-th" style="text-align:right">Ações</th>
     </tr></thead><tbody>${linhas}</tbody></table></div>
     ${pager}`;
@@ -300,6 +408,8 @@ function renderLista() {
       <div class="section-subtitle">${produtosCache.length} produto${produtosCache.length !== 1 ? 's' : ''} no catálogo</div></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button class="btn-secondary btn-sm" onclick="produtoImportarBling()">${IC_BARCODE} Importar do Bling</button>
+        <button class="btn-secondary btn-sm" onclick="produtoImportFotos()">${IC_CAM} Importar fotos em lote</button>
+        ${ehGestor() ? `<button class="btn-secondary btn-sm" onclick="produtoPlanilha()">${IC_SHEET} Planilha</button>` : ''}
         <button class="btn-primary btn-sm" onclick="produtoNovo()">${IC_PLUS} Novo produto</button>
       </div>
     </div>
@@ -318,6 +428,10 @@ function renderLista() {
         <option value="">Todos os fornecedores</option>
         ${(cadastroCache.fornecedores || []).map(c => `<option value="${c.id}" ${String(c.id) === String(filtroFornecedor) ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}
       </select>
+      <select class="form-control" style="max-width:200px" onchange="produtoFiltrarCaracteristica(this.value)">
+        <option value="">Todas as características</option>
+        ${Object.entries(CARACT_FILTROS).map(([k, v]) => `<option value="${k}" ${k === filtroCaract ? 'selected' : ''}>${esc(v.label)}</option>`).join('')}
+      </select>
     </div>
     <div id="prod-lista">${tabelaHTML()}</div>`;
 }
@@ -326,6 +440,39 @@ export function produtoFiltrar(v) { filtroProdutos = v; paginaAtual = 1; renderT
 export function produtoFiltrarColecao(v) { filtroColecao = v; paginaAtual = 1; renderTabela(); }
 export function produtoFiltrarCategoria(v) { filtroCategoria = v; paginaAtual = 1; renderTabela(); }
 export function produtoFiltrarFornecedor(v) { filtroFornecedor = v; paginaAtual = 1; renderTabela(); }
+export function produtoFiltrarCaracteristica(v) { filtroCaract = v; paginaAtual = 1; renderTabela(); }
+
+// ── Custo editável inline na grid (só admin) ──
+let custoCancelado = false;
+export function produtoCustoEditar(id, td) {
+  if (!ehAdmin()) return;
+  const p = produtosCache.find(x => String(x.id) === String(id));
+  if (!p) return;
+  const atual = Number(p.custo_compra) > 0 ? moneyToInput(p.custo_compra) : '';
+  custoCancelado = false;
+  td.onclick = null;
+  td.innerHTML = `<input type="text" inputmode="numeric" value="${atual}" placeholder="0,00"
+    style="width:90px;padding:4px 6px;font-size:12.5px;text-align:right;border:1px solid var(--rose);border-radius:6px"
+    oninput="maskMoneyProduto(this)" onkeydown="produtoCustoTecla(event,this)" onblur="produtoCustoSalvar('${id}',this)">`;
+  const inp = td.querySelector('input');
+  inp.focus(); inp.select();
+}
+export function produtoCustoTecla(ev, input) {
+  if (ev.key === 'Enter') input.blur();
+  else if (ev.key === 'Escape') { custoCancelado = true; input.blur(); }
+}
+export async function produtoCustoSalvar(id, input) {
+  if (custoCancelado) { custoCancelado = false; renderTabela(); return; }
+  const p = produtosCache.find(x => String(x.id) === String(id));
+  if (!p) { renderTabela(); return; }
+  const novo = parseMoneyBR(input.value) || 0;
+  if (novo === Number(p.custo_compra || 0)) { renderTabela(); return; }   // sem mudança
+  const { error } = await sbQ(sb.from('produtos').update({ custo_compra: novo }).eq('id', id));
+  if (error) { toast('Erro ao salvar o custo'); renderTabela(); return; }
+  p.custo_compra = novo;
+  toast('Custo atualizado');
+  renderTabela();
+}
 export function produtoPagina(delta) { paginaAtual += delta; renderTabela(); }
 export function produtoToggleGrupo(chave) {
   const base = decodeURIComponent(chave);
@@ -346,13 +493,15 @@ export function produtoImportarBling() {
     <div class="card" style="margin-bottom:14px">
       <p style="font-size:13px;color:var(--muted);margin:0">Traz os produtos do Bling para o catálogo daqui (nome, código/SKU, código de barras, preço, custo e foto). Não duplica: SKU/código de barras que já existem são ignorados; os existentes têm custo/foto completados se estiverem vazios.</p>
       <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-top:14px">
-        <div class="form-group" style="margin:0"><label class="form-label">Incluídas no Bling a partir de</label>
-          <input type="date" id="imp-desde" class="form-control" style="max-width:190px"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">SKU de</label>
+          <input type="number" id="imp-sku-de" class="form-control" style="max-width:130px" placeholder="21800" inputmode="numeric"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">SKU até</label>
+          <input type="number" id="imp-sku-ate" class="form-control" style="max-width:130px" placeholder="21933" inputmode="numeric"></div>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--plum);padding-bottom:10px;cursor:pointer">
           <input type="checkbox" id="imp-ativos" checked> Só produtos ativos</label>
       </div>
-      <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0">Deixe a data vazia pra trazer tudo. Ex.: pra só os últimos 2 anos, escolha a data de 2 anos atrás.</p>
-      <button class="btn-primary btn-sm" style="margin-top:12px" onclick="produtoImportBlingPreview()">${IC_BARCODE} Buscar prévia (página 1)</button>
+      <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0">Deixe em branco para trazer tudo. Os SKUs da Lizzie são sequenciais — use a faixa do lote que você quer importar. A varredura passa por todo o catálogo do Bling (o lote novo costuma estar nas últimas páginas), então pode levar alguns minutos.</p>
+      <button class="btn-primary btn-sm" style="margin-top:12px" onclick="produtoImportBlingPreview()">${IC_BARCODE} Buscar produtos da faixa</button>
     </div>
     <div id="import-bling-area"></div>`;
 }
@@ -362,23 +511,45 @@ function impErro(msg) {
 }
 
 export async function produtoImportBlingPreview() {
-  const area = document.getElementById('import-bling-area');
-  area.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Buscando no Bling...</div>';
-  let resp;
-  try { resp = await fetchBlingProdutos(1, impFiltros()); }
-  catch (e) { area.innerHTML = impErro('Falha ao chamar a função bling-produtos: ' + e.message); return; }
-  console.log('[import-bling] resposta crua da funcao:', resp);
-  if (resp?.error) { area.innerHTML = impErro('Bling: ' + resp.error); return; }
-  let arr = resp?.data || resp?.retorno?.produtos || [];
-  if (impSoAtivos()) arr = arr.filter(p => (p.situacao ?? 'A') === 'A');
-  if (!arr.length) {
-    area.innerHTML = impErro('A página 1 voltou sem produtos no formato esperado. Segue a resposta crua da função — me manda isto:')
-      + `<pre style="font-size:11px;white-space:pre-wrap;word-break:break-all;background:var(--cream);padding:10px;border-radius:8px;max-height:340px;overflow:auto">${esc(JSON.stringify(resp, null, 2))}</pre>`;
+  const { skuDe, skuAte } = impFaixaSku();
+  const semFaixa = skuDe == null && skuAte == null;
+  // Guarda: sem faixa varre e traz o catálogo INTEIRO — confirma pra não fazer
+  // isso por engano (ex.: DOM antigo após hot-reload leu os campos vazios).
+  if (semFaixa) {
+    confirmarAcao('Importar catálogo inteiro?',
+      'Você não definiu a faixa de SKU (SKU de / SKU até) — a busca vai varrer e trazer TODOS os produtos do Bling. Se era pra importar só um lote, cancele e preencha a faixa.',
+      'Trazer tudo', () => rodarVarreduraBling(null, null));
     return;
   }
-  console.log('[import-bling] 1º produto cru do Bling:', arr[0]);
+  rodarVarreduraBling(skuDe, skuAte);
+}
 
-  const mapped = arr.slice(0, 12).map(mapProdutoBling);
+async function rodarVarreduraBling(skuDe, skuAte) {
+  const area = document.getElementById('import-bling-area');
+  const soAtivos = impSoAtivos();
+  const faixaLabel = (skuDe != null || skuAte != null) ? `faixa ${skuDe ?? '…'}–${skuAte ?? '…'}` : 'SEM faixa (todos)';
+  blingScan = null;
+  area.innerHTML = `<div class="card"><div id="imp-prog" style="font-size:13px">Iniciando varredura do Bling (${faixaLabel})...</div>
+    <button class="btn-secondary btn-sm" style="margin-top:10px" onclick="produtoImportBlingParar(this)">Parar</button></div>`;
+  const prog = () => document.getElementById('imp-prog');
+
+  let res;
+  try {
+    res = await varrerBling(skuDe, skuAte, soAtivos, ({ pagina, matched, totalVarridos }) => {
+      if (prog()) prog().textContent = `Varrendo página ${pagina} · ${faixaLabel} · ${matched} no intervalo · ${totalVarridos} varridos`;
+    });
+  } catch (e) { area.innerHTML = impErro(e.message || 'Erro na varredura'); return; }
+
+  blingScan = res;
+  const { matched, totalVarridos, foraIntervalo, parado } = res;
+  const faixaTxt = (skuDe != null || skuAte != null) ? ` entre ${skuDe ?? '…'} e ${skuAte ?? '…'}` : '';
+
+  if (!matched.length) {
+    area.innerHTML = impErro(`Nenhum produto${faixaTxt}${parado ? ' (varredura interrompida)' : ''} — confira a faixa. Varridos: ${totalVarridos}.`);
+    return;
+  }
+
+  const mapped = matched.slice(0, 12);
   const rows = mapped.map(m => `<tr class="ciclo-row">
     <td class="ciclo-td"><div style="display:flex;align-items:center;gap:8px"><span class="ciclo-emoji">${m.foto_url ? `<img src="${esc(m.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">` : IC_GEM}</span><div class="ciclo-desc">${esc(m.nome)}</div></div></td>
     <td class="ciclo-td">${m.sku ? esc(m.sku) : '—'}</td>
@@ -387,20 +558,20 @@ export async function produtoImportBlingPreview() {
 
   area.innerHTML = `
     <div class="card" style="margin-bottom:12px">
-      <div style="font-size:13px;color:var(--plum);font-weight:600;margin-bottom:8px">Prévia — ${arr.length} produto(s) na página 1 (mostrando ${mapped.length})</div>
+      <div style="font-size:13px;color:var(--plum);font-weight:600;margin-bottom:8px">Prévia — ${matched.length} produto(s)${faixaTxt} (mostrando ${mapped.length})${parado ? ' · varredura interrompida' : ''}</div>
       <div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">Produto</th><th class="pag-th">SKU</th><th class="pag-th">Cód. barras</th><th class="pag-th">Preço</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">Ver JSON cru do 1º produto (conferência de campos)</summary>
-        <pre style="font-size:11px;white-space:pre-wrap;word-break:break-all;background:var(--cream);padding:10px;border-radius:8px;max-height:280px;overflow:auto">${esc(JSON.stringify(arr[0], null, 2))}</pre></details>
+      <div style="font-size:12px;color:var(--muted);margin-top:8px">Varridos no total: ${totalVarridos} · Fora do intervalo/inativos: ${foraIntervalo}</div>
       <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn-primary btn-sm" onclick="produtoImportBlingRun()">Importar TODOS os produtos</button>
-        <span style="font-size:12px;color:var(--muted)">Confira o código de barras e a foto acima antes de puxar tudo.</span>
+        <button class="btn-primary btn-sm" onclick="produtoImportBlingRun()">Importar ${matched.length} produto(s)</button>
+        <span style="font-size:12px;color:var(--muted)">Confira o código de barras e a foto acima antes de importar.</span>
       </div>
     </div>`;
 }
 
 export async function produtoImportBlingRun() {
+  if (!blingScan || !(blingScan.matched || []).length) { toast('Faça a prévia da faixa primeiro'); return; }
   const area = document.getElementById('import-bling-area');
-  area.innerHTML = '<div class="card"><div id="imp-prog" style="font-size:13px">Iniciando importação...</div></div>';
+  area.innerHTML = '<div class="card"><div id="imp-prog" style="font-size:13px">Preparando importação...</div></div>';
   const prog = () => document.getElementById('imp-prog');
 
   // Existentes: usados pra deduplicar (nunca duplica) E pra completar campos
@@ -409,42 +580,26 @@ export async function produtoImportBlingRun() {
   const porSku = new Map((existentes || []).filter(p => p.sku).map(p => [p.sku, p]));
   const porBarras = new Map((existentes || []).filter(p => p.codigo_barras).map(p => [p.codigo_barras, p]));
 
-  // Filtros capturados UMA vez no início (valem pra rodada inteira)
-  const filtros = impFiltros();
-  const soAtivos = impSoAtivos();
-
-  let pagina = 1, totalBling = 0, pulados = 0, foraDoFiltro = 0;
+  // Opera sobre a lista JÁ filtrada pela faixa (a varredura aconteceu na prévia).
+  const totalBling = blingScan.totalVarridos;
+  let pulados = 0;
   const paraInserir = [];
   const paraCompletar = [];   // updates parciais: só campos hoje vazios
-  while (pagina <= 200) {
-    if (prog()) prog().textContent = `Buscando página ${pagina} no Bling... (${paraInserir.length} novos · ${paraCompletar.length} a completar)`;
-    let resp;
-    try { resp = await fetchBlingProdutos(pagina, filtros); }
-    catch (e) { if (prog()) prog().innerHTML = impErro('Erro na página ' + pagina + ': ' + e.message); return; }
-    if (resp?.error) { if (prog()) prog().innerHTML = impErro('Bling: ' + resp.error); return; }
-    const arr = resp?.data || [];
-    if (!arr.length) break;
-    totalBling += arr.length;
-    for (const p of arr) {
-      if (soAtivos && (p.situacao ?? 'A') !== 'A') { foraDoFiltro++; continue; }
-      const m = mapProdutoBling(p);
-      const ex = (m.sku && porSku.get(m.sku)) || (m.codigo_barras && porBarras.get(m.codigo_barras));
-      if (ex) {
-        // ex sem id = duplicado DENTRO do próprio Bling nesta varredura (mesmo SKU
-        // duas vezes) — só pula; completar vale apenas pra registro já no banco.
-        const upd = {};
-        if (ex.id && !(Number(ex.custo_compra) > 0) && m.custo_compra > 0) upd.custo_compra = m.custo_compra;
-        if (ex.id && !ex.foto_url && m.foto_url) upd.foto_url = m.foto_url;
-        if (ex.id && Object.keys(upd).length) paraCompletar.push({ id: ex.id, ...upd });
-        else pulados++;
-        continue;
-      }
-      if (m.sku) porSku.set(m.sku, m);
-      if (m.codigo_barras) porBarras.set(m.codigo_barras, m);
-      paraInserir.push(m);
+  for (const m of blingScan.matched) {
+    const ex = (m.sku && porSku.get(m.sku)) || (m.codigo_barras && porBarras.get(m.codigo_barras));
+    if (ex) {
+      // ex sem id = duplicado DENTRO do próprio Bling nesta varredura (mesmo SKU
+      // duas vezes) — só pula; completar vale apenas pra registro já no banco.
+      const upd = {};
+      if (ex.id && !(Number(ex.custo_compra) > 0) && m.custo_compra > 0) upd.custo_compra = m.custo_compra;
+      if (ex.id && !ex.foto_url && m.foto_url) upd.foto_url = m.foto_url;
+      if (ex.id && Object.keys(upd).length) paraCompletar.push({ id: ex.id, ...upd });
+      else pulados++;
+      continue;
     }
-    pagina++;
-    await sleep(350); // respeita ~3 req/s do Bling
+    if (m.sku) porSku.set(m.sku, m);
+    if (m.codigo_barras) porBarras.set(m.codigo_barras, m);
+    paraInserir.push(m);
   }
 
   // A varredura do Bling demora minutos — re-checa os existentes AGORA, na hora
@@ -490,8 +645,495 @@ export async function produtoImportBlingRun() {
 
   if (prog()) prog().innerHTML = `
     <div style="color:var(--success);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Importação concluída</div>
-    <div style="font-size:13px;margin-top:6px">Bling: ${totalBling} · Novos: ${gravados} · Completados (custo/foto que faltava): ${completados} · Já completos: ${pulados}${foraDoFiltro ? ` · Fora do filtro (inativos): ${foraDoFiltro}` : ''}</div>
+    <div style="font-size:13px;margin-top:6px">Varridos no Bling: ${totalBling} · No intervalo: ${blingScan.matched.length} · Novos: ${gravados} · Completados (custo/foto que faltava): ${completados} · Já completos: ${pulados}</div>
     <button class="btn-primary btn-sm" style="margin-top:10px" onclick="produtoVoltarLista()">Ver produtos</button>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// IMPORTAR FOTOS EM LOTE (casa foto ↔ produto pelo SKU no nome do arquivo)
+// ════════════════════════════════════════════════════════════════════
+// Nome do arquivo: "{SKU} - {descrição} - R$ {preço}.jpg". Só o SKU (dígitos
+// iniciais) é usado; descrição/preço já vieram do Bling. Vários arquivos do
+// mesmo SKU viram as imagens do produto (ordem natural; a 1ª = principal).
+const IC_UPLOAD = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>';
+const IC_CHECK = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
+const IC_WARN  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>';
+
+const FOTO_TIPOS = ['image/jpeg', 'image/png', 'image/webp'];
+let fotosLote = null;   // { receberao:[], jaComFoto:[], naoCasou:[] } — resultado da análise
+
+function produtoTemFoto(p) {
+  return !!p.foto_url || (Array.isArray(p.imagens) && p.imagens.length > 0);
+}
+
+export function produtoImportFotos() {
+  fotosLote = null;
+  panel().innerHTML = `
+    <div class="section-header" style="display:flex;align-items:center;gap:10px">
+      <button class="btn-voltar-ciclo" onclick="produtoVoltarLista()">← Voltar</button>
+      <div class="section-title" style="font-size:19px">Importar fotos em lote</div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <p style="font-size:13px;color:var(--muted);margin:0">Selecione várias fotos de uma vez. O sistema casa cada foto com o produto pelo <b>SKU no início do nome do arquivo</b> (ex.: <code>21800 - Brinco ... - R$ 42,00.jpg</code>). Fotos do mesmo SKU viram as imagens desse produto (a primeira, em ordem, é a principal). Nada é enviado antes de você conferir o relatório.</p>
+      <input type="file" id="fotos-lote-input" accept="image/jpeg,image/png,image/webp" multiple style="display:none" onchange="produtoFotosSelecionar(this)">
+      <button class="btn-primary btn-sm" style="margin-top:12px" onclick="document.getElementById('fotos-lote-input').click()">${IC_UPLOAD} Selecionar fotos</button>
+    </div>
+    <div id="fotos-lote-area"></div>`;
+}
+
+export async function produtoFotosSelecionar(input) {
+  const files = [...(input.files || [])];
+  input.value = '';   // permite reescolher os mesmos arquivos
+  if (!files.length) return;
+  const area = document.getElementById('fotos-lote-area');
+  area.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Analisando arquivos e casando por SKU...</div>';
+
+  const { data: produtos, error } = await fetchPaginado(() => sb.from('produtos')
+    .select('id,nome,sku,codigo_barras,foto_url,imagens').order('id'));
+  if (error) { area.innerHTML = impErro('Erro ao carregar produtos: ' + (error.message || '')); return; }
+
+  // Índices de busca: SKU exato, SKU sem zeros à esquerda, e código de barras.
+  const porSku = new Map(), porSkuNorm = new Map(), porBarras = new Map();
+  for (const p of (produtos || [])) {
+    if (p.sku) { const s = String(p.sku).trim(); porSku.set(s, p); porSkuNorm.set(s.replace(/^0+/, ''), p); }
+    if (p.codigo_barras) porBarras.set(String(p.codigo_barras).trim(), p);
+  }
+  const acharProduto = (sku) => porSku.get(sku) || porSkuNorm.get(sku.replace(/^0+/, '')) || porBarras.get(sku) || null;
+
+  const grupos = new Map();      // produto.id -> { produto, sku, files:[] }
+  const naoCasou = [];           // { name, motivo }
+  for (const file of files) {
+    const nome = file.name.trim();
+    const m = nome.match(/^(\d+)/);
+    if (!m) { naoCasou.push({ name: file.name, motivo: 'sem dígitos no início do nome' }); continue; }
+    if (!FOTO_TIPOS.includes(file.type)) { naoCasou.push({ name: file.name, motivo: 'tipo inválido' }); continue; }
+    if (file.size > MAX_IMG_MB * 1024 * 1024) { naoCasou.push({ name: file.name, motivo: `maior que ${MAX_IMG_MB}MB` }); continue; }
+    const sku = m[1];
+    const prod = acharProduto(sku);
+    if (!prod) { naoCasou.push({ name: file.name, motivo: 'SKU não encontrado no catálogo' }); continue; }
+    const k = String(prod.id);
+    if (!grupos.has(k)) grupos.set(k, { produto: prod, sku, files: [] });
+    grupos.get(k).files.push(file);
+  }
+
+  // Ordena por nome (ordem natural) e aplica o teto de MAX_IMAGENS por produto;
+  // o excedente vira "não casou" (ignorado), como pede o relatório.
+  for (const g of grupos.values()) {
+    g.files.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { numeric: true }));
+    if (g.files.length > MAX_IMAGENS) {
+      for (const extra of g.files.slice(MAX_IMAGENS)) naoCasou.push({ name: extra.name, motivo: `passou do limite de ${MAX_IMAGENS} imagens` });
+      g.files = g.files.slice(0, MAX_IMAGENS);
+    }
+  }
+
+  const receberao = [], jaComFoto = [];
+  for (const g of grupos.values()) (produtoTemFoto(g.produto) ? jaComFoto : receberao).push(g);
+  receberao.sort((a, b) => a.produto.nome.localeCompare(b.produto.nome, 'pt-BR'));
+  jaComFoto.sort((a, b) => a.produto.nome.localeCompare(b.produto.nome, 'pt-BR'));
+
+  fotosLote = { receberao, jaComFoto, naoCasou };
+  renderRelatorioFotos();
+}
+
+function linhaGrupoFoto(g) {
+  return `<tr class="ciclo-row">
+    <td class="ciclo-td"><div class="ciclo-desc">${esc(g.produto.nome)}</div></td>
+    <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${esc(g.produto.sku || g.sku)}</td>
+    <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${g.files.length}</span></td></tr>`;
+}
+
+function renderRelatorioFotos() {
+  const area = document.getElementById('fotos-lote-area');
+  const { receberao, jaComFoto, naoCasou } = fotosLote;
+  const arqReceber = receberao.reduce((s, g) => s + g.files.length, 0);
+  const totalAImportar = receberao.length;   // "já têm foto" só entra se marcar substituir
+
+  const blocoReceber = `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--success);margin-bottom:8px;display:flex;align-items:center;gap:6px">${IC_CHECK} Vão receber foto — ${receberao.length} produto${receberao.length !== 1 ? 's' : ''} (${arqReceber} arquivo${arqReceber !== 1 ? 's' : ''})</div>
+      ${receberao.length ? `<div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">Produto</th><th class="pag-th">SKU</th><th class="pag-th" style="text-align:center">Fotos</th></tr></thead><tbody>${receberao.map(linhaGrupoFoto).join('')}</tbody></table></div>` : '<p style="font-size:12px;color:var(--muted);margin:0">Nenhum produto novo para receber foto.</p>'}
+    </div>`;
+
+  const blocoJaTem = jaComFoto.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--gold);margin-bottom:8px;display:flex;align-items:center;gap:6px">${IC_WARN} Já têm foto — ${jaComFoto.length} produto${jaComFoto.length !== 1 ? 's' : ''} (pulados por padrão)</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--plum);cursor:pointer;margin-bottom:10px">
+        <input type="checkbox" id="fotos-substituir" onchange="produtoFotosToggleSubstituir()"> Substituir fotos existentes desses produtos</label>
+      <div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">Produto</th><th class="pag-th">SKU</th><th class="pag-th" style="text-align:center">Fotos</th></tr></thead><tbody>${jaComFoto.map(linhaGrupoFoto).join('')}</tbody></table></div>
+    </div>` : '';
+
+  const blocoNaoCasou = naoCasou.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--danger);margin-bottom:8px;display:flex;align-items:center;gap:6px">${IC_WARN} Não casaram — ${naoCasou.length} arquivo${naoCasou.length !== 1 ? 's' : ''}</div>
+      <div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">Arquivo</th><th class="pag-th">Motivo</th></tr></thead><tbody>${naoCasou.map(f => `<tr class="ciclo-row"><td class="ciclo-td" style="font-size:12px">${esc(f.name)}</td><td class="ciclo-td" style="font-size:12px;color:var(--muted)">${esc(f.motivo)}</td></tr>`).join('')}</tbody></table></div>
+    </div>` : '';
+
+  area.innerHTML = blocoReceber + blocoJaTem + blocoNaoCasou + `
+    <div class="card">
+      <button class="btn-primary" id="fotos-btn-importar" ${totalAImportar ? '' : 'disabled style="opacity:.5"'} onclick="produtoFotosImportar()">${IC_UPLOAD} <span id="fotos-btn-label">Importar ${arqReceber} foto${arqReceber !== 1 ? 's' : ''} em ${totalAImportar} produto${totalAImportar !== 1 ? 's' : ''}</span></button>
+      <p style="font-size:11.5px;color:var(--muted);margin:8px 0 0">Enviar pode levar alguns minutos — <b>não feche esta aba</b> durante o envio. Rodar de novo é seguro: produtos que já têm foto são pulados (a menos que você marque substituir).</p>
+    </div>`;
+}
+
+// Recalcula o rótulo/estado do botão quando marca/desmarca "substituir".
+export function produtoFotosToggleSubstituir() {
+  if (!fotosLote) return;
+  const substituir = document.getElementById('fotos-substituir')?.checked;
+  const alvos = substituir ? [...fotosLote.receberao, ...fotosLote.jaComFoto] : fotosLote.receberao;
+  const arquivos = alvos.reduce((s, g) => s + g.files.length, 0);
+  const btn = document.getElementById('fotos-btn-importar');
+  const label = document.getElementById('fotos-btn-label');
+  if (label) label.textContent = `Importar ${arquivos} foto${arquivos !== 1 ? 's' : ''} em ${alvos.length} produto${alvos.length !== 1 ? 's' : ''}`;
+  if (btn) { btn.disabled = !alvos.length; btn.style.opacity = alvos.length ? '' : '.5'; }
+}
+
+// Envia os arquivos de um produto e grava as URLs numa única atualização.
+async function subirGrupoFotos(g) {
+  const urls = [];
+  const falhas = [];
+  for (let i = 0; i < g.files.length; i++) {
+    const file = g.files[i];
+    const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
+    const fname = `produtos/${g.sku}_${Date.now()}_${i}.${ext}`;
+    const { error: upErr } = await sb.storage.from('lizzie-fotos').upload(fname, file, { upsert: true });
+    if (upErr) { falhas.push({ name: file.name, motivo: upErr.message || 'erro no upload' }); continue; }
+    urls.push(sb.storage.from('lizzie-fotos').getPublicUrl(fname).data.publicUrl);
+  }
+  if (!urls.length) return { enviadas: 0, atualizado: false, falhas };
+  const imagens = urls.slice(0, MAX_IMAGENS);
+  let { error } = await sb.from('produtos').update({ imagens, foto_url: imagens[0] }).eq('id', g.produto.id);
+  // Migração 0004 (coluna imagens) não rodada: grava só a foto principal.
+  if (error && /imagens/i.test(error.message || '') && /column|schema cache/i.test(error.message || '')) {
+    ({ error } = await sb.from('produtos').update({ foto_url: imagens[0] }).eq('id', g.produto.id));
+  }
+  if (error) return { enviadas: urls.length, atualizado: false, falhas: [...falhas, { name: g.produto.nome, motivo: error.message || 'erro ao salvar' }] };
+  return { enviadas: urls.length, atualizado: true, falhas };
+}
+
+export async function produtoFotosImportar() {
+  if (!fotosLote) return;
+  const substituir = document.getElementById('fotos-substituir')?.checked;
+  const alvos = substituir ? [...fotosLote.receberao, ...fotosLote.jaComFoto] : fotosLote.receberao;
+  if (!alvos.length) { toast('Nada para importar'); return; }
+
+  const area = document.getElementById('fotos-lote-area');
+  area.innerHTML = `<div class="card"><div id="fotos-prog" style="font-size:13px">Iniciando envio...</div>
+    <p style="font-size:11.5px;color:var(--danger);margin:8px 0 0">Não feche esta aba até terminar.</p></div>`;
+  const prog = () => document.getElementById('fotos-prog');
+
+  let prodOk = 0, fotosEnviadas = 0, done = 0;
+  const falhas = [];
+
+  // Concorrência baixa (máx. 3 produtos simultâneos): são ~120 produtos, não
+  // dispara centenas de uploads de uma vez. Um erro num arquivo/produto NÃO
+  // aborta o lote — registra e segue.
+  const LIMITE = 3;
+  let idx = 0;
+  async function worker() {
+    while (idx < alvos.length) {
+      const g = alvos[idx++];
+      let r;
+      try { r = await subirGrupoFotos(g); }
+      catch (e) { r = { enviadas: 0, atualizado: false, falhas: [{ name: g.produto.nome, motivo: e.message || 'erro inesperado' }] }; }
+      if (r.atualizado) prodOk++;
+      fotosEnviadas += r.enviadas;
+      if (r.falhas.length) falhas.push(...r.falhas);
+      done++;
+      if (prog()) prog().textContent = `Enviando ${done} de ${alvos.length} produtos... (${fotosEnviadas} foto${fotosEnviadas !== 1 ? 's' : ''} enviada${fotosEnviadas !== 1 ? 's' : ''})`;
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(LIMITE, alvos.length) }, worker));
+
+  const listaFalhas = falhas.length ? `
+    <div style="margin-top:10px"><div style="font-size:12.5px;font-weight:600;color:var(--danger)">Falhas (${falhas.length}):</div>
+    <div class="pag-wrap" style="margin-top:6px"><table class="pag-table"><thead><tr><th class="pag-th">Arquivo/Produto</th><th class="pag-th">Motivo</th></tr></thead><tbody>${falhas.map(f => `<tr class="ciclo-row"><td class="ciclo-td" style="font-size:12px">${esc(f.name)}</td><td class="ciclo-td" style="font-size:12px;color:var(--muted)">${esc(f.motivo)}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+
+  if (prog()) prog().parentElement.innerHTML = `
+    <div style="color:var(--success);font-weight:600;display:flex;align-items:center;gap:6px">${IC_CHECK} Importação concluída</div>
+    <div style="font-size:13px;margin-top:6px">${prodOk} produto${prodOk !== 1 ? 's' : ''} atualizado${prodOk !== 1 ? 's' : ''} · ${fotosEnviadas} foto${fotosEnviadas !== 1 ? 's' : ''} enviada${fotosEnviadas !== 1 ? 's' : ''} · ${falhas.length} falha${falhas.length !== 1 ? 's' : ''}</div>
+    ${listaFalhas}
+    <button class="btn-primary btn-sm" style="margin-top:12px" onclick="produtoVoltarLista()">Ver produtos</button>`;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// PLANILHA (CSV): exportar / modelo / importar. Chave = SKU. Célula em
+// branco NÃO altera nada. Categoria/Coleção/Fornecedor casam pelo NOME.
+// ════════════════════════════════════════════════════════════════════
+const PLANILHA_COLS = ['sku', 'nome', 'codigo_barras', 'preco_venda', 'custo_compra', 'estoque_qtd', 'descricao_curta', 'categoria', 'colecao', 'fornecedor', 'codigo_fornecedor', 'peso_liquido', 'peso_bruto', 'largura', 'altura', 'profundidade', 'ativo'];
+let planilhaAnalise = null;
+
+// nome do cadastro a partir do id (categorias/colecoes/fornecedores)
+function nomeCadastro(tabela, id) {
+  const c = (cadastroCache[tabela] || []).find(x => String(x.id) === String(id));
+  return c ? c.nome : '';
+}
+// mapa nome(minúsculo) -> id, para casar cadastro pela planilha
+function mapaCadastroPorNome(tabela) {
+  const m = new Map();
+  for (const x of (cadastroCache[tabela] || [])) m.set(String(x.nome).trim().toLowerCase(), x.id);
+  return m;
+}
+const ptNum = v => (v == null || v === '') ? '' : String(v).replace('.', ',');
+const moneyOut = v => Number(v) > 0 ? moneyToInput(v) : '';
+
+// ── Download CSV (separador ; + BOM p/ Excel abrir com acento certo) ──
+function csvCelula(v) {
+  const s = v == null ? '' : String(v);
+  return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+}
+function baixarCSV(nomeArquivo, matriz) {
+  const conteudo = '﻿' + matriz.map(l => l.map(csvCelula).join(';')).join('\r\n');
+  const blob = new Blob([conteudo], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nomeArquivo;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+}
+
+// ── Parser CSV (aspas, separador auto ; ou , pela 1ª linha) ──
+function parseCSV(texto) {
+  const primeira = (texto.split(/\r?\n/)[0] || '');
+  const sep = primeira.split(';').length >= primeira.split(',').length ? ';' : ',';
+  const linhas = [];
+  let campo = '', linha = [], aspas = false;
+  for (let i = 0; i < texto.length; i++) {
+    const ch = texto[i];
+    if (aspas) {
+      if (ch === '"') { if (texto[i + 1] === '"') { campo += '"'; i++; } else aspas = false; }
+      else campo += ch;
+    } else if (ch === '"') aspas = true;
+    else if (ch === sep) { linha.push(campo); campo = ''; }
+    else if (ch === '\n') { linha.push(campo); linhas.push(linha); linha = []; campo = ''; }
+    else if (ch !== '\r') campo += ch;
+  }
+  if (campo.length || linha.length) { linha.push(campo); linhas.push(linha); }
+  return linhas;
+}
+// Excel pt-BR às vezes salva ANSI (windows-1252): se UTF-8 quebrar, redecodifica.
+async function lerTextoCSV(file) {
+  const buf = await file.arrayBuffer();
+  let txt = new TextDecoder('utf-8').decode(buf);
+  if (txt.includes('�')) txt = new TextDecoder('windows-1252').decode(buf);
+  if (txt.charCodeAt(0) === 0xFEFF) txt = txt.slice(1);
+  return txt;
+}
+
+export function produtoPlanilha() {
+  planilhaAnalise = null;
+  panel().innerHTML = `
+    <div class="section-header" style="display:flex;align-items:center;gap:10px">
+      <button class="btn-voltar-ciclo" onclick="produtoVoltarLista()">← Voltar</button>
+      <div class="section-title" style="font-size:19px">Planilha de produtos</div>
+    </div>
+    <div class="card" style="margin-bottom:14px">
+      <div style="font-size:13px;color:var(--text);line-height:1.7">
+        <b>Como funciona:</b>
+        <ul style="margin:8px 0 0;padding-left:18px;color:var(--muted)">
+          <li>A chave é o <b>SKU</b> — é por ele que cada linha encontra o produto.</li>
+          <li><b>Célula em branco não altera nada</b> — só os campos preenchidos são gravados.</li>
+          <li>Categoria, Coleção e Fornecedor casam <b>pelo nome</b> (têm que existir em Cadastros; nome que não existe é ignorado com aviso).</li>
+          <li>Fotos não entram por aqui — use <b>Importar fotos em lote</b>.</li>
+          <li>SKU que não existe no catálogo só é criado se você marcar a opção no relatório (precisa de nome).</li>
+        </ul>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn-secondary btn-sm" onclick="produtoPlanilhaModelo()">${IC_DOWN} Baixar planilha modelo</button>
+        <button class="btn-secondary btn-sm" onclick="produtoPlanilhaExportar(this)">${IC_DOWN} Exportar produtos atuais</button>
+        <button class="btn-primary btn-sm" onclick="document.getElementById('planilha-input').click()">${IC_SHEET} Importar planilha</button>
+        <input type="file" id="planilha-input" accept=".csv,text/csv" style="display:none" onchange="produtoPlanilhaArquivo(this)">
+      </div>
+    </div>
+    <div id="planilha-area"></div>`;
+}
+
+export function produtoPlanilhaModelo() {
+  const exemplo = ['21800', 'Brinco Exemplo Ouro 18k', '7891234567890', '42,00', '18,50', '10', 'Brinco leve para o dia a dia', 'Brinco', 'Verão', 'Fornecedor X', 'FORN-123', '', '', '', '', '', 'sim'];
+  baixarCSV('modelo-produtos-lizzie.csv', [PLANILHA_COLS, exemplo]);
+  toast('Modelo baixado');
+}
+
+export async function produtoPlanilhaExportar(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Exportando...'; }
+  await carregarCadastrosParaSelect();
+  const { data, error } = await fetchPaginado(() => sb.from('produtos').select('*').order('nome'));
+  if (btn) { btn.disabled = false; btn.innerHTML = `${IC_DOWN} Exportar produtos atuais`; }
+  if (error) { toast('Erro ao exportar'); return; }
+  const linhas = [PLANILHA_COLS];
+  for (const p of (data || [])) {
+    linhas.push([
+      p.sku || '', p.nome || '', p.codigo_barras || '',
+      moneyOut(p.preco_venda), moneyOut(p.custo_compra),
+      p.estoque_qtd ?? '', p.descricao_curta || '',
+      nomeCadastro('categorias', p.categoria_id), nomeCadastro('colecoes', p.colecao_id), nomeCadastro('fornecedores', p.fornecedor_id),
+      p.codigo_fornecedor || '',
+      ptNum(p.peso_liquido), ptNum(p.peso_bruto), ptNum(p.largura), ptNum(p.altura), ptNum(p.profundidade),
+      p.ativo === false ? 'não' : 'sim',
+    ]);
+  }
+  baixarCSV('produtos-lizzie.csv', linhas);
+  toast(`${(data || []).length} produtos exportados`);
+}
+
+export async function produtoPlanilhaArquivo(input) {
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  const area = document.getElementById('planilha-area');
+  area.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Lendo a planilha e comparando com o catálogo...</div>';
+
+  await carregarCadastrosParaSelect();
+  const { data: produtos, error } = await fetchPaginado(() => sb.from('produtos').select('*').order('id'));
+  if (error) { area.innerHTML = impErro('Erro ao carregar produtos: ' + (error.message || '')); return; }
+
+  const porSku = new Map(), porSkuNorm = new Map();
+  for (const p of (produtos || [])) {
+    if (p.sku) { const s = String(p.sku).trim(); porSku.set(s, p); porSkuNorm.set(s.replace(/^0+/, ''), p); }
+  }
+  const acharProduto = sku => porSku.get(sku) || porSkuNorm.get(sku.replace(/^0+/, '')) || null;
+  const catMap = mapaCadastroPorNome('categorias'), colMap = mapaCadastroPorNome('colecoes'), fornMap = mapaCadastroPorNome('fornecedores');
+
+  let linhas;
+  try { linhas = parseCSV(await lerTextoCSV(file)).filter(l => l.some(c => (c || '').trim() !== '')); }
+  catch (e) { area.innerHTML = impErro('Não consegui ler o arquivo: ' + (e.message || e)); return; }
+  if (linhas.length < 2) { area.innerHTML = impErro('Planilha vazia ou só com o cabeçalho.'); return; }
+
+  const header = linhas[0].map(h => (h || '').trim().toLowerCase());
+  const idx = {};
+  PLANILHA_COLS.forEach(c => { const i = header.indexOf(c); if (i >= 0) idx[c] = i; });
+  if (idx.sku == null) { area.innerHTML = impErro('Falta a coluna "sku" no cabeçalho. Baixe a planilha modelo e use o mesmo cabeçalho.'); return; }
+
+  const atualizar = [], criar = [], avisos = [];
+  let semMudanca = 0;
+  for (let r = 1; r < linhas.length; r++) {
+    const row = linhas[r];
+    const get = c => idx[c] != null ? String(row[idx[c]] ?? '').trim() : '';
+    const sku = get('sku');
+    if (!sku) { avisos.push({ linha: r + 1, msg: 'sem SKU — linha ignorada' }); continue; }
+
+    const campos = {}, avisosLinha = [];
+    for (const c of ['nome', 'codigo_barras', 'descricao_curta', 'codigo_fornecedor']) { const v = get(c); if (v !== '') campos[c] = v; }
+    for (const c of ['preco_venda', 'custo_compra']) {
+      const v = get(c); if (v === '') continue;
+      const n = parseMoneyBR(v);
+      if (n != null && !isNaN(n)) campos[c] = n; else avisosLinha.push(`${c} inválido ("${v}")`);
+    }
+    { const v = get('estoque_qtd'); if (v !== '') { const n = parseInt(v.replace(/[^\d-]/g, ''), 10); if (!isNaN(n)) campos.estoque_qtd = n; else avisosLinha.push('estoque inválido'); } }
+    for (const c of ['peso_liquido', 'peso_bruto', 'largura', 'altura', 'profundidade']) {
+      const v = get(c); if (v === '') continue;
+      const n = parseFloat(v.replace(',', '.'));
+      if (!isNaN(n)) campos[c] = n; else avisosLinha.push(`${c} inválido`);
+    }
+    const nomeCampo = { categoria: ['categoria_id', catMap], colecao: ['colecao_id', colMap], fornecedor: ['fornecedor_id', fornMap] };
+    for (const [col, [campo, mapa]] of Object.entries(nomeCampo)) {
+      const v = get(col); if (v === '') continue;
+      const id = mapa.get(v.toLowerCase());
+      if (id) campos[campo] = id; else avisosLinha.push(`${col} "${v}" não existe em Cadastros — ignorado`);
+    }
+    { const v = get('ativo').toLowerCase(); if (v !== '') {
+      if (['sim', 's', '1', 'true', 'ativo'].includes(v)) campos.ativo = true;
+      else if (['não', 'nao', 'n', '0', 'false', 'inativo'].includes(v)) campos.ativo = false;
+      else avisosLinha.push(`ativo "${v}" inválido`);
+    } }
+    avisosLinha.forEach(m => avisos.push({ linha: r + 1, msg: `SKU ${sku}: ${m}` }));
+
+    const prod = acharProduto(sku);
+    if (!prod) { criar.push({ sku, campos, nome: campos.nome || '', faltaNome: !campos.nome }); continue; }
+    const diff = {}, resumo = [];
+    for (const [k, v] of Object.entries(campos)) {
+      const atual = prod[k];
+      const igual = (typeof v === 'number') ? Number(atual || 0) === v : String(atual ?? '') === String(v);
+      if (!igual) { diff[k] = v; resumo.push(k); }
+    }
+    if (Object.keys(diff).length) atualizar.push({ produto: prod, campos: diff, resumo });
+    else semMudanca++;
+  }
+
+  planilhaAnalise = { atualizar, criar, avisos, semMudanca, total: linhas.length - 1 };
+  renderPlanilhaRelatorio();
+}
+
+function renderPlanilhaRelatorio() {
+  const area = document.getElementById('planilha-area');
+  const { atualizar, criar, avisos, semMudanca, total } = planilhaAnalise;
+  const podeCriar = criar.filter(c => !c.faltaNome).length;
+  const semNome = criar.length - podeCriar;
+
+  const blocoAtualizar = `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--success);margin-bottom:8px">Vão ser atualizados — ${atualizar.length} produto${atualizar.length !== 1 ? 's' : ''}</div>
+      ${atualizar.length ? `<div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">SKU</th><th class="pag-th">Produto</th><th class="pag-th">Campos que mudam</th></tr></thead><tbody>${atualizar.slice(0, 200).map(a => `<tr class="ciclo-row"><td class="ciclo-td" style="font-size:12px">${esc(a.produto.sku || '')}</td><td class="ciclo-td"><div class="ciclo-desc">${esc(a.produto.nome)}</div></td><td class="ciclo-td" style="font-size:12px;color:var(--muted)">${esc(a.resumo.join(', '))}</td></tr>`).join('')}</tbody></table></div>${atualizar.length > 200 ? `<div style="font-size:11px;color:var(--muted);margin-top:6px">Mostrando 200 de ${atualizar.length}.</div>` : ''}` : '<p style="font-size:12px;color:var(--muted);margin:0">Nenhuma alteração encontrada.</p>'}
+    </div>`;
+
+  const blocoCriar = criar.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--plum);margin-bottom:8px">SKUs não encontrados — ${criar.length}</div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--plum);cursor:pointer;margin-bottom:10px">
+        <input type="checkbox" id="planilha-criar" onchange="produtoPlanilhaToggleCriar()"> Criar produtos para esses SKUs${podeCriar !== criar.length ? ` (${podeCriar} com nome; ${semNome} sem nome serão ignorados)` : ''}</label>
+      <div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">SKU</th><th class="pag-th">Nome (obrigatório p/ criar)</th></tr></thead><tbody>${criar.slice(0, 200).map(c => `<tr class="ciclo-row"><td class="ciclo-td" style="font-size:12px">${esc(c.sku)}</td><td class="ciclo-td" style="font-size:12px${c.faltaNome ? ';color:var(--danger)' : ''}">${c.faltaNome ? 'faltando nome' : esc(c.nome)}</td></tr>`).join('')}</tbody></table></div>
+    </div>` : '';
+
+  const blocoAvisos = avisos.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:var(--gold);margin-bottom:8px">Avisos — ${avisos.length} (campo pulado, resto da linha vale)</div>
+      <div class="pag-wrap" style="max-height:220px;overflow:auto"><table class="pag-table"><tbody>${avisos.slice(0, 300).map(a => `<tr class="ciclo-row"><td class="ciclo-td" style="font-size:12px;color:var(--muted)">Linha ${a.linha}: ${esc(a.msg)}</td></tr>`).join('')}</tbody></table></div>
+    </div>` : '';
+
+  const nada = !atualizar.length && !podeCriar;
+  area.innerHTML = blocoAtualizar + blocoCriar + blocoAvisos + `
+    <div class="card">
+      <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Linhas na planilha: ${total} · Atualizar: ${atualizar.length} · Sem mudança: ${semMudanca} · Novos: ${criar.length}</div>
+      <button class="btn-primary" id="planilha-btn-aplicar" ${nada ? 'disabled style="opacity:.5"' : ''} onclick="produtoPlanilhaAplicar()">Aplicar ${atualizar.length} alteraç${atualizar.length !== 1 ? 'ões' : 'ão'}</button>
+    </div>`;
+}
+
+export function produtoPlanilhaToggleCriar() {
+  if (!planilhaAnalise) return;
+  const criar = document.getElementById('planilha-criar')?.checked;
+  const novos = criar ? planilhaAnalise.criar.filter(c => !c.faltaNome).length : 0;
+  const btn = document.getElementById('planilha-btn-aplicar');
+  const totalAcoes = planilhaAnalise.atualizar.length + novos;
+  if (btn) {
+    btn.textContent = `Aplicar ${planilhaAnalise.atualizar.length} alteraç${planilhaAnalise.atualizar.length !== 1 ? 'ões' : 'ão'}${novos ? ` + criar ${novos}` : ''}`;
+    btn.disabled = !totalAcoes; btn.style.opacity = totalAcoes ? '' : '.5';
+  }
+}
+
+export async function produtoPlanilhaAplicar() {
+  if (!planilhaAnalise) return;
+  const criarNovos = document.getElementById('planilha-criar')?.checked;
+  const alvos = planilhaAnalise.atualizar;
+  const novos = criarNovos ? planilhaAnalise.criar.filter(c => !c.faltaNome) : [];
+  const total = alvos.length + novos.length;
+  if (!total) { toast('Nada para aplicar'); return; }
+
+  const area = document.getElementById('planilha-area');
+  area.innerHTML = `<div class="card"><div id="planilha-prog" style="font-size:13px">Aplicando alterações...</div>
+    <p style="font-size:11.5px;color:var(--danger);margin:8px 0 0">Não feche esta aba até terminar.</p></div>`;
+  const prog = () => document.getElementById('planilha-prog');
+
+  let atualizados = 0, criados = 0, done = 0;
+  const falhas = [];
+  for (const a of alvos) {
+    const { error } = await sbQ(sb.from('produtos').update(a.campos).eq('id', a.produto.id));
+    if (error) falhas.push({ item: a.produto.sku || a.produto.nome, msg: error.message || 'erro' }); else atualizados++;
+    done++;
+    if (prog()) prog().textContent = `Aplicando ${done} de ${total}...`;
+  }
+  for (const c of novos) {
+    const { error } = await sbQ(sb.from('produtos').insert({ ...c.campos, sku: c.sku }));
+    if (error) falhas.push({ item: c.sku, msg: error.message || 'erro' }); else criados++;
+    done++;
+    if (prog()) prog().textContent = `Aplicando ${done} de ${total}...`;
+  }
+
+  const listaFalhas = falhas.length ? `<div style="margin-top:10px"><div style="font-size:12.5px;font-weight:600;color:var(--danger)">Falhas (${falhas.length}):</div><div class="pag-wrap" style="margin-top:6px"><table class="pag-table"><tbody>${falhas.map(f => `<tr class="ciclo-row"><td class="ciclo-td" style="font-size:12px">${esc(f.item)}</td><td class="ciclo-td" style="font-size:12px;color:var(--muted)">${esc(f.msg)}</td></tr>`).join('')}</tbody></table></div></div>` : '';
+  if (prog()) prog().parentElement.innerHTML = `
+    <div style="color:var(--success);font-weight:600;display:flex;align-items:center;gap:6px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Planilha aplicada</div>
+    <div style="font-size:13px;margin-top:6px">${atualizados} atualizado${atualizados !== 1 ? 's' : ''} · ${criados} criado${criados !== 1 ? 's' : ''} · ${planilhaAnalise.semMudanca} sem mudança · ${falhas.length} falha${falhas.length !== 1 ? 's' : ''}</div>
+    ${listaFalhas}
+    <button class="btn-primary btn-sm" style="margin-top:12px" onclick="produtoVoltarLista()">Ver produtos</button>`;
 }
 
 // ════════════════════════════════════════════════════════════════════
