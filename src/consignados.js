@@ -120,10 +120,10 @@ export function cicloRowHtml(c, isAdmin, historico = false) {
         <button class="btn-icon" title="Ver foto" style="color:var(--rose);padding:2px;flex:none" onclick="confVerFoto('${c.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></button>
         <div style="min-width:0">
           <div class="ciclo-desc">${esc(c.descricao)}</div>
-          ${c.referencia ? `<div class="ciclo-ref">${esc(c.referencia)}</div>` : ''}
         </div>
       </div>
     </td>
+    <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${c.referencia ? esc(c.referencia) : '—'}</td>
     <td class="ciclo-td"><span class="ciclo-badge">${CAT_LABEL[cat] || cat}</span></td>
     <td class="ciclo-td"><span class="ciclo-num">${c.quantidade_enviada}</span></td>
     <td class="ciclo-td">${c.preco_venda ? `<span class="ciclo-preco">R$ ${Number(c.preco_venda).toFixed(2)}</span>` : '—'}</td>
@@ -138,6 +138,7 @@ export function cicloTableHtml(list, isAdmin, historico = false) {
       <thead>
         <tr>
           ${cicloTh('descricao','Descrição')}
+          ${cicloTh('referencia','SKU')}
           ${cicloTh('categoria','Categoria')}
           ${cicloTh('quantidade_enviada','Enviadas')}
           ${cicloTh('preco_venda','Preço')}
