@@ -17,12 +17,66 @@ async function fetchBlingProdutos(pagina, filtros = {}) {
   return r.json();
 }
 
-// Lê os filtros escolhidos na tela de importação
-function impFiltros() {
-  const desde = document.getElementById('imp-desde')?.value || '';
-  return desde ? { dataInclusaoInicial: desde } : {};
+// Faixa de SKU escolhida na tela (o Bling v3 ignora o filtro de data, então
+// filtramos por SKU no cliente). Campos vazios => sem limite naquele lado.
+function impFaixaSku() {
+  const de  = document.getElementById('imp-sku-de')?.value.trim();
+  const ate = document.getElementById('imp-sku-ate')?.value.trim();
+  return { skuDe: de ? parseInt(de, 10) : null, skuAte: ate ? parseInt(ate, 10) : null };
 }
 function impSoAtivos() { return document.getElementById('imp-ativos')?.checked ?? true; }
+
+// SKU numérico "puro" -> Number; qualquer coisa com letra/vazio -> NaN (fica fora
+// da faixa). Evita casar "ABC123" como 123.
+function skuNumero(sku) {
+  const s = String(sku ?? '').trim();
+  return /^\d+$/.test(s) ? parseInt(s, 10) : NaN;
+}
+
+// Resultado da última varredura (a prévia varre; o "Importar" reusa isto sem
+// varrer de novo — a varredura completa leva minutos).
+let blingScan = null;
+let blingCancelar = false;
+export function produtoImportBlingParar(btn) {
+  blingCancelar = true;
+  if (btn) { btn.disabled = true; btn.textContent = 'Parando...'; }
+}
+
+// Varre TODAS as páginas do Bling (o lote novo fica nas últimas) e mantém só os
+// produtos com SKU dentro de [skuDe, skuAte]. onProgress atualiza a tela; o
+// usuário pode cancelar via produtoImportBlingParar().
+async function varrerBling(skuDe, skuAte, soAtivos, onProgress) {
+  const matched = [];
+  let pagina = 1, totalVarridos = 0, foraIntervalo = 0;
+  const temFaixa = skuDe != null || skuAte != null;
+  blingCancelar = false;
+  while (pagina <= 500) {
+    if (blingCancelar) break;
+    let resp;
+    try { resp = await fetchBlingProdutos(pagina, {}); }
+    catch (e) { throw new Error('Erro na página ' + pagina + ': ' + (e.message || e)); }
+    if (resp?.error) throw new Error('Bling: ' + resp.error);
+    const arr = resp?.data || [];
+    if (!arr.length) break;
+    totalVarridos += arr.length;
+    for (const p of arr) {
+      if (soAtivos && (p.situacao ?? 'A') !== 'A') { foraIntervalo++; continue; }
+      const m = mapProdutoBling(p);
+      let dentro;
+      if (!temFaixa) dentro = true;
+      else {
+        const n = skuNumero(m.sku);
+        dentro = Number.isFinite(n) && (skuDe == null || n >= skuDe) && (skuAte == null || n <= skuAte);
+      }
+      if (dentro) matched.push(m); else foraIntervalo++;
+    }
+    onProgress && onProgress({ pagina, matched: matched.length, totalVarridos });
+    if (arr.length < 100) break;   // última página do catálogo
+    pagina++;
+    await sleep(350);              // respeita ~3 req/s do Bling
+  }
+  return { matched, totalVarridos, foraIntervalo, parado: blingCancelar };
+}
 
 // Mapeia um produto do Bling v3 -> colunas de `produtos` (defensivo: os campos
 // variam; se algo nao vier na lista, a previa mostra e a gente ajusta/usa detalhe).
@@ -346,13 +400,15 @@ export function produtoImportarBling() {
     <div class="card" style="margin-bottom:14px">
       <p style="font-size:13px;color:var(--muted);margin:0">Traz os produtos do Bling para o catálogo daqui (nome, código/SKU, código de barras, preço, custo e foto). Não duplica: SKU/código de barras que já existem são ignorados; os existentes têm custo/foto completados se estiverem vazios.</p>
       <div style="display:flex;gap:14px;flex-wrap:wrap;align-items:flex-end;margin-top:14px">
-        <div class="form-group" style="margin:0"><label class="form-label">Incluídas no Bling a partir de</label>
-          <input type="date" id="imp-desde" class="form-control" style="max-width:190px"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">SKU de</label>
+          <input type="number" id="imp-sku-de" class="form-control" style="max-width:130px" placeholder="21800" inputmode="numeric"></div>
+        <div class="form-group" style="margin:0"><label class="form-label">SKU até</label>
+          <input type="number" id="imp-sku-ate" class="form-control" style="max-width:130px" placeholder="21933" inputmode="numeric"></div>
         <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--plum);padding-bottom:10px;cursor:pointer">
           <input type="checkbox" id="imp-ativos" checked> Só produtos ativos</label>
       </div>
-      <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0">Deixe a data vazia pra trazer tudo. Ex.: pra só os últimos 2 anos, escolha a data de 2 anos atrás.</p>
-      <button class="btn-primary btn-sm" style="margin-top:12px" onclick="produtoImportBlingPreview()">${IC_BARCODE} Buscar prévia (página 1)</button>
+      <p style="font-size:11.5px;color:var(--muted);margin:6px 0 0">Deixe em branco para trazer tudo. Os SKUs da Lizzie são sequenciais — use a faixa do lote que você quer importar. A varredura passa por todo o catálogo do Bling (o lote novo costuma estar nas últimas páginas), então pode levar alguns minutos.</p>
+      <button class="btn-primary btn-sm" style="margin-top:12px" onclick="produtoImportBlingPreview()">${IC_BARCODE} Buscar produtos da faixa</button>
     </div>
     <div id="import-bling-area"></div>`;
 }
@@ -363,22 +419,30 @@ function impErro(msg) {
 
 export async function produtoImportBlingPreview() {
   const area = document.getElementById('import-bling-area');
-  area.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Buscando no Bling...</div>';
-  let resp;
-  try { resp = await fetchBlingProdutos(1, impFiltros()); }
-  catch (e) { area.innerHTML = impErro('Falha ao chamar a função bling-produtos: ' + e.message); return; }
-  console.log('[import-bling] resposta crua da funcao:', resp);
-  if (resp?.error) { area.innerHTML = impErro('Bling: ' + resp.error); return; }
-  let arr = resp?.data || resp?.retorno?.produtos || [];
-  if (impSoAtivos()) arr = arr.filter(p => (p.situacao ?? 'A') === 'A');
-  if (!arr.length) {
-    area.innerHTML = impErro('A página 1 voltou sem produtos no formato esperado. Segue a resposta crua da função — me manda isto:')
-      + `<pre style="font-size:11px;white-space:pre-wrap;word-break:break-all;background:var(--cream);padding:10px;border-radius:8px;max-height:340px;overflow:auto">${esc(JSON.stringify(resp, null, 2))}</pre>`;
+  const { skuDe, skuAte } = impFaixaSku();
+  const soAtivos = impSoAtivos();
+  blingScan = null;
+  area.innerHTML = `<div class="card"><div id="imp-prog" style="font-size:13px">Iniciando varredura do Bling...</div>
+    <button class="btn-secondary btn-sm" style="margin-top:10px" onclick="produtoImportBlingParar(this)">Parar</button></div>`;
+  const prog = () => document.getElementById('imp-prog');
+
+  let res;
+  try {
+    res = await varrerBling(skuDe, skuAte, soAtivos, ({ pagina, matched, totalVarridos }) => {
+      if (prog()) prog().textContent = `Varrendo página ${pagina} · ${matched} no intervalo · ${totalVarridos} varridos`;
+    });
+  } catch (e) { area.innerHTML = impErro(e.message || 'Erro na varredura'); return; }
+
+  blingScan = res;
+  const { matched, totalVarridos, foraIntervalo, parado } = res;
+  const faixaTxt = (skuDe != null || skuAte != null) ? ` entre ${skuDe ?? '…'} e ${skuAte ?? '…'}` : '';
+
+  if (!matched.length) {
+    area.innerHTML = impErro(`Nenhum produto${faixaTxt}${parado ? ' (varredura interrompida)' : ''} — confira a faixa. Varridos: ${totalVarridos}.`);
     return;
   }
-  console.log('[import-bling] 1º produto cru do Bling:', arr[0]);
 
-  const mapped = arr.slice(0, 12).map(mapProdutoBling);
+  const mapped = matched.slice(0, 12);
   const rows = mapped.map(m => `<tr class="ciclo-row">
     <td class="ciclo-td"><div style="display:flex;align-items:center;gap:8px"><span class="ciclo-emoji">${m.foto_url ? `<img src="${esc(m.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:6px">` : IC_GEM}</span><div class="ciclo-desc">${esc(m.nome)}</div></div></td>
     <td class="ciclo-td">${m.sku ? esc(m.sku) : '—'}</td>
@@ -387,20 +451,20 @@ export async function produtoImportBlingPreview() {
 
   area.innerHTML = `
     <div class="card" style="margin-bottom:12px">
-      <div style="font-size:13px;color:var(--plum);font-weight:600;margin-bottom:8px">Prévia — ${arr.length} produto(s) na página 1 (mostrando ${mapped.length})</div>
+      <div style="font-size:13px;color:var(--plum);font-weight:600;margin-bottom:8px">Prévia — ${matched.length} produto(s)${faixaTxt} (mostrando ${mapped.length})${parado ? ' · varredura interrompida' : ''}</div>
       <div class="pag-wrap"><table class="pag-table"><thead><tr><th class="pag-th">Produto</th><th class="pag-th">SKU</th><th class="pag-th">Cód. barras</th><th class="pag-th">Preço</th></tr></thead><tbody>${rows}</tbody></table></div>
-      <details style="margin-top:10px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">Ver JSON cru do 1º produto (conferência de campos)</summary>
-        <pre style="font-size:11px;white-space:pre-wrap;word-break:break-all;background:var(--cream);padding:10px;border-radius:8px;max-height:280px;overflow:auto">${esc(JSON.stringify(arr[0], null, 2))}</pre></details>
+      <div style="font-size:12px;color:var(--muted);margin-top:8px">Varridos no total: ${totalVarridos} · Fora do intervalo/inativos: ${foraIntervalo}</div>
       <div style="margin-top:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <button class="btn-primary btn-sm" onclick="produtoImportBlingRun()">Importar TODOS os produtos</button>
-        <span style="font-size:12px;color:var(--muted)">Confira o código de barras e a foto acima antes de puxar tudo.</span>
+        <button class="btn-primary btn-sm" onclick="produtoImportBlingRun()">Importar ${matched.length} produto(s)</button>
+        <span style="font-size:12px;color:var(--muted)">Confira o código de barras e a foto acima antes de importar.</span>
       </div>
     </div>`;
 }
 
 export async function produtoImportBlingRun() {
+  if (!blingScan || !(blingScan.matched || []).length) { toast('Faça a prévia da faixa primeiro'); return; }
   const area = document.getElementById('import-bling-area');
-  area.innerHTML = '<div class="card"><div id="imp-prog" style="font-size:13px">Iniciando importação...</div></div>';
+  area.innerHTML = '<div class="card"><div id="imp-prog" style="font-size:13px">Preparando importação...</div></div>';
   const prog = () => document.getElementById('imp-prog');
 
   // Existentes: usados pra deduplicar (nunca duplica) E pra completar campos
@@ -409,42 +473,26 @@ export async function produtoImportBlingRun() {
   const porSku = new Map((existentes || []).filter(p => p.sku).map(p => [p.sku, p]));
   const porBarras = new Map((existentes || []).filter(p => p.codigo_barras).map(p => [p.codigo_barras, p]));
 
-  // Filtros capturados UMA vez no início (valem pra rodada inteira)
-  const filtros = impFiltros();
-  const soAtivos = impSoAtivos();
-
-  let pagina = 1, totalBling = 0, pulados = 0, foraDoFiltro = 0;
+  // Opera sobre a lista JÁ filtrada pela faixa (a varredura aconteceu na prévia).
+  const totalBling = blingScan.totalVarridos;
+  let pulados = 0;
   const paraInserir = [];
   const paraCompletar = [];   // updates parciais: só campos hoje vazios
-  while (pagina <= 200) {
-    if (prog()) prog().textContent = `Buscando página ${pagina} no Bling... (${paraInserir.length} novos · ${paraCompletar.length} a completar)`;
-    let resp;
-    try { resp = await fetchBlingProdutos(pagina, filtros); }
-    catch (e) { if (prog()) prog().innerHTML = impErro('Erro na página ' + pagina + ': ' + e.message); return; }
-    if (resp?.error) { if (prog()) prog().innerHTML = impErro('Bling: ' + resp.error); return; }
-    const arr = resp?.data || [];
-    if (!arr.length) break;
-    totalBling += arr.length;
-    for (const p of arr) {
-      if (soAtivos && (p.situacao ?? 'A') !== 'A') { foraDoFiltro++; continue; }
-      const m = mapProdutoBling(p);
-      const ex = (m.sku && porSku.get(m.sku)) || (m.codigo_barras && porBarras.get(m.codigo_barras));
-      if (ex) {
-        // ex sem id = duplicado DENTRO do próprio Bling nesta varredura (mesmo SKU
-        // duas vezes) — só pula; completar vale apenas pra registro já no banco.
-        const upd = {};
-        if (ex.id && !(Number(ex.custo_compra) > 0) && m.custo_compra > 0) upd.custo_compra = m.custo_compra;
-        if (ex.id && !ex.foto_url && m.foto_url) upd.foto_url = m.foto_url;
-        if (ex.id && Object.keys(upd).length) paraCompletar.push({ id: ex.id, ...upd });
-        else pulados++;
-        continue;
-      }
-      if (m.sku) porSku.set(m.sku, m);
-      if (m.codigo_barras) porBarras.set(m.codigo_barras, m);
-      paraInserir.push(m);
+  for (const m of blingScan.matched) {
+    const ex = (m.sku && porSku.get(m.sku)) || (m.codigo_barras && porBarras.get(m.codigo_barras));
+    if (ex) {
+      // ex sem id = duplicado DENTRO do próprio Bling nesta varredura (mesmo SKU
+      // duas vezes) — só pula; completar vale apenas pra registro já no banco.
+      const upd = {};
+      if (ex.id && !(Number(ex.custo_compra) > 0) && m.custo_compra > 0) upd.custo_compra = m.custo_compra;
+      if (ex.id && !ex.foto_url && m.foto_url) upd.foto_url = m.foto_url;
+      if (ex.id && Object.keys(upd).length) paraCompletar.push({ id: ex.id, ...upd });
+      else pulados++;
+      continue;
     }
-    pagina++;
-    await sleep(350); // respeita ~3 req/s do Bling
+    if (m.sku) porSku.set(m.sku, m);
+    if (m.codigo_barras) porBarras.set(m.codigo_barras, m);
+    paraInserir.push(m);
   }
 
   // A varredura do Bling demora minutos — re-checa os existentes AGORA, na hora
@@ -490,7 +538,7 @@ export async function produtoImportBlingRun() {
 
   if (prog()) prog().innerHTML = `
     <div style="color:var(--success);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Importação concluída</div>
-    <div style="font-size:13px;margin-top:6px">Bling: ${totalBling} · Novos: ${gravados} · Completados (custo/foto que faltava): ${completados} · Já completos: ${pulados}${foraDoFiltro ? ` · Fora do filtro (inativos): ${foraDoFiltro}` : ''}</div>
+    <div style="font-size:13px;margin-top:6px">Varridos no Bling: ${totalBling} · No intervalo: ${blingScan.matched.length} · Novos: ${gravados} · Completados (custo/foto que faltava): ${completados} · Já completos: ${pulados}</div>
     <button class="btn-primary btn-sm" style="margin-top:10px" onclick="produtoVoltarLista()">Ver produtos</button>`;
 }
 
