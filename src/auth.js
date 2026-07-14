@@ -29,9 +29,18 @@ export function ehStaff()  { return ['admin','func_completo','func_basico'].incl
 
 export async function loadUser(user) {
   state.currentUser = user;
-  const { data: profile } = await sbQ(sb.from('profiles').select('*').eq('id', user.id).single());
+  let { data: profile } = await sbQ(sb.from('profiles').select('*').eq('id', user.id).single());
 
   if (!profile) { showSplash(); return; }
+
+  // Funcionário: no 1º login o profile nasce como 'revendedora' pendente
+  // (handle_new_user). Vincula pelo e-mail e promove o papel ANTES do gate de
+  // aprovação, pra não travar na tela "aguardando" nem cair na lista de
+  // Revendedoras. Não-funcionário: RPC retorna null e segue o fluxo normal.
+  if (profile.role === 'revendedora') {
+    const { data: novoRole } = await sbQ(sb.rpc('fn_vincular_funcionario'));
+    if (novoRole && novoRole !== 'revendedora') profile = { ...profile, role: novoRole, aprovada: true };
+  }
   state.currentProfile = profile;
 
   if (profile.role === 'revendedora' && !profile.aprovada) {
