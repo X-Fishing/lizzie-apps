@@ -27,41 +27,50 @@ const IC = {
   card:      '<svg class="ico" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>',
   percent:   '<svg class="ico" viewBox="0 0 24 24"><line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>',
   cart:      '<svg class="ico" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>',
+  package:   '<svg class="ico" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+  gift:      '<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>',
 };
 
 // ── Registry (fonte única do menu lateral) ─────────────────────────
 // `panel` é o nome usado pelo showPanel() existente; `chave` é a
 // permissão gravada no banco.
+// IMPORTANTE: a `chave` de cada item é a permissão gravada no banco
+// (perfil_permissoes.chave_menu). Ao MOVER um item de grupo, a chave viaja
+// junto SEM mudar — senão os perfis perdem o acesso àquela tela.
 export const MENU = [
   { chave: 'dashboard', panel: 'dashboard', label: 'Dashboard', icon: IC.grid },
   { grupo: 'grp_vendas', label: 'Vendas', icon: IC.bag, filhos: [
-      { chave: 'vendas_controle', panel: 'consignados', label: 'Controle de Vendas',  icon: IC.gem },
-      { chave: 'vendas_produtos', panel: 'produtos',    label: 'Produtos',            icon: IC.gem },
-      { chave: 'vendas_lancar',   panel: 'lancador',    label: 'Lançar Mostruário',   icon: IC.columns },
-      { chave: 'vendas_troca',    panel: 'trocas',      label: 'Troca de Mostruário', icon: IC.repeat },
+      { chave: 'vendas_controle',  panel: 'consignados', label: 'Controle de Vendas',  icon: IC.gem },
+      { chave: 'cad_revendedoras', panel: 'admin',       label: 'Revendedoras',        icon: IC.userCheck },
+      { chave: 'cad_clientes',     panel: 'clientes',    label: 'Clientes',            icon: IC.users, em_breve: true },
+      { chave: 'vendas_lancar',    panel: 'lancador',    label: 'Lançar Mostruário',   icon: IC.columns },
+      { chave: 'vendas_troca',     panel: 'trocas',      label: 'Troca de Mostruário', icon: IC.repeat },
       // chave 'cad_garantias' mantida: perfis existentes seguem valendo
-      { chave: 'cad_garantias',   panel: 'garantias',   label: 'Garantias',           icon: IC.shield },
+      { chave: 'cad_garantias',    panel: 'garantias',   label: 'Garantias',           icon: IC.shield },
   ]},
-  { grupo: 'grp_compras', label: 'Compras', icon: IC.cart, filhos: [
-      // chave 'vendas_entrada_mercadoria' mantida (só mudou de grupo):
-      // perfis já configurados continuam com acesso, sem migration.
-      { chave: 'vendas_entrada_mercadoria', panel: 'entrada-mercadoria', label: 'Entrada de Mercadoria', icon: IC.fabrica },
+  { grupo: 'grp_estoque', label: 'Estoque', icon: IC.package, filhos: [
+      { chave: 'cad_fornecedores', panel: 'fornecedores', label: 'Fornecedores', icon: IC.fabrica },
+      { chave: 'vendas_produtos',  panel: 'produtos',     label: 'Produtos',     icon: IC.gem },
+      { chave: 'cad_categorias',   panel: 'categorias',   label: 'Categorias',   icon: IC.tag },
+      { chave: 'cad_colecoes',     panel: 'colecoes',     label: 'Coleções',     icon: IC.layers },
+      // chave 'vendas_entrada_mercadoria' mantida (só mudou de grupo)
+      { chave: 'vendas_entrada_mercadoria', panel: 'entrada-mercadoria', label: 'Entrada de Mercadoria', icon: IC.cart },
+      { chave: 'cad_precificacao', panel: 'precificacao', label: 'Precificação', icon: IC.percent },
   ]},
-  { chave: 'financeiro',  panel: 'financeiro',  label: 'Financeiro',  icon: IC.fin },
-  { chave: 'calculadora', panel: 'calculadora', label: 'Calculadora', icon: IC.calc },
-  { chave: 'marketing',   panel: 'marketing',   label: 'Marketing',   icon: IC.mega, em_breve: true },
-  { secao: 'Cadastros', grupo: 'grp_cadastros', filhos: [
-      { chave: 'cad_categorias',       panel: 'categorias',             label: 'Categorias',             icon: IC.tag },
-      { chave: 'cad_colecoes',         panel: 'colecoes',               label: 'Coleções',               icon: IC.layers },
-      { chave: 'cad_fornecedores',     panel: 'fornecedores',           label: 'Fornecedores',           icon: IC.fabrica },
-      { chave: 'cad_clientes',         panel: 'clientes',               label: 'Clientes',               icon: IC.users, em_breve: true },
-      { chave: 'cad_revendedoras',     panel: 'admin',                  label: 'Revendedoras',           icon: IC.userCheck },
-      { chave: 'cad_funcionarios',     panel: 'funcionarios',           label: 'Funcionários',           icon: IC.crachaFunc, admin_only: true },
-      { chave: 'cad_faixas_comissao',  panel: 'faixas-comissao',        label: 'Faixas de Comissão',     icon: IC.percent },
-      { chave: 'cad_raspadinha',       panel: 'config-raspadinha',      label: 'Raspadinha',             icon: IC.tag, admin_only: true },
-      { chave: 'cad_precificacao',     panel: 'precificacao',           label: 'Precificação',           icon: IC.percent },
+  { grupo: 'grp_financeiro', label: 'Financeiro', icon: IC.fin, filhos: [
+      // chave 'financeiro' mantida (item solto virou "Lançamentos" dentro do grupo)
+      { chave: 'financeiro',           panel: 'financeiro',             label: 'Lançamentos',            icon: IC.fin },
       { chave: 'cad_formas_pagamento', panel: 'formas-pagamento',       label: 'Formas de Pagamento',    icon: IC.card, em_breve: true },
       { chave: 'cad_categorias_fin',   panel: 'categorias-financeiras', label: 'Categorias Financeiras', icon: IC.tag, em_breve: true },
+  ]},
+  { chave: 'calculadora', panel: 'calculadora', label: 'Calculadora', icon: IC.calc },
+  { grupo: 'grp_marketing', label: 'Marketing', icon: IC.mega, filhos: [
+      { chave: 'cad_raspadinha',  panel: 'config-raspadinha', label: 'Raspadinha', icon: IC.tag, admin_only: true },
+      { chave: 'marketing_bonus', panel: 'bonus',             label: 'Bônus',      icon: IC.gift, em_breve: true },
+  ]},
+  { secao: 'Configurações', grupo: 'grp_cadastros', filhos: [
+      { chave: 'cad_funcionarios',    panel: 'funcionarios',    label: 'Funcionários',       icon: IC.crachaFunc, admin_only: true },
+      { chave: 'cad_faixas_comissao', panel: 'faixas-comissao', label: 'Faixas de Comissão', icon: IC.percent },
   ]},
 ];
 
