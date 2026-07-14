@@ -38,6 +38,8 @@ export const MENU = [
       { chave: 'vendas_produtos', panel: 'produtos',    label: 'Produtos',            icon: IC.gem },
       { chave: 'vendas_lancar',   panel: 'lancador',    label: 'Lançar Mostruário',   icon: IC.columns },
       { chave: 'vendas_troca',    panel: 'trocas',      label: 'Troca de Mostruário', icon: IC.repeat },
+      // chave 'cad_garantias' mantida: perfis existentes seguem valendo
+      { chave: 'cad_garantias',   panel: 'garantias',   label: 'Garantias',           icon: IC.shield },
   ]},
   { chave: 'financeiro',  panel: 'financeiro',  label: 'Financeiro',  icon: IC.fin },
   { chave: 'calculadora', panel: 'calculadora', label: 'Calculadora', icon: IC.calc, em_breve: true },
@@ -48,7 +50,6 @@ export const MENU = [
       { chave: 'cad_fornecedores',     panel: 'fornecedores',           label: 'Fornecedores',           icon: IC.fabrica },
       { chave: 'cad_clientes',         panel: 'clientes',               label: 'Clientes',               icon: IC.users, em_breve: true },
       { chave: 'cad_revendedoras',     panel: 'admin',                  label: 'Revendedoras',           icon: IC.userCheck },
-      { chave: 'cad_garantias',        panel: 'garantias',              label: 'Garantias',              icon: IC.shield },
       { chave: 'cad_funcionarios',     panel: 'funcionarios',           label: 'Funcionários',           icon: IC.crachaFunc, admin_only: true },
       { chave: 'cad_faixas_comissao',  panel: 'faixas-comissao',        label: 'Faixas de Comissão',     icon: IC.percent },
       { chave: 'cad_formas_pagamento', panel: 'formas-pagamento',       label: 'Formas de Pagamento',    icon: IC.card, em_breve: true },
