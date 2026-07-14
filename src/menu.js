@@ -99,6 +99,19 @@ export function podeVer(item) {
   return IS_ADMIN || PERMISSOES.has(item.chave);
 }
 
+// Painel inicial pós-login (staff): o PRIMEIRO item do menu que a pessoa
+// pode ver, respeitando perfil_permissoes e pulando "Em breve". Evita que
+// um funcionário parcial caia na dashboard (financeiro/DRE) sem permissão.
+// Admin e quem tem a chave 'dashboard' continuam caindo na dashboard.
+export function primeiroPanelInicial() {
+  if (IS_ADMIN) return 'dashboard';
+  for (const item of todosItens()) {
+    if (item.em_breve || !item.panel) continue;
+    if (podeVer(item)) return item.panel;
+  }
+  return 'dashboard';
+}
+
 // Guarda de navegação: painéis fora do registry (garantias mobile,
 // pagamentos, histórico...) passam direto.
 export function podeAcessarPanel(panel) {

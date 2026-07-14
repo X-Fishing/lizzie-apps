@@ -2,7 +2,7 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { sbQ, showMsg, toast, handleSupabaseError, openModal, closeModal } from './utils.js';
-import { carregarPermissoes, renderSidebar } from './menu.js';
+import { carregarPermissoes, renderSidebar, primeiroPanelInicial } from './menu.js';
 export function mostrarRecovery() {
   state.recoveryAtiva = true;
   document.getElementById('splash').style.display = 'none';
@@ -74,7 +74,9 @@ export async function loadUser(user) {
   if (ehStaff()) await carregarPermissoes();
   renderSidebar();
 
-  showPanel('dashboard');   // já dispara loadDashboard()
+  // Staff cai no primeiro painel permitido (funcionário parcial sem acesso à
+  // dashboard não vê financeiro/DRE). Revendedora: sempre a própria dashboard.
+  showPanel(ehStaff() ? primeiroPanelInicial() : 'dashboard');
 
   // Primeiro acesso de revendedora sem telefone: pede o WhatsApp (trocas).
   if (ehRevendedora && !(profile.telefone && profile.telefone.trim())) {
