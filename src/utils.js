@@ -153,6 +153,47 @@ export function hojeBR() {
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
 
+// CPF 000.000.000-00
+export function maskCpf(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 11);
+  if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+  else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+  else if (v.length > 3) v = v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+  input.value = v;
+}
+
+// CEP 00000-000
+export function maskCep(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 8);
+  if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
+  input.value = v;
+}
+
+// Validação de CPF (dígito verificador). Só para AVISAR — não bloqueia salvar.
+export function cpfValido(cpf) {
+  const c = String(cpf || '').replace(/\D/g, '');
+  if (c.length !== 11 || /^(\d)\1{10}$/.test(c)) return false;
+  const dv = base => {
+    let soma = 0;
+    for (let i = 0; i < base.length; i++) soma += Number(base[i]) * (base.length + 1 - i);
+    const r = (soma * 10) % 11;
+    return r === 10 ? 0 : r;
+  };
+  return dv(c.slice(0, 9)) === Number(c[9]) && dv(c.slice(0, 10)) === Number(c[10]);
+}
+
+// Busca de endereço por CEP (ViaCEP — grátis, sem chave). Falha → null.
+export async function buscarCep(cep) {
+  const limpo = (cep || '').replace(/\D/g, '');
+  if (limpo.length !== 8) return null;
+  try {
+    const r = await fetch(`https://viacep.com.br/ws/${limpo}/json/`);
+    const d = await r.json();
+    if (d.erro) return null;
+    return { logradouro: d.logradouro, bairro: d.bairro, cidade: d.localidade, estado: d.uf };
+  } catch { return null; }
+}
+
 // Máscara monetária: dígitos vão andando, sempre 2 casas decimais
 export function maskMoneyBR(input) {
   let v = (input.value || '').replace(/\D/g, '');
