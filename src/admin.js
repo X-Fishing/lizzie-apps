@@ -7,9 +7,13 @@ import { carregarProximasTrocas, compararPorTroca, atualizarBadgesTroca } from '
 export async function loadAdmin() {
   document.getElementById('rev-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
   document.getElementById('pendentes-list').innerHTML = '';
-  const [{ data: pendentes, error: e1 }, { data: aprovadas, error: e2 }] = await Promise.all([
+  const [{ data: pendentes, error: e1 }, { data: aprovadas, error: e2 }, { data: funcs }] = await Promise.all([
     sbQ(sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',false).order('created_at')),
-    sbQ(sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',true).order('nome'))
+    sbQ(sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',true).order('nome')),
+    // Blindagem: nunca listar quem é funcionário como revendedora (evita
+    // excluir por engano o perfil de um funcionário). RLS só devolve a lista
+    // para admin; gestor recebe vazio — inofensivo (promoção já os tira daqui).
+    sbQ(sb.from('funcionarios').select('auth_user_id'))
   ]);
   if (e1 || e2) {
     const msg = (e1||e2).message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar revendedoras.';
@@ -17,13 +21,18 @@ export async function loadAdmin() {
     return;
   }
 
+  // Ids de funcionários (para nunca aparecerem na lista de revendedoras).
+  const funcIds = new Set((funcs || []).map(f => f.auth_user_id).filter(Boolean));
+  const semFunc = lista => (lista || []).filter(r => !funcIds.has(r.id));
+  const pendentesRev = semFunc(pendentes);
+
   const pendDiv = document.getElementById('pendentes-list');
-  if (pendentes && pendentes.length) {
-    pendDiv.innerHTML = `<div class="alert alert-warning"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg> ${pendentes.length} cadastro${pendentes.length>1?'s':''} aguardando aprovação</div>` +
-      pendentes.map(r => renderRevCard(r, true)).join('');
+  if (pendentesRev.length) {
+    pendDiv.innerHTML = `<div class="alert alert-warning"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg> ${pendentesRev.length} cadastro${pendentesRev.length>1?'s':''} aguardando aprovação</div>` +
+      pendentesRev.map(r => renderRevCard(r, true)).join('');
   } else pendDiv.innerHTML = '';
 
-  state.aprovadasCache = aprovadas || [];
+  state.aprovadasCache = semFunc(aprovadas);
   await renderAprovadas();
 }
 
@@ -200,6 +209,10 @@ export function confirmarExclusaoRev(id, btn) {
 
 export async function excluirRevendedora(id, btn) {
   if (!ehAdmin()) { toast('Sem permissão'); return; }
+  // Blindagem: não deixar apagar o perfil de um funcionário por esta tela
+  // (foi o que deixou a conta órfã antes). Gerencie em Cadastros → Funcionários.
+  const { data: func } = await sbQ(sb.from('funcionarios').select('id').eq('auth_user_id', id).maybeSingle());
+  if (func) { toast('Esse acesso é de um funcionário — gerencie em Cadastros → Funcionários, não aqui.'); return; }
   if (btn) { btn.disabled = true; btn.textContent = 'Excluindo...'; }
   try {
     // Apaga os dados filhos antes do profile (nao depende de ON DELETE CASCADE).
