@@ -2,7 +2,8 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { sbQ, showMsg, toast, handleSupabaseError, openModal, closeModal } from './utils.js';
-import { carregarPermissoes, renderSidebar, primeiroPanelInicial } from './menu.js';
+import { carregarPermissoes, renderSidebar } from './menu.js';
+import { iniciarRoteamento } from './nav.js';
 export function mostrarRecovery() {
   state.recoveryAtiva = true;
   document.getElementById('splash').style.display = 'none';
@@ -74,9 +75,10 @@ export async function loadUser(user) {
   if (ehStaff()) await carregarPermissoes();
   renderSidebar();
 
-  // Staff cai no primeiro painel permitido (funcionário parcial sem acesso à
-  // dashboard não vê financeiro/DRE). Revendedora: sempre a própria dashboard.
-  showPanel(ehStaff() ? primeiroPanelInicial() : 'dashboard');
+  // Liga o roteador por hash e resolve a URL atual: se veio de um link
+  // direto/F5 (#/produtos), abre aquela tela (com guard de papel); se não,
+  // cai no painel inicial permitido. Faz o "voltar" do navegador funcionar.
+  iniciarRoteamento();
 
   // Primeiro acesso de revendedora sem telefone: pede o WhatsApp (trocas).
   if (ehRevendedora && !(profile.telefone && profile.telefone.trim())) {

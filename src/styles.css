@@ -780,7 +780,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 }
 .snav-brand { font-family:'Cormorant Garamond',serif; font-size:20px; letter-spacing:3px;
   color: var(--plum); text-transform: uppercase; padding: 4px 12px 14px; }
-.snav-item { display:flex; align-items:center; gap:11px; padding:10px 14px; border-radius:10px;
+.snav-item { text-decoration:none; color:inherit; display:flex; align-items:center; gap:11px; padding:10px 14px; border-radius:10px;
   border:none; background:none; cursor:pointer; font-family:'DM Sans',sans-serif; font-size:13px;
   color: var(--text); text-align:left; width:100%; transition: background .15s; }
 .snav-item:hover { background: rgba(0,0,0,0.035); }

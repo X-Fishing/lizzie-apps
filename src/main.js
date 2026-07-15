@@ -10,12 +10,12 @@ import './styles.css';
 import { sb, RECOVERY_IN_URL, URL_AUTH_ERROR } from './supabase.js';
 import { state } from './state.js';
 import { closeModal, openModal, fecharConfirma, hojeBR, maskDateBR, maskMoneyBR, maskCpf, maskCep, previewFoto, showMsg, toast } from './utils.js';
-import { showPanel, toggleCadastros } from './nav.js';
+import { showPanel, toggleCadastros, abrirRevendedora } from './nav.js';
 import { mostrarRecovery, ehAdmin, ehGestor, ehStaff, loadUser, maskTelBR, salvarComplemento, showSplash, switchTab, fazerLogin, mostrarRecuperar, voltarLogin, loginGoogle, enviarLinkRecuperacao, salvarNovaSenha, fazerCadastro } from './auth.js';
 import { loadDashboard, loadClientes, loadMarketing, loadFormasPagamento, loadCategoriasFinanceiras } from './dashboard.js';
 import { loadCalculadora, calcularSimulacao, loadPrecificacao, precifSalvarParams, precifSalvarBanhos, loadEntradaMercadoria, loteAdd, loteRemover, loteSet, loteRecalcTudo, loteLancar, loteDuplicar, loteTecla, loteArredondarTodos, entradaColarAbrir, entradaColarProcessar, entradaLimparLote } from './precificacao.js';
 import { loadFinanceiro, abrirRecebimento, registrarRecebimento, recRecalc, recAtalho, copiarPixCola, pixConfigAbrir, pixConfigSalvar, zapCobranca, estornarRecebimento, estornarConfirmar } from './financeiro.js';
-import { podeAcessarPanel, renderSidebar, toggleSnavGrupo, toggleSidebarLateral } from './menu.js';
+import { podeAcessarPanel, renderSidebar, toggleSnavGrupo, toggleSidebarLateral, primeiroPanelInicial } from './menu.js';
 import { loadFuncionarios, loadPerfis, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilFechar, perfilSalvarPermissoes } from './funcionarios.js';
 import { calcPrazoGarantia, loadGarantias, filtrarGarantias, sortGarantiasStaff, setGFilter, renderGarantiaCard, verGarantia, openNovaGarantia, editarGarantia, salvarGarantia, mudarStatus, atualizarStatusCard, excluirGarantia } from './garantias.js';
 import { openBlingSync, buscarBling, filtrarBling, verItensBling, voltarListaBling, importarItensBling, atualizarMaleta, previewMaletaPorId, confirmarMaleta, salvarBlingId, detectarBlingId, escolherBlingCandidato } from './bling.js';
@@ -116,7 +116,7 @@ Object.assign(window, { renderAprovadas, renderGarantiaCard, ehAdmin, ehStaff, e
   calcularSimulacao, loadPrecificacao, precifSalvarParams, precifSalvarBanhos, loadEntradaMercadoria, loteAdd, loteRemover, loteSet, loteRecalcTudo, loteLancar, loteDuplicar, loteTecla, loteArredondarTodos, entradaColarAbrir, entradaColarProcessar, entradaLimparLote,
   loadCategorias, loadColecoes, loadFornecedores, loadFaixasComissao, loadConfigRaspadinha, cadNovo, cadEditar, cadSalvar, cadExcluir,
   perfilAbrirFoto, perfilFecharFoto, perfilTirarSelfie, perfilCapturar, perfilArquivo, perfilSalvarFoto,
-  toast, podeAcessarPanel, renderSidebar, toggleSnavGrupo,
+  toast, podeAcessarPanel, renderSidebar, toggleSnavGrupo, primeiroPanelInicial, abrirRevendedora,
   abrirRecebimento, registrarRecebimento, recRecalc, recAtalho, copiarPixCola, pixConfigAbrir, pixConfigSalvar, zapCobranca, estornarRecebimento, estornarConfirmar,
   loadPerfis, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilFechar, perfilSalvarPermissoes,
   loadLancador, lancadorBipar, lancadorSetQtd, lancadorRemover, lancadorEnviar, lancadorCamera, fecharCamera, scanBarcodeInto, lancadorSelecionarRev, lancadorDestinoNova, lancadorDestinoExistente, lancadorTrocarDestino, lancadorAbrirBusca, lancadorFecharBusca, lancadorBuscaInput, lancadorBuscaTeclas, lancadorBuscaAdicionar,

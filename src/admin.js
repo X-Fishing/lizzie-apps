@@ -93,7 +93,7 @@ export function renderRevCard(r, pendente) {
   const trocaSlot = pendente ? '' : `<div data-troca-bling-id="${r.bling_contato_id || ''}" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><span style="font-size:11px;color:var(--muted)">Carregando próxima troca...</span></div>`;
   const seloIncompleto = revIncompleta(r)
     ? '<span class="badge-soon" style="background:var(--warning);color:#fff;margin-left:6px" title="Falta CPF, nascimento ou endereço">Cadastro incompleto</span>' : '';
-  return `<div class="card rev-card" onclick="abrirFormRev('${r.id}')">
+  return `<div class="card rev-card" onclick="abrirRevendedora('${r.id}')">
     <div class="rev-header">
       <div class="rev-avatar">${inicial}</div>
       <div>
