@@ -17,10 +17,26 @@ function revIncompleta(r) {
   const d = r._doc || {};
   return !d.cpf || !d.data_nascimento || !(r.logradouro && r.cidade);
 }
-// Gancho p/ "Gerar Contrato" (Prompt 2): true quando tem o essencial.
-export function cadastroCompletoParaContrato(r, doc) {
+// Campos OBRIGATÓRIOS do contrato (só o RG e o complemento são opcionais).
+// Fonte única usada pelo botão, pelo pop-up e pelo bloqueio da impressão.
+export function faltantesContrato(r, doc) {
   const d = doc || r?._doc || {};
-  return !!(r?.nome && d.cpf && r?.logradouro && r?.cidade);
+  const f = [];
+  if (!r?.nome)      f.push('Nome');
+  if (!d.cpf)        f.push('CPF');
+  if (!r?.logradouro) f.push('Logradouro');
+  if (!r?.numero)    f.push('Número');
+  if (!r?.bairro)    f.push('Bairro');
+  if (!r?.cidade)    f.push('Cidade');
+  if (!r?.estado)    f.push('Estado (UF)');
+  if (!r?.cep)       f.push('CEP');
+  if (!r?.email)     f.push('E-mail');
+  if (!r?.telefone)  f.push('Telefone');
+  return f; // RG e Complemento não entram (opcionais)
+}
+// Gancho p/ "Gerar Contrato": só true sem nenhum campo obrigatório faltando.
+export function cadastroCompletoParaContrato(r, doc) {
+  return faltantesContrato(r, doc).length === 0;
 }
 
 export async function loadAdmin() {
@@ -336,36 +352,19 @@ export async function salvarRevendedora(id) {
   if (gestor) popupContratoStatus(profileId, rSalvo, docSalvo);
 }
 
-// Campos que o contrato usa; separa essenciais (bloqueiam) de recomendados.
-function faltantesContrato(r, doc) {
-  const d = doc || {};
-  const ess = [], rec = [];
-  if (!d.cpf) ess.push('CPF');
-  if (!r.logradouro) ess.push('Logradouro');
-  if (!r.cidade) ess.push('Cidade');
-  if (!r.estado) ess.push('Estado (UF)');
-  if (!r.numero) rec.push('Número');
-  if (!r.bairro) rec.push('Bairro');
-  if (!r.cep) rec.push('CEP');
-  if (!d.rg) rec.push('RG');
-  if (!r.email) rec.push('E-mail');
-  if (!r.telefone) rec.push('Telefone');
-  return { ess, rec };
-}
-
 // Pop-up após salvar: oferece gerar o contrato, ou avisa o que falta.
 function popupContratoStatus(id, r, doc) {
-  const { ess, rec } = faltantesContrato(r, doc);
-  if (cadastroCompletoParaContrato(r, doc)) {
-    let msg = 'Os dados essenciais do contrato estão preenchidos.';
-    if (rec.length) msg += '\n\nFicam em branco no contrato (opcional): ' + rec.join(', ') + '.';
-    msg += '\n\nDeseja gerar o contrato agora?';
-    confirmarAcao('Revendedora salva', msg, 'Gerar contrato', () => gerarContrato(id));
+  const faltam = faltantesContrato(r, doc);
+  if (!faltam.length) {
+    confirmarAcao('Revendedora salva',
+      'Todos os dados obrigatórios do contrato estão preenchidos.\n\nDeseja gerar o contrato agora?',
+      'Gerar contrato', () => gerarContrato(id));
   } else {
-    let msg = 'Para gerar o contrato ainda faltam:\n\n' + ess.map(f => '•  ' + f).join('\n');
-    if (rec.length) msg += '\n\nRecomendado também: ' + rec.join(', ') + '.';
-    msg += '\n\nComplete os campos e salve novamente.';
-    confirmarAcao('Revendedora salva', msg, 'Continuar editando', () => {});
+    confirmarAcao('Revendedora salva',
+      'Ainda não dá para gerar o contrato. Faltam os campos obrigatórios:\n\n' +
+      faltam.map(f => '•  ' + f).join('\n') +
+      '\n\n(O RG é o único opcional.) Complete e salve novamente.',
+      'Continuar editando', () => {});
   }
 }
 
@@ -511,9 +510,10 @@ function enderecoFiadorLinha(d) {
 }
 
 export function renderBotaoContrato(id, r, doc) {
-  const ok = cadastroCompletoParaContrato(r, doc);
+  const faltam = faltantesContrato(r, doc);
+  const ok = faltam.length === 0;
   const ic = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>';
-  return `<button class="btn-secondary" style="width:100%;margin-top:10px${ok ? '' : ';opacity:.55'}" ${ok ? '' : 'disabled title="Complete CPF e endereço para gerar o contrato"'} onclick="gerarContrato('${id}')">${ic} Gerar Contrato</button>`;
+  return `<button class="btn-secondary" style="width:100%;margin-top:10px${ok ? '' : ';opacity:.55'}" ${ok ? '' : `disabled title="Faltam campos obrigatórios: ${esc(faltam.join(', '))}"`} onclick="gerarContrato('${id}')">${ic} Gerar Contrato</button>`;
 }
 
 export async function gerarContrato(revId) {
@@ -524,7 +524,9 @@ export async function gerarContrato(revId) {
   ]);
   if (!r) { toast('Revendedora não encontrada'); return; }
   const d = doc || {};
-  if (!cadastroCompletoParaContrato(r, d)) { toast('Complete CPF e endereço para gerar o contrato'); return; }
+  // Bloqueio: sem os obrigatórios, não imprime (só o RG é opcional).
+  const faltam = faltantesContrato(r, d);
+  if (faltam.length) { toast('Não é possível gerar o contrato — faltam: ' + faltam.join(', ')); return; }
 
   // Negrito automático nos termos-chave (mantém o texto abaixo literal/limpo).
   const realca = t => t
