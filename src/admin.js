@@ -180,6 +180,7 @@ export async function abrirFormRev(id) {
 
     <button class="btn-primary" style="width:100%;margin-top:22px" onclick="salvarRevendedora(${id ? `'${id}'` : 'null'})">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> ${id ? 'Salvar alterações' : 'Salvar revendedora'}</button>
+    ${id && gestor ? renderBotaoContrato(id, r, doc) : ''}
 
     ${id && gestor ? renderGestao(r) : ''}`;
 }
@@ -378,4 +379,193 @@ export async function excluirRevendedora(id, btn) {
   toast('Revendedora excluída');
   state.blingRevs = []; state.aprovadasCache = []; state.proximaTrocaCarregado = false;
   loadAdmin();
+}
+
+// ════════════════════════════════════════════════════════════════════
+// CONTRATO DE REVENDA EM CONSIGNAÇÃO — PDF via window.print() (mesmo
+// padrão do gerarPdfFechamento: injeta em #print-content, mostra o
+// #print-overlay e imprime; o @media print esconde o resto do app).
+// ════════════════════════════════════════════════════════════════════
+const CONSIGNANTE = {
+  nome: 'Lizzie Comércio e Importação de Artigos Religiosos e Semijoias Ltda.',
+  cnpj: '37.690.436/0001-60',
+  endereco: 'Rua Tiradentes, n.º 446, Vila Itapura, sala 23, Campinas/SP – CEP 13.023-190',
+  representante: 'Lidiane Soares Figueiredo Coutinho',
+  email: 'lizziesemijoias@outlook.com',
+  telefone: '(19) 99580-2087',
+};
+const MESES_EXT = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
+
+const soDig = v => String(v || '').replace(/\D/g, '');
+function fmtCpfDoc(v) {
+  const d = soDig(v).slice(0, 11);
+  return d.length === 11 ? `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9)}` : esc(v || '');
+}
+function fmtTelDoc(v) {
+  const d = soDig(v);
+  if (d.length === 11) return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`;
+  return esc(v || '');
+}
+// Endereço da revendedora numa linha só, a partir dos campos estruturados.
+function enderecoRevLinha(r) {
+  const partes = [];
+  if (r.logradouro) partes.push(esc(r.logradouro) + (r.numero ? `, n.º ${esc(r.numero)}` : ''));
+  if (r.complemento) partes.push(esc(r.complemento));
+  if (r.bairro) partes.push(esc(r.bairro));
+  const cidUf = [r.cidade, r.estado].filter(Boolean).map(esc).join('/');
+  if (cidUf) partes.push(cidUf);
+  let linha = partes.join(', ');
+  if (r.cep) linha += (linha ? ' – ' : '') + 'CEP ' + esc(r.cep);
+  return linha;
+}
+
+export function renderBotaoContrato(id, r, doc) {
+  const ok = cadastroCompletoParaContrato(r, doc);
+  const ic = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><path d="M14 2v5h5"/><line x1="16" x2="8" y1="13" y2="13"/><line x1="16" x2="8" y1="17" y2="17"/><line x1="10" x2="8" y1="9" y2="9"/></svg>';
+  return `<button class="btn-secondary" style="width:100%;margin-top:10px${ok ? '' : ';opacity:.55'}" ${ok ? '' : 'disabled title="Complete CPF e endereço para gerar o contrato"'} onclick="gerarContrato('${id}')">${ic} Gerar Contrato</button>`;
+}
+
+export async function gerarContrato(revId) {
+  if (!ehGestor()) { toast('Sem permissão'); return; }
+  const [{ data: r }, { data: doc }] = await Promise.all([
+    sbQ(sb.from('profiles').select('*').eq('id', revId).single()),
+    sbQ(sb.from('revendedora_docs').select('*').eq('profile_id', revId).maybeSingle()),
+  ]);
+  if (!r) { toast('Revendedora não encontrada'); return; }
+  const d = doc || {};
+  if (!cadastroCompletoParaContrato(r, d)) { toast('Complete CPF e endereço para gerar o contrato'); return; }
+
+  // Negrito automático nos termos-chave (mantém o texto abaixo literal/limpo).
+  const realca = t => t
+    .replace(/CONSIGNATÁRIO\(A\)/g, '<strong>CONSIGNATÁRIO(A)</strong>')
+    .replace(/CONSIGINATÁRIO\(A\)/g, '<strong>CONSIGINATÁRIO(A)</strong>')
+    .replace(/CONSIGNANTE/g, '<strong>CONSIGNANTE</strong>');
+  const p = t => `<p style="margin:0 0 9px;text-align:justify">${realca(t)}</p>`;
+  const cl = (n, t) => `<p style="margin:0 0 9px;text-align:justify"><strong>CLÁUSULA ${n}</strong> – ${realca(t)}</p>`;
+  const h = t => `<p style="margin:16px 0 9px"><u><strong>${t}</strong></u>:</p>`;
+  const linhaQ = (rot, val) => `<tr><td style="border:1px solid #444;padding:5px 8px;width:32%;font-weight:600;vertical-align:top">${rot}</td><td style="border:1px solid #444;padding:5px 8px">${val || '&nbsp;'}</td></tr>`;
+  const cabQ = t => `<tr><td colspan="2" style="border:1px solid #444;padding:5px 8px;background:#f0ebf3;font-weight:700">${t}</td></tr>`;
+
+  const hoje = new Date();
+  const cidUf = [r.cidade, r.estado].filter(Boolean).map(esc).join('/');
+  const linhaData = r.cidade
+    ? `${cidUf}, ${hoje.getDate()} de ${MESES_EXT[hoje.getMonth()]} de ${hoje.getFullYear()} .`
+    : '___________________________, ____ de __________ de ______ .';
+
+  const assinatura = (rot, extra = '') => `<div style="page-break-inside:avoid;margin-top:34px">
+    <div style="border-top:1px solid #000;width:70%;max-width:420px"></div>
+    <div style="margin-top:4px;font-weight:600">${rot}</div>${extra}</div>`;
+
+  const html = `
+  <div style="font-family:Georgia,'Times New Roman',serif;font-size:12.5px;line-height:1.5;color:#1a1a1a;max-width:720px;margin:0 auto">
+    <h1 style="text-align:center;font-size:17px;margin:0 0 18px;text-transform:uppercase">Contrato de Revenda em Consignação</h1>
+
+    <p style="margin:0 0 14px;text-align:justify">Resolvem a <strong>CONSIGNANTE</strong>, o(a) <strong>CONSIGNATÁRIO(A)</strong>, sendo certo que todos os efetivamente obrigados por esse Instrumento estão elencados no quadro abaixo e de comum acordo, celebraram o presente, que se regerá pelas cláusulas e condições a seguir elencadas:</p>
+
+    <table style="width:100%;border-collapse:collapse;margin:0 0 18px;font-size:12px">
+      ${cabQ('CONSIGNANTE')}
+      ${linhaQ('Nome', esc(CONSIGNANTE.nome))}
+      ${linhaQ('CNPJ/MF', esc(CONSIGNANTE.cnpj))}
+      ${linhaQ('Endereço', esc(CONSIGNANTE.endereco))}
+      ${linhaQ('Representante legal', esc(CONSIGNANTE.representante))}
+      ${linhaQ('E-mail', esc(CONSIGNANTE.email))}
+      ${linhaQ('Telefone', esc(CONSIGNANTE.telefone))}
+      ${cabQ('CONSIGNATÁRIO(A)')}
+      ${linhaQ('Nome', esc(r.nome))}
+      ${linhaQ('CPF/MF', fmtCpfDoc(d.cpf))}
+      ${linhaQ('RG', esc(d.rg))}
+      ${linhaQ('Endereço', enderecoRevLinha(r))}
+      ${linhaQ('E-mail', esc(r.email))}
+      ${linhaQ('Telefone', fmtTelDoc(r.telefone))}
+      ${cabQ('FIADOR')}
+      ${linhaQ('Nome', esc(d.fiador_nome))}
+      ${linhaQ('CPF/MF', fmtCpfDoc(d.fiador_cpf))}
+      ${linhaQ('RG', esc(d.fiador_rg))}
+      ${linhaQ('Endereço', esc(d.fiador_endereco))}
+      ${linhaQ('E-mail', esc(d.fiador_email))}
+      ${linhaQ('Telefone', fmtTelDoc(d.fiador_telefone))}
+    </table>
+
+    ${h('DAS CONSIDERAÇÕES INICIAIS')}
+    ${p('Este Instrumento será gerido pelas normas previstas nos artigos 534 a 537, do Código Civil, bem como no Princípio da Livre Iniciativa, consoante o artigo 170, da Constituição Federal.')}
+    ${p('Será dever das Partes adotar a política de cooperação, haja vista que a relação contratual necessita efetivamente do comprometimento mútuo para a excelência na execução das obrigações assumidas, sobretudo se escorando no Princípio da Boa-fé.')}
+    ${p('Todos os contratantes têm pleno conhecimento da autonomia para exercer as atividades por esse contrato assumidas, entretanto isso não exime nenhuma das Partes quanto a responsabilidade inerente dos compromissos.')}
+
+    ${h('DOS OBJETIVOS DO CONTRATO')}
+    ${cl('PRIMEIRA', 'O presente Instrumento tem por finalidade a entrega em consignação pela CONSIGNANTE, a(o) CONSIGNATÁRIO(A), de 1 (uma) maleta contendo diversas semijoias, para fins de exposição, comercialização e venda pelo(a) CONSIGNATÁRIO(A), respeitando todos os termos desse Instrumento.')}
+    ${cl('SEGUNDA', 'É obrigação do(a) CONSIGNATÁRIO(A), para a manutenção dos alvos desse Instrumento, respeitar os procedimentos de uso, manuseio e garantia, em conformidade com as orientações técnicas que afirma ter recebido da CONSIGNANTE.')}
+    ${cl('TERCEIRA', 'Compete o(a) CONSIGNATÁRIO(A) zelar por absolutamente todos os produtos disponibilizados pela CONSIGNANTE, além de adequada apresentação aos eventuais consumidores.')}
+    ${cl('QUARTA', 'A(o) CONSIGNATÁRIO(A) cabe comercializar os produtos estritamente no preço informado pela CONSIGNANTE, não sendo aceita qualquer alteração sem o prévio consentimento dela, sendo que nessa hipótese, deverá estar previamente acordado por escrito. Os preços dos produtos também estarão discriminados nas etiquetas fixadas neles.')}
+    ${cl('QUINTA', 'O(A) CONSIGNATÁRIO(A) poderá realizar a complementação, substituição ou até mesmo a troca de produtos da maleta, a cada 35 (trinta e cinco) dias, juntamente com o acerto financeiro que se dará nessa mesma data, ao passo que eventualmente todas as possibilidades respeitarão os critérios comerciais da CONSIGNANTE e possibilidade pelo estoque.')}
+    ${cl('SEXTA', 'Todos os produtos que serão entregues a(o) CONSIGNATÁRIO(A) estão relacionados em catálogo, com todas as características e preço, este que faz parte integrante do contrato.')}
+
+    ${h('DOS PRAZOS DO CONTRATO E CONDIÇÕES DE DEVOLUÇÃO')}
+    ${cl('SÉTIMA', 'O presente instrumento vigorará por prazo indeterminado, de modo que para o tempo mínimo do desfazimento é necessário que a parte interessada, respeite a Cláusula Trigésima.')}
+    ${cl('OITAVA', 'No exato dia em que ficar estipulada a rescisão contratual, o(a) CONSIGINATÁRIO(A) deverá devolver a maleta outrora lhe entregue pela CONSIGNANTE, com todos os produtos não vendidos e em perfeito estado de conservação, bem como quitar o valor dos produtos comercializados dentro daquele ciclo.')}
+    ${cl('NONA', 'Na hipótese de o(a) CONSIGNATÁRIO(A) entregar os produtos com avarias, serão equiparados como vendidos, quando ele(a) deverá efetuar o pagamento total desses produtos para a CONSIGNANTE, sendo que este fato não interferirá em qualquer outra penalidade prevista neste Instrumento.')}
+    ${cl('DÉCIMA', 'Tanto a entrega da maleta supracitada, bem como a devolução dela – obrigatoriamente – deverá ser realizada na sede da CONSIGNANTE, isto é: na Rua Tiradentes, n.º 446, sala 23, Vila Itapura, Campinas/SP.')}
+
+    ${h('DOS PAGAMENTOS E COMISSÕES')}
+    ${cl('DÉCIMA PRIMEIRA', 'As comissões devidas para o(a) CONSIGNATÁRIO(A), serão pagas de formas escalonadas, de acordo com o percentual de vendas atingidas no ciclo de 35 (trinta e cinco) dias, baseando-se na somatória dos preços dos produtos vendidos, preços esses estampados no catálogo.')}
+    ${cl('DÉCIMA SEGUNDA', 'Se todas as vendas realizadas pelo(a) CONSIGNATÁRIO(A) dentro do ciclo de 35 (trinta e cinco) dias, totalizar a quantia de até R$ 1.799,99 (mil setecentos e noventa e nove reais e noventa e nove centavos), a comissão será de 30% (trinta por cento) sobre o valor total das vendas. Outrossim, para as vendas dentro do ciclo que somarem juntas quantias superiores ao montante de R$ 1.800,00 (mil e oitocentos reais), a comissão sobre as vendas será de 35% (trinta e cinco por cento).')}
+    ${cl('DÉCIMA TERCEIRA', 'Eventualmente e por motivos justificáveis, a CONSIGNANTE poderá estender o prazo para quitação da comissão, por mais 5 (cinco) dias úteis, desde que avise com no mínimo 2 (dois) dias úteis de antecedência da data primária.')}
+    ${cl('DÉCIMA QUARTA', 'O pagamento do(a) CONSIGNATÁRIO(A) à CONSIGNANTE, em razão das vendas dos produtos consignados, deverá ser feito até o dia que se findará o ciclo de 35 (trinta e cinco) dias da retirada dos produtos, de forma improrrogável, sendo considerado inadimplente o valor não repassado até a data estipulada, independente de notificação e passível de multa contratual.')}
+    ${cl('DÉCIMA QUINTA', 'Em qualquer hipótese na qual o pagamento for realizado em dinheiro, necessária será a entrega do comprovante de quitação para a parte credora.')}
+
+    ${h('DAS OBRIGAÇÕES DA CONSIGNANTE')}
+    ${cl('DÉCIMA SEXTA', 'Compõe obrigação da CONSIGNANTE entregar todos os produtos para o(a) CONSIGNATÁRIO(A), livre de qualquer ônus e na data aprazada.')}
+    ${cl('DÉCIMA SÉTIMA', 'Cabe a CONSIGNANTE, informar o(a) CONSIGNATÁRIO(A) sobre qualquer medida judicial que possa comprometer os produtos consignados, atingindo a posse, circulação ou venda.')}
+    ${cl('DÉCIMA OITAVA', 'Até o instante em que os produtos consignados forem entregues para o(a) CONSIGNATÁRIO(A), qualquer vício ou defeito são de responsabilidade da CONSIGNANTE, os quais serão substituídos, exceto na falta de estoque para tanto.')}
+
+    ${h('DAS OBRIGAÇÕES DO(A) CONSIGNATÁRIO(A)')}
+    ${cl('DÉCIMA NONA', 'O(A) CONSIGNATÁRIO(A) enviará para a CONSIGNANTE até 1 (um) dia antes do final do ciclo de 35 (trinta e cinco) dias, relatório descrevendo os produtos que foram vendidos no período, com o fito de facilitar na exposição presencial dos produtos e pagamento da comissão.')}
+    ${cl('VIGÉSIMA', 'Caberá o(a) CONSIGNATÁRIO(A) a responsabilidade por todos os produtos para ele(a) confiados, seja em relação a venda ao consumidor final, depósito, guarda e integridade, devendo indenizar a CONSIGNANTE por qualquer extravio, furto, roubo, perca, vício ou defeito no produto enquanto eles estiveram sob a posse dele(a), baseando-se na soma do preço de revenda de cada produto.')}
+    ${cl('VIGÉSIMA PRIMEIRA', 'Na existência de fato que comprometa a integridade dos produtos consignados, cabe o(a) CONSIGNATÁRIO(A) informar imediatamente à CONSIGNANTE, para que medidas cabíveis sejam prontamente tomadas.')}
+    ${cl('VIGÉSIMA SEGUNDA', 'Não poderá o(a) CONSIGNATÁRIO(A) alterar, substituir ou retirar, qualquer objeto que compõe a apresentação do produto, tais como: etiquetas, códigos, embalagem, ou qualquer outro.')}
+    ${cl('VIGÉSIMA TERCEIRA', 'É dever do(a) CONSIGNATÁRIO(A), devolver os eventuais produtos não comercializados íntegros, sem sinais de uso ou má conservação, sob pena de desconsiderar a hipotética entrega para todos os fins.')}
+    ${cl('VIGÉSIMA QUARTA', 'O(A) CONSIGNATÁRIO(A) se compromete a responder de forma adequada e no prazo de até 1 (um) dia útil, qualquer comunicação emanada pela CONSIGNANTE, seja por meio eletrônico ou presencial, sendo encarado o descumprimento injustificado como violação contratual, permitindo que a CONSIGNANTE adote medidas administrativas e judiciais cabíveis.')}
+
+    ${h('DA APROPRIAÇÃO INDÉBITA')}
+    ${cl('VIGÉSIMA QUINTA', 'Compete o(a) CONSIGNATÁRIO(A), restituir para a CONSIGNANTE a maleta com todos os produtos não vendidos e nas mesmas condições que lhes foram entregues, dentro do ciclo de 35 (trinta e cinco) dias, respeitando também as condições impostas pela Cláusula Décima deste Instrumento.')}
+    ${cl('VIGÉSIMA SEXTA', 'O não cumprimento da Cláusula anterior, possibilita à CONSIGNANTE registrar boletim de ocorrência para averiguação do crime de apropriação indébita, o qual está previsto no artigo 168, § 1º, III, do Código Penal, sujeitando o(a) CONSIGNATÁRIO(A) as sanções penais de reclusão de 1 (um) a 4 (quatro) anos, mais 1/3 (um terço), além de multa na esfera criminal, não eximindo das penalidades cíveis.')}
+
+    ${h('DAS GARANTIAS')}
+    ${cl('VIGÉSIMA SÉTIMA', 'Em caso de as Partes estabelecerem a necessidade de um fiador, o qual estará qualificado no quadro da primeira página desse Instrumento, ele também assinará o presente pactuado na condição que se impõe e como principal pagador, solidariamente com o(a) CONSIGNATÁRIO(A), por todas as obrigações e responsabilidades constantes deste Instrumento com disposições nos artigos 818 e seguintes do Código Civil, declarando, expressamente, desistir da faculdade estabelecida nos artigos 835 e 838, renunciando ao benefício de ordem do artigo 827 do mesmo Código, perdurando sua responsabilidade até a rescisão deste Instrumento.')}
+    ${cl('VIGÉSIMA OITAVA', 'Em caso de ausência, interdição, recuperação judicial, falência, insolvência do fiador ou morte, as obrigações serão transferidas aos herdeiros ou sucessores e o(a) CONSIGNATÁRIO(A) se obriga, dentro do prazo de 30 (trinta) dias a dar substituto idôneo, a juízo da CONSIGNANTE, ficando ele(a) em mora se não fizer dentro do prazo de tolerância.')}
+
+    ${h('DA HIPÓTESE DE RESCISÃO CONTRATUAL')}
+    ${cl('VIGÉSIMA NONA', 'Caso alguma das Partes opte em rescindir este Instrumento, deverá notificar a parte contrária a qualquer tempo, respeitando o prazo mínimo de 10 (dez) dias para tanto e mediante o integral pagamento pelas vendas realizadas, sem qualquer multa ou penalização.')}
+    ${cl('TRIGÉSIMA', 'Se no período de 2 (dois) ciclos consecutivos de 35 (trinta e cinco) dias (cada), o(a) CONSIGNATÁRIO(A) não atingir vendas em cada um deles, de no mínimo R$ 1.000,00 (mil reais), o contrato será imediatamente rescindido, sem qualquer ônus para a CONSIGNANTE.')}
+
+    ${h('DO USO DA IMAGEM')}
+    ${cl('TRIGÉSIMA PRIMEIRA', 'O(A) CONSIGNATÁRIO(A) permitirá o uso da sua imagem e voz com a aceitação de ambas as Partes, nas atividades promocionais e de divulgação da CONSIGNANTE.')}
+    ${cl('TRIGÉSIMA SEGUNDA', 'A cessão da Cláusula anterior é a título gratuito, sem qualquer remuneração para as Partes ou indenização, no que tange ao uso autorizado.')}
+
+    ${h('DA CONFIDENCIALIDADE')}
+    ${cl('TRIGÉSIMA TERCEIRA', 'Cada Parte obriga-se a manter em sigilo, sem limite de tempo e lugar, de toda e qualquer informação confidencial recebida ou obtida da outra Parte, sobretudo as tratativas, cláusulas contratuais e a fazer uso delas com a única finalidade do cumprimento deste Instrumento e somente delas façam uso no âmbito do contrato ou mediante expressa autorização da Parte contrária, responsabilizando-se por qualquer violação desta cláusula.')}
+
+    ${h('DAS DISPOSIÇÕES GERAIS')}
+    ${cl('TRIGÉSIMA QUARTA', 'Esse instrumento é fruto de um ajuste mútuo entre as Partes, substituindo qualquer processo, arranjos, comunicações, por escrito ou verbais, de alguma das partes.')}
+    ${cl('TRIGÉSIMA QUINTA', 'Na hipótese de tolerância a um descumprimento desse Instrumento será tido como mera tolerância, não constituindo novação e não integralizará aos termos.')}
+    ${cl('TRIGÉSIMA SEXTA', 'Esse Instrumento é de cunho exclusivamente civil e comercial, não gerando entre as Partes vínculo de natureza empregatícia, societária, associativa, de representante comercial, de agência, parceria, muito menos liame de subordinação e não gera direito de exclusividade, ficando cada qual responsável por eventuais direitos decorrentes da legislação trabalhista, previdenciária e todos outros encargos aplicáveis aos empregados, caso assim os tenham.')}
+    ${cl('TRIGÉSIMA SÉTIMA', 'Na hipótese do(a) CONSIGNATÁRIO(A) descumprir a Cláusula Vigésima Quinta deste Instrumento, o contrato será rescindido e ele(a) deverá arcar com multa contratual no importe de R$ 9.000,00 (nove mil reais).')}
+    ${cl('TRIGÉSIMA OITAVA', 'Se para cobrança do que lhe for devido, tiver a CONSIGNANTE que recorrer aos meios judiciais e extrajudiciais, o(a) CONSIGNATÁRIO(A) será responsável pelas despesas a que der causa, inclusive sobre a verba honorária que desde já se fixa em 20% (vinte por cento) sobre o valor total do débito.')}
+    ${cl('TRIGÉSIMA NONA', 'As Partes se obrigam, por si, herdeiros e sucessores, a qualquer título, a respeitarem o presente pacto em todos os seus termos, cláusulas e condições.')}
+    ${cl('QUADRAGÉSIMA', 'As Partes elegem o foro da comarca de Campinas, Estado de São Paulo, com renúncia de qualquer outro, por mais privilegiado que seja, para dirimirem qualquer dúvida ou litígio oriundos do presente Instrumento.')}
+
+    <p style="margin:18px 0 9px;text-align:justify">Por estarem assim justos e contratados, firmam o presente instrumento em uma via para cada Parte e outra, se for o caso, para o fiador, todas em igual teor e assinadas por 2 (duas) testemunhas para que assim produza seus devidos e legais efeitos.</p>
+
+    <p style="margin:24px 0 8px">${linhaData}</p>
+
+    ${assinatura('CONSIGNANTE')}
+    ${assinatura('CONSIGNATÁRIO(A)')}
+    ${assinatura('FIADOR(A)')}
+    ${assinatura('TESTEMUNHA 1.:', '<div style="margin-top:2px">CPF/MF:</div>')}
+    ${assinatura('TESTEMUNHA 2.:', '<div style="margin-top:2px">CPF/MF:</div>')}
+  </div>`;
+
+  document.getElementById('print-content').innerHTML = html;
+  document.getElementById('print-overlay').classList.add('show');
+  setTimeout(() => window.print(), 300);
 }
