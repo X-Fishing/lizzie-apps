@@ -338,7 +338,7 @@ export async function salvarRevendedora(id) {
     const { error } = await sbQ(sb.from('profiles').update(profilePayload).eq('id', id));
     if (error) { desfazerBtn(); if (await handleSupabaseError(error, 'Erro ao salvar')) return; toast('Erro ao salvar'); return; }
   } else {
-    const { data, error } = await sbQ(sb.from('profiles').insert({ role: 'revendedora', aprovada: true, ...profilePayload }).select('id').single());
+    const { data, error } = await sbQ(sb.from('profiles').insert({ role: 'revendedora', is_revendedora: true, aprovada: true, ...profilePayload }).select('id').single());
     if (error || !data) { desfazerBtn(); if (await handleSupabaseError(error, 'Erro ao criar')) return; toast('Erro ao criar'); return; }
     profileId = data.id;
   }
