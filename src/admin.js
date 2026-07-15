@@ -3,7 +3,7 @@
 // nascimento/fiador) vivem em revendedora_docs (RLS só gestor — LGPD).
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, sbQ, toast, handleSupabaseError,
+import { esc, sbQ, toast, handleSupabaseError, confirmarAcao,
          maskCpf, maskCep, cpfValido, buscarCep, maskDateBR, isoToBR, brToISO, hojeBR } from './utils.js';
 import { ROLE_LABELS, maskTelBR } from './auth.js';
 import { carregarProximasTrocas, compararPorTroca, atualizarBadgesTroca } from './trocas.js';
@@ -141,9 +141,18 @@ export async function abrirFormRev(id) {
       ${grpTxt('rev-fnome', 'Nome do fiador', doc.fiador_nome)}
       ${grpTxt('rev-fcpf', 'CPF do fiador', doc.fiador_cpf, 'inputmode="numeric" placeholder="000.000.000-00" oninput="maskCpf(this)"')}
       ${grpTxt('rev-frg', 'RG do fiador', doc.fiador_rg)}
-      ${grpTxt('rev-fend', 'Endereço do fiador', doc.fiador_endereco)}
       ${grpTxt('rev-femail', 'E-mail do fiador', doc.fiador_email)}
       ${grpTxt('rev-ftel', 'Telefone do fiador', doc.fiador_telefone, 'inputmode="numeric" oninput="maskTelBR(this)"')}
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin:12px 0 6px">Endereço do fiador</div>
+    <div class="form-grid">
+      ${grpTxt('rev-fcep', 'CEP', doc.fiador_cep, 'inputmode="numeric" placeholder="00000-000" oninput="maskCep(this)" onblur="fiadorCepBlur()"')}
+      ${grpTxt('rev-flog', 'Logradouro', doc.fiador_logradouro)}
+      ${grpTxt('rev-fnum', 'Número', doc.fiador_numero)}
+      ${grpTxt('rev-fcomp', 'Complemento', doc.fiador_complemento)}
+      ${grpTxt('rev-fbairro', 'Bairro', doc.fiador_bairro)}
+      ${grpTxt('rev-fcid', 'Cidade', doc.fiador_cidade)}
+      ${grpTxt('rev-fest', 'Estado (UF)', doc.fiador_estado)}
     </div></details>` : '';
 
   panelAdmin().innerHTML = `
@@ -235,6 +244,17 @@ export async function revCepBlur() {
   setSe('rev-estado', info.estado);
 }
 
+// ViaCEP para o endereço do fiador (mesmo comportamento).
+export async function fiadorCepBlur() {
+  const info = await buscarCep(document.getElementById('rev-fcep')?.value);
+  if (!info) return;
+  const setSe = (id, val) => { const el = document.getElementById(id); if (el && !el.value.trim() && val) el.value = val; };
+  setSe('rev-flog', info.logradouro);
+  setSe('rev-fbairro', info.bairro);
+  setSe('rev-fcid', info.cidade);
+  setSe('rev-fest', info.estado);
+}
+
 export async function salvarRevendedora(id) {
   const val = elId => (document.getElementById(elId)?.value || '').trim();
   const nome = val('rev-nome');
@@ -272,14 +292,34 @@ export async function salvarRevendedora(id) {
   if (gestor) {
     const cpf = val('rev-cpf');
     if (cpf && !cpfValido(cpf)) toast('Atenção: o CPF digitado parece inválido — salvo mesmo assim.');
-    const docPayload = {
+    // Endereço do fiador: monta a linha (retrocompat com fiador_endereco).
+    const fpartes = [];
+    if (val('rev-flog')) fpartes.push(val('rev-flog') + (val('rev-fnum') ? `, n.º ${val('rev-fnum')}` : ''));
+    if (val('rev-fcomp')) fpartes.push(val('rev-fcomp'));
+    if (val('rev-fbairro')) fpartes.push(val('rev-fbairro'));
+    const fcidUf = [val('rev-fcid'), val('rev-fest')].filter(Boolean).join('/');
+    if (fcidUf) fpartes.push(fcidUf);
+    let fEndLinha = fpartes.join(', ');
+    if (val('rev-fcep')) fEndLinha += (fEndLinha ? ' – ' : '') + 'CEP ' + val('rev-fcep');
+
+    const docBase = {
       profile_id: profileId,
       cpf: nb(cpf), rg: nb(val('rev-rg')), data_nascimento: brToISO(val('rev-nasc')),
       fiador_nome: nb(val('rev-fnome')), fiador_cpf: nb(val('rev-fcpf')), fiador_rg: nb(val('rev-frg')),
-      fiador_endereco: nb(val('rev-fend')), fiador_email: nb(val('rev-femail')), fiador_telefone: nb(val('rev-ftel')),
+      fiador_endereco: nb(fEndLinha), fiador_email: nb(val('rev-femail')), fiador_telefone: nb(val('rev-ftel')),
       updated_at: new Date().toISOString(),
     };
-    const { error: dErr } = await sbQ(sb.from('revendedora_docs').upsert(docPayload, { onConflict: 'profile_id' }));
+    const docEstruturado = {
+      fiador_cep: nb(val('rev-fcep')), fiador_logradouro: nb(val('rev-flog')), fiador_numero: nb(val('rev-fnum')),
+      fiador_complemento: nb(val('rev-fcomp')), fiador_bairro: nb(val('rev-fbairro')),
+      fiador_cidade: nb(val('rev-fcid')), fiador_estado: nb(val('rev-fest')),
+    };
+    let { error: dErr } = await sbQ(sb.from('revendedora_docs').upsert({ ...docBase, ...docEstruturado }, { onConflict: 'profile_id' }));
+    // Migração 0017 não rodada: grava sem as colunas estruturadas do fiador.
+    if (dErr && /fiador_(cep|logradouro|numero|complemento|bairro|cidade|estado)/i.test(dErr.message || '') && /column|schema cache/i.test(dErr.message || '')) {
+      console.warn('Colunas estruturadas do fiador ausentes (rode a migração 0017):', dErr.message);
+      ({ error: dErr } = await sbQ(sb.from('revendedora_docs').upsert(docBase, { onConflict: 'profile_id' })));
+    }
     if (dErr) {
       console.error('revendedora_docs:', dErr);
       if (/revendedora_docs/i.test(dErr.message || '') && /relation|does not exist|schema cache/i.test(dErr.message || '')) {
@@ -289,7 +329,44 @@ export async function salvarRevendedora(id) {
   }
 
   toast('Revendedora salva!');
-  loadAdmin();
+  // Fica na tela de cadastro (não volta pra lista) e abre o pop-up de status.
+  const rSalvo = { ...profilePayload, id: profileId };
+  const docSalvo = gestor ? { cpf: nb(val('rev-cpf')), rg: nb(val('rev-rg')) } : {};
+  await abrirFormRev(profileId);
+  if (gestor) popupContratoStatus(profileId, rSalvo, docSalvo);
+}
+
+// Campos que o contrato usa; separa essenciais (bloqueiam) de recomendados.
+function faltantesContrato(r, doc) {
+  const d = doc || {};
+  const ess = [], rec = [];
+  if (!d.cpf) ess.push('CPF');
+  if (!r.logradouro) ess.push('Logradouro');
+  if (!r.cidade) ess.push('Cidade');
+  if (!r.estado) ess.push('Estado (UF)');
+  if (!r.numero) rec.push('Número');
+  if (!r.bairro) rec.push('Bairro');
+  if (!r.cep) rec.push('CEP');
+  if (!d.rg) rec.push('RG');
+  if (!r.email) rec.push('E-mail');
+  if (!r.telefone) rec.push('Telefone');
+  return { ess, rec };
+}
+
+// Pop-up após salvar: oferece gerar o contrato, ou avisa o que falta.
+function popupContratoStatus(id, r, doc) {
+  const { ess, rec } = faltantesContrato(r, doc);
+  if (cadastroCompletoParaContrato(r, doc)) {
+    let msg = 'Os dados essenciais do contrato estão preenchidos.';
+    if (rec.length) msg += '\n\nFicam em branco no contrato (opcional): ' + rec.join(', ') + '.';
+    msg += '\n\nDeseja gerar o contrato agora?';
+    confirmarAcao('Revendedora salva', msg, 'Gerar contrato', () => gerarContrato(id));
+  } else {
+    let msg = 'Para gerar o contrato ainda faltam:\n\n' + ess.map(f => '•  ' + f).join('\n');
+    if (rec.length) msg += '\n\nRecomendado também: ' + rec.join(', ') + '.';
+    msg += '\n\nComplete os campos e salve novamente.';
+    confirmarAcao('Revendedora salva', msg, 'Continuar editando', () => {});
+  }
 }
 
 // ── Gestão (aprovar/revogar/papel/teste/excluir) ────────────────────
@@ -419,6 +496,19 @@ function enderecoRevLinha(r) {
   if (r.cep) linha += (linha ? ' – ' : '') + 'CEP ' + esc(r.cep);
   return linha;
 }
+// Endereço do fiador: monta das colunas estruturadas; cai no legado
+// (fiador_endereco) se as estruturadas estiverem vazias.
+function enderecoFiadorLinha(d) {
+  const partes = [];
+  if (d.fiador_logradouro) partes.push(esc(d.fiador_logradouro) + (d.fiador_numero ? `, n.º ${esc(d.fiador_numero)}` : ''));
+  if (d.fiador_complemento) partes.push(esc(d.fiador_complemento));
+  if (d.fiador_bairro) partes.push(esc(d.fiador_bairro));
+  const cidUf = [d.fiador_cidade, d.fiador_estado].filter(Boolean).map(esc).join('/');
+  if (cidUf) partes.push(cidUf);
+  let linha = partes.join(', ');
+  if (d.fiador_cep) linha += (linha ? ' – ' : '') + 'CEP ' + esc(d.fiador_cep);
+  return linha || esc(d.fiador_endereco || '');
+}
 
 export function renderBotaoContrato(id, r, doc) {
   const ok = cadastroCompletoParaContrato(r, doc);
@@ -482,7 +572,7 @@ export async function gerarContrato(revId) {
       ${linhaQ('Nome', esc(d.fiador_nome))}
       ${linhaQ('CPF/MF', fmtCpfDoc(d.fiador_cpf))}
       ${linhaQ('RG', esc(d.fiador_rg))}
-      ${linhaQ('Endereço', esc(d.fiador_endereco))}
+      ${linhaQ('Endereço', enderecoFiadorLinha(d))}
       ${linhaQ('E-mail', esc(d.fiador_email))}
       ${linhaQ('Telefone', fmtTelDoc(d.fiador_telefone))}
     </table>
