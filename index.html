@@ -544,6 +544,21 @@
   <div id="print-content"></div>
 </div>
 
+<!-- MODAL CONFERÊNCIA DO CONTRATO (checklist ao sair da tela do contrato) -->
+<div class="modal-overlay" id="modal-conf-contrato" data-lock-outside style="z-index:10001">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Conferência do contrato</div>
+    <p id="cc-subtitulo" style="font-size:13px;color:var(--muted);margin:-6px 0 14px"></p>
+    <div id="cc-itens"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:18px">
+      <button class="btn-primary" id="cc-btn-ok" onclick="contratoResolver('concluida')" disabled style="opacity:.55">Confirmar e sair</button>
+      <button class="btn-secondary" onclick="contratoResolver('pendente')">Ainda não concluí</button>
+      <button class="btn-secondary" onclick="contratoResolver('cancelar')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL FECHAMENTO DO CICLO -->
 <div class="modal-overlay" id="modal-fechamento">
   <div class="modal">

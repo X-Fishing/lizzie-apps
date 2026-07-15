@@ -3,7 +3,7 @@
 // nascimento/fiador) vivem em revendedora_docs (RLS só gestor — LGPD).
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, sbQ, toast, handleSupabaseError, confirmarAcao,
+import { esc, sbQ, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, formatDate,
          maskCpf, maskCep, cpfValido, buscarCep, maskDateBR, isoToBR, brToISO, hojeBR } from './utils.js';
 import { ROLE_LABELS, maskTelBR } from './auth.js';
 import { carregarProximasTrocas, compararPorTroca, atualizarBadgesTroca } from './trocas.js';
@@ -207,7 +207,46 @@ export async function abrirFormRev(id) {
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> ${id ? 'Salvar alterações' : 'Salvar revendedora'}</button>
     ${id && gestor ? renderBotaoContrato(id, r, doc) : ''}
 
-    ${id && gestor ? renderGestao(r) : ''}`;
+    ${id && gestor ? renderGestao(r) : ''}
+    ${id && gestor ? `${secH('Contratos')}<div id="rev-contratos"><div style="font-size:12px;color:var(--muted)">Carregando...</div></div>` : ''}`;
+
+  if (id && gestor) carregarContratosEmissoes(id);
+}
+
+// Histórico de emissões do contrato (checklist de conferência ao sair).
+async function carregarContratosEmissoes(revId) {
+  const el = document.getElementById('rev-contratos');
+  if (!el) return;
+  const { data, error } = await sbQ(sb.from('contratos_emissoes')
+    .select('*').eq('revendedora_id', revId).order('emitido_em', { ascending: false }));
+  if (error) {
+    el.innerHTML = `<div style="font-size:12px;color:var(--muted)">Não foi possível carregar${/contratos_emissoes|relation|schema cache/i.test(error.message || '') ? ' — rode a migração 0018.' : '.'}</div>`;
+    return;
+  }
+  if (!data?.length) {
+    el.innerHTML = '<div style="font-size:12.5px;color:var(--muted)">Nenhum contrato gerado ainda.</div>';
+    return;
+  }
+  el.innerHTML = data.map(e => {
+    const concl = e.status === 'concluida';
+    const badge = concl
+      ? '<span class="badge badge-ativo" style="font-size:10px">Concluída</span>'
+      : '<span class="badge-soon" style="background:var(--warning);color:#fff">Pendente</span>';
+    let faltou = '';
+    if (!concl) {
+      const itens = [];
+      if (!e.rubricado) itens.push('rubricas');
+      if (!e.assinado_revendedora) itens.push('assinatura da revendedora');
+      if (e.tem_fiador && !e.assinado_fiador) itens.push('assinatura do fiador');
+      if (!e.vias_impressas) itens.push('impressão das vias');
+      if (itens.length) faltou = `<div style="font-size:11px;color:var(--warning);margin-top:2px">Faltou: ${itens.join(', ')}.</div>`;
+    }
+    return `<div style="border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">
+        <span style="font-size:13px;color:var(--plum)">${formatDate((e.emitido_em || '').slice(0,10))} · ${e.vias_esperadas} vias${e.tem_fiador ? ' · com fiador' : ''}</span>
+        ${badge}
+      </div>${faltou}</div>`;
+  }).join('');
 }
 
 // Bloco de gestão dentro do form (mesmas permissões de sempre).
@@ -528,6 +567,18 @@ export async function gerarContrato(revId) {
   const faltam = faltantesContrato(r, d);
   if (faltam.length) { toast('Não é possível gerar o contrato — faltam: ' + faltam.join(', ')); return; }
 
+  // Nº de vias sai do fecho: sem fiador = 2 (Consignante+Consignatária),
+  // com fiador = 3. A conferência ao sair usa isso.
+  const temFiador = !!(d.fiador_nome && d.fiador_nome.trim());
+  const viasEsperadas = temFiador ? 3 : 2;
+
+  // Aviso se a última emissão desta revendedora ficou pendente (ou não existe).
+  const { data: ult } = await sbQ(sb.from('contratos_emissoes')
+    .select('status').eq('revendedora_id', revId).order('emitido_em', { ascending: false }).limit(1));
+  const avisoPendente = (!ult?.length || ult[0].status === 'pendente')
+    ? '<div style="background:rgba(232,168,56,0.15);border:1px solid rgba(232,168,56,0.4);color:#8a6d1f;border-radius:8px;padding:8px 12px;margin:0 auto 14px;max-width:720px;font-size:12px;text-align:center">A conferência deste contrato ainda não foi concluída.</div>'
+    : '';
+
   // Negrito automático nos termos-chave (mantém o texto abaixo literal/limpo).
   const realca = t => t
     .replace(/CONSIGNATÁRIO\(A\)/g, '<strong>CONSIGNATÁRIO(A)</strong>')
@@ -658,7 +709,117 @@ export async function gerarContrato(revId) {
     </div>
   </div>`;
 
-  document.getElementById('print-content').innerHTML = html;
+  document.getElementById('print-content').innerHTML = avisoPendente + html;
   document.getElementById('print-overlay').classList.add('show');
+  contratoAtivar(revId, r, temFiador, viasEsperadas);
   setTimeout(() => window.print(), 300);
+}
+
+// ════════════════════════════════════════════════════════════════════
+// CONFERÊNCIA AO SAIR DO CONTRATO — checklist obrigatório na saída pela
+// tela; grava uma emissão (concluida/pendente) por saída. Botão "Voltar"
+// e F5 interceptados (limite do navegador: F5 só mostra aviso nativo).
+// ════════════════════════════════════════════════════════════════════
+let contratoCtx = null;   // { revId, temFiador, viasEsperadas } enquanto aberto
+let contratoResolvePromise = null;
+
+function contratoAtivar(revId, r, temFiador, viasEsperadas) {
+  contratoCtx = { revId, nome: r.nome, temFiador, viasEsperadas };
+  // O botão "Fechar" do overlay passa a pedir a conferência.
+  const btn = document.querySelector('#print-overlay .print-close button');
+  if (btn) btn.setAttribute('onclick', 'contratoTentarSair()');
+  // Segura o "voltar" do navegador enquanto o contrato estiver aberto.
+  history.pushState({ contrato: true }, '', location.hash);
+  window.addEventListener('popstate', onPopContrato);
+  window.addEventListener('beforeunload', onBeforeUnloadContrato);
+}
+
+// Restaura tudo e fecha o overlay (uma vez só). Consome a entrada extra do
+// histórico com um history.back() e atualiza o detalhe (mostra a emissão).
+function contratoFecharLimpo() {
+  if (!contratoCtx) return;
+  const revId = contratoCtx.revId;
+  contratoCtx = null;
+  window.removeEventListener('popstate', onPopContrato);
+  window.removeEventListener('beforeunload', onBeforeUnloadContrato);
+  const btn = document.querySelector('#print-overlay .print-close button');
+  if (btn) btn.setAttribute('onclick', 'fecharPrint()');
+  document.getElementById('print-overlay').classList.remove('show');
+  history.back();            // consome o pushState de contratoAtivar
+  abrirFormRev(revId);       // recarrega o detalhe (seção Contratos atualizada)
+}
+
+function onBeforeUnloadContrato(e) { e.preventDefault(); e.returnValue = ''; }
+
+function onPopContrato() {
+  // Re-empurra p/ segurar o usuário enquanto o modal decide.
+  history.pushState({ contrato: true }, '', location.hash);
+  pedirConferencia().then(r => { if (r !== 'cancelar') contratoFecharLimpo(); });
+}
+
+// Chamado pelo botão "Fechar" do overlay (via onclick injetado).
+export function contratoTentarSair() {
+  pedirConferencia().then(r => { if (r !== 'cancelar') contratoFecharLimpo(); });
+}
+
+// Abre o checklist e resolve com 'concluida' | 'pendente' | 'cancelar'.
+function pedirConferencia() {
+  return new Promise(resolve => {
+    contratoResolvePromise = resolve;
+    const c = contratoCtx;
+    document.getElementById('cc-subtitulo').textContent =
+      `${c.nome || 'Revendedora'} — antes de sair, confirme o que já foi feito.`;
+    const item = (id, label) => `<label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:6px 0">
+      <input type="checkbox" id="${id}" style="width:auto" onchange="contratoAtualizarBtn()"> ${label}</label>`;
+    document.getElementById('cc-itens').innerHTML =
+      item('cc-rubricado', 'Todas as páginas foram rubricadas') +
+      item('cc-assinado-rev', 'Contrato assinado pela revendedora') +
+      (c.temFiador ? item('cc-assinado-fiador', 'Contrato assinado pelo fiador') : '') +
+      item('cc-vias', `${c.viasEsperadas} vias impressas`);
+    contratoAtualizarBtn();
+    openModal('modal-conf-contrato');
+  });
+}
+
+// "Confirmar e sair" só habilita com todos os itens marcados.
+export function contratoAtualizarBtn() {
+  const ids = ['cc-rubricado', 'cc-assinado-rev', 'cc-vias'];
+  if (contratoCtx?.temFiador) ids.push('cc-assinado-fiador');
+  const todos = ids.every(id => document.getElementById(id)?.checked);
+  const btn = document.getElementById('cc-btn-ok');
+  if (btn) { btn.disabled = !todos; btn.style.opacity = todos ? '1' : '.55'; }
+}
+
+// Botões do modal (concluida / pendente / cancelar).
+export async function contratoResolver(status) {
+  const resolve = contratoResolvePromise;
+  if (status === 'cancelar') {
+    closeModal('modal-conf-contrato');
+    contratoResolvePromise = null;
+    if (resolve) resolve('cancelar');
+    return;
+  }
+  const chk = id => !!document.getElementById(id)?.checked;
+  const c = contratoCtx;
+  const { error } = await sbQ(sb.from('contratos_emissoes').insert({
+    revendedora_id: c.revId,
+    emitido_por: state.currentUser.id,
+    status,
+    tem_fiador: c.temFiador,
+    vias_esperadas: c.viasEsperadas,
+    rubricado: chk('cc-rubricado'),
+    assinado_revendedora: chk('cc-assinado-rev'),
+    assinado_fiador: c.temFiador ? chk('cc-assinado-fiador') : false,
+    vias_impressas: chk('cc-vias'),
+  }));
+  if (error) {
+    console.error('contratos_emissoes:', error);
+    const dica = /contratos_emissoes|relation|schema cache/i.test(error.message || '') ? ' Rode a migração 0018.' : '';
+    toast(`Erro ao registrar a conferência: ${error.message}.${dica}`);
+    return; // mantém o modal aberto para tentar de novo (não perde o estado)
+  }
+  closeModal('modal-conf-contrato');
+  contratoResolvePromise = null;
+  toast(status === 'concluida' ? 'Conferência concluída e registrada.' : 'Registrado como pendente.');
+  if (resolve) resolve(status);
 }
