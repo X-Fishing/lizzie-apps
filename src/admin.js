@@ -540,9 +540,9 @@ export async function gerarContrato(revId) {
   const cabQ = t => `<tr><td colspan="2" style="border:1px solid #444;padding:5px 8px;background:#f0ebf3;font-weight:700">${t}</td></tr>`;
 
   const hoje = new Date();
-  const cidUf = [r.cidade, r.estado].filter(Boolean).map(esc).join('/');
+  // Local/data: só a CIDADE (o contrato não leva o estado aqui).
   const linhaData = r.cidade
-    ? `${cidUf}, ${hoje.getDate()} de ${MESES_EXT[hoje.getMonth()]} de ${hoje.getFullYear()} .`
+    ? `${esc(r.cidade)}, ${hoje.getDate()} de ${MESES_EXT[hoje.getMonth()]} de ${hoje.getFullYear()} .`
     : '___________________________, ____ de __________ de ______ .';
 
   const assinatura = (rot, extra = '') => `<div style="page-break-inside:avoid;margin-top:34px">
@@ -648,13 +648,14 @@ export async function gerarContrato(revId) {
 
     <p style="margin:18px 0 9px;text-align:justify">Por estarem assim justos e contratados, firmam o presente instrumento em uma via para cada Parte e outra, se for o caso, para o fiador, todas em igual teor e assinadas por 2 (duas) testemunhas para que assim produza seus devidos e legais efeitos.</p>
 
-    <p style="margin:24px 0 8px">${linhaData}</p>
-
-    ${assinatura('CONSIGNANTE')}
-    ${assinatura('CONSIGNATÁRIO(A)')}
-    ${assinatura('FIADOR(A)')}
-    ${assinatura('TESTEMUNHA 1.:', '<div style="margin-top:2px">CPF/MF:</div>')}
-    ${assinatura('TESTEMUNHA 2.:', '<div style="margin-top:2px">CPF/MF:</div>')}
+    <div style="page-break-inside:avoid">
+      <p style="margin:24px 0 8px">${linhaData}</p>
+      ${assinatura('CONSIGNANTE')}
+      ${assinatura('CONSIGNATÁRIO(A)')}
+      ${assinatura('FIADOR(A)')}
+      ${assinatura('TESTEMUNHA 1.:', '<div style="margin-top:2px">CPF/MF:</div>')}
+      ${assinatura('TESTEMUNHA 2.:', '<div style="margin-top:2px">CPF/MF:</div>')}
+    </div>
   </div>`;
 
   document.getElementById('print-content').innerHTML = html;
