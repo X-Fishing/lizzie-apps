@@ -204,7 +204,7 @@ export async function verItensBling(pedidoId, numero, btn) {
   btn.textContent = '⟳'; btn.disabled = true;
 
   if (!state.blingRevs.length) {
-    const { data, error } = await sb.from('profiles').select('id,nome').eq('role','revendedora').eq('aprovada',true).order('nome');
+    const { data, error } = await sb.from('profiles').select('id,nome').eq('is_revendedora', true).eq('aprovada',true).order('nome');
     if (error) { console.error('Erro ao buscar revendedoras:', error); }
     state.blingRevs = data || [];
   }

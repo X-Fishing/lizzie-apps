@@ -13,7 +13,7 @@ export async function loadConsignados() {
   };
   const queries = [fetchPaginado(makeQ)];
   if (isAdmin) {
-    queries.push(sbQ(sb.from('profiles').select('*').eq('role','revendedora')));
+    queries.push(sbQ(sb.from('profiles').select('*').eq('is_revendedora', true)));
   } else {
     // revendedora: descobre a maleta ATIVA (o catálogo só mostra peças dela)
     queries.push(sbQ(sb.from('maletas').select('id').eq('revendedora_id', state.currentUser.id).eq('status', 'ativa').maybeSingle()));
@@ -1406,7 +1406,7 @@ export async function confirmarVendaCarrinho(btn) {
 }
 
 export async function openNovoConsignado() {
-  const { data: revs } = await sb.from('profiles').select('id,nome').eq('role','revendedora').eq('aprovada',true);
+  const { data: revs } = await sb.from('profiles').select('id,nome').eq('is_revendedora', true).eq('aprovada',true);
   const sel = document.getElementById('c-rev');
   sel.innerHTML = revs.map(r => `<option value="${r.id}">${esc(r.nome)}</option>`).join('');
   ['c-desc','c-ref','c-custo','c-venda'].forEach(id => document.getElementById(id).value = '');

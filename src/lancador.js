@@ -31,7 +31,7 @@ function beep(ok = true) {
 
 export async function loadLancador() {
   panel().innerHTML = '<div class="loading"><div class="spinner"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div><br>Carregando...</div>';
-  const { data, error } = await sbQ(sb.from('profiles').select('id,nome').eq('role', 'revendedora').eq('aprovada', true).order('nome'));
+  const { data, error } = await sbQ(sb.from('profiles').select('id,nome').eq('is_revendedora', true).eq('aprovada', true).order('nome'));
   if (error) { if (await handleSupabaseError(error, 'Erro ao carregar revendedoras')) return; }
   revsAprovadas = data || [];
   carrinho = [];

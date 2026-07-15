@@ -174,7 +174,7 @@ export async function loadDashboardStaff() {
   const [vRes, gRes, pRes] = await Promise.all([
     fetchPaginado(() => sb.from('vendas').select('valor_total,valor_pago,status,data_venda,revendedora_id')),
     sbQ(sb.from('garantias').select('status,prazo_maximo')),
-    sbQ(sb.from('profiles').select('*').eq('role', 'revendedora'))
+    sbQ(sb.from('profiles').select('*').eq('is_revendedora', true))
   ]);
   // Métricas de faturamento IGNORAM revendedoras TESTE (profiles.teste).
   const todasRevs = pRes.data || [];

@@ -19,7 +19,7 @@ export async function loadGarantias() {
     if (!isAdmin) q = q.eq('revendedora_id', state.currentUser.id);
     return q.order('created_at', { ascending: false });
   })];
-  if (isAdmin) queries.push(sbQ(sb.from('profiles').select('id,nome').eq('role', 'revendedora')));
+  if (isAdmin) queries.push(sbQ(sb.from('profiles').select('id,nome').eq('is_revendedora', true)));
   const results = await Promise.all(queries);
   const { data, error } = results[0];
   if (error) {

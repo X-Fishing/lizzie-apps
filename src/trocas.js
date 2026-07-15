@@ -258,7 +258,7 @@ export async function loadTrocasDashboard() {
   filtros.innerHTML = '';
 
   if (!state.aprovadasCache.length) {
-    const { data } = await sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',true).order('nome');
+    const { data } = await sb.from('profiles').select('*').eq('is_revendedora', true).eq('aprovada',true).order('nome');
     state.aprovadasCache = data || [];
   }
   const ok = await carregarProximasTrocas();

@@ -51,10 +51,11 @@ export async function loadAdmin() {
     <div id="pendentes-list"></div>
     <div id="rev-list"><div class="loading"><div class="spinner">⟳</div><br>Carregando...</div></div>`;
 
-  const [{ data: pendentes, error: e1 }, { data: aprovadas, error: e2 }, { data: funcs }, { data: docs }] = await Promise.all([
-    sbQ(sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',false).order('created_at')),
-    sbQ(sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',true).order('nome')),
-    sbQ(sb.from('funcionarios').select('auth_user_id')),
+  // A lista agora é por is_revendedora (não por role): funcionária-revendedora
+  // aparece aqui automaticamente. Staff puro tem is_revendedora=false e some.
+  const [{ data: pendentes, error: e1 }, { data: aprovadas, error: e2 }, { data: docs }] = await Promise.all([
+    sbQ(sb.from('profiles').select('*').eq('is_revendedora', true).eq('aprovada',false).order('created_at')),
+    sbQ(sb.from('profiles').select('*').eq('is_revendedora', true).eq('aprovada',true).order('nome')),
     // Só gestor/admin recebem (RLS). func_basico → erro/vazio → sem selo, sem quebrar.
     sbQ(sb.from('revendedora_docs').select('profile_id,cpf,data_nascimento')),
   ]);
@@ -64,9 +65,8 @@ export async function loadAdmin() {
     return;
   }
 
-  const funcIds = new Set((funcs || []).map(f => f.auth_user_id).filter(Boolean));
   const docMap = new Map((docs || []).map(d => [String(d.profile_id), d]));
-  const prep = lista => (lista || []).filter(r => !funcIds.has(r.id)).map(r => ({ ...r, _doc: docMap.get(String(r.id)) || null }));
+  const prep = lista => (lista || []).map(r => ({ ...r, _doc: docMap.get(String(r.id)) || null }));
   const pendentesRev = prep(pendentes);
 
   const pendDiv = document.getElementById('pendentes-list');
@@ -109,11 +109,14 @@ export function renderRevCard(r, pendente) {
   const trocaSlot = pendente ? '' : `<div data-troca-bling-id="${r.bling_contato_id || ''}" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><span style="font-size:11px;color:var(--muted)">Carregando próxima troca...</span></div>`;
   const seloIncompleto = revIncompleta(r)
     ? '<span class="badge-soon" style="background:var(--warning);color:#fff;margin-left:6px" title="Falta CPF, nascimento ou endereço">Cadastro incompleto</span>' : '';
+  // Badge "Funcionária" quando também tem acesso de funcionária (role != revendedora).
+  const seloFunc = r.role && r.role !== 'revendedora'
+    ? '<span class="badge-soon" style="background:var(--plum);color:#fff;margin-left:6px" title="Também é funcionária">Funcionária</span>' : '';
   return `<div class="card rev-card" onclick="abrirRevendedora('${r.id}')">
     <div class="rev-header">
       <div class="rev-avatar">${inicial}</div>
       <div>
-        <div class="rev-nome">${esc(r.nome)}${r.teste ? ' <span class="badge-soon" style="background:var(--warning);color:#fff">TESTE</span>' : ''}${seloIncompleto}</div>
+        <div class="rev-nome">${esc(r.nome)}${r.teste ? ' <span class="badge-soon" style="background:var(--warning);color:#fff">TESTE</span>' : ''}${seloFunc}${seloIncompleto}</div>
         <div class="rev-cidade">${esc(local)} · ${esc(r.telefone || '—')}</div>
       </div>
       <div class="rev-status">
@@ -127,6 +130,10 @@ export function renderRevCard(r, pendente) {
 // ── Formulário criar/editar ─────────────────────────────────────────
 const secH = txt => `<div style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:14px;color:var(--plum);margin:22px 0 12px;padding-bottom:6px;border-bottom:1px solid var(--border)">${txt}</div>`;
 const grpTxt = (id, label, val, extra = '') => `<div class="form-group"><label class="form-label">${label}</label><input type="text" id="${id}" class="form-control" value="${esc(val || '')}" ${extra}></div>`;
+// UF como select (evita o bug de aceitar "464" no campo estado).
+const UFS = ['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'];
+const grpUf = (id, label, val) => `<div class="form-group"><label class="form-label">${label}</label>
+  <select id="${id}" class="form-control"><option value="">—</option>${UFS.map(u => `<option value="${u}" ${(val || '').toUpperCase() === u ? 'selected' : ''}>${u}</option>`).join('')}</select></div>`;
 
 export function novaRevendedora() { abrirFormRev(null); }
 
@@ -168,7 +175,7 @@ export async function abrirFormRev(id) {
       ${grpTxt('rev-fcomp', 'Complemento', doc.fiador_complemento)}
       ${grpTxt('rev-fbairro', 'Bairro', doc.fiador_bairro)}
       ${grpTxt('rev-fcid', 'Cidade', doc.fiador_cidade)}
-      ${grpTxt('rev-fest', 'Estado (UF)', doc.fiador_estado)}
+      ${grpUf('rev-fest', 'Estado (UF)', doc.fiador_estado)}
     </div></details>` : '';
 
   panelAdmin().innerHTML = `
@@ -194,7 +201,7 @@ export async function abrirFormRev(id) {
       ${grpTxt('rev-complemento', 'Complemento', r.complemento)}
       ${grpTxt('rev-bairro', 'Bairro', r.bairro)}
       ${grpTxt('rev-cidade', 'Cidade', r.cidade)}
-      ${grpTxt('rev-estado', 'Estado (UF)', r.estado)}
+      ${grpUf('rev-estado', 'Estado (UF)', r.estado)}
     </div>
 
     ${secH('Cadastro')}
@@ -269,19 +276,33 @@ function renderGestao(r) {
       <input type="checkbox" ${r.teste ? 'checked' : ''} style="width:auto" onchange="marcarRevTeste('${r.id}', this.checked)">
       Conta de teste (não afeta faturamento/estoque)
     </label>
-    ${ehAdmin() ? `
-    <div class="form-group" style="margin-top:12px">
-      <label class="form-label">Nível de acesso</label>
-      <select id="rev-role" class="form-control" onchange="definirPapel('${r.id}', this.value)">
-        ${Object.entries(ROLE_LABELS).map(([v,l]) => `<option value="${v}" ${r.role===v?'selected':''}>${l}</option>`).join('')}
-      </select>
-    </div>` : ''}
+    ${ehAdmin() ? renderControleAcesso(r) : ''}
     <div class="detail-actions" id="rev-actions" style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
       ${!r.aprovada
         ? `<button class="btn-primary" onclick="aprovarRev('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Aprovar acesso</button>`
         : `<button class="btn-danger" onclick="revogarRev('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg> Revogar acesso</button>`}
-      ${ehAdmin() ? `<button class="btn-danger" data-rev-nome="${esc(r.nome || '')}" onclick="confirmarExclusaoRev('${r.id}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Excluir revendedora</button>` : ''}
+      ${ehAdmin() ? `<button class="btn-danger" data-rev-nome="${esc(r.nome || '')}" data-func="${r.role && r.role !== 'revendedora' ? '1' : ''}" onclick="confirmarExclusaoRev('${r.id}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> ${r.role && r.role !== 'revendedora' ? 'Remover da lista de revendedoras' : 'Excluir revendedora'}</button>` : ''}
     </div>`;
+}
+
+// Controle de acesso no detalhe (só admin). Revendedora pura → botão "Promover
+// a funcionária". Quem já é func_* → seletor de nível (edita/despromove aqui,
+// já que o dropdown de papel do form foi removido).
+function renderControleAcesso(r) {
+  if (r.role === 'revendedora') {
+    return `<div class="form-group" style="margin-top:12px">
+      <button class="btn-secondary" data-rev-nome="${esc(r.nome || '')}" onclick="promoverFuncionaria('${r.id}', this.dataset.revNome)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg> Promover a funcionária</button>
+    </div>`;
+  }
+  // Funcionária-revendedora: edita o nível ou volta a ser só revendedora.
+  const opcoes = [['func_basico', ROLE_LABELS.func_basico], ['func_completo', ROLE_LABELS.func_completo], ['admin', ROLE_LABELS.admin], ['revendedora', 'Voltar a ser só revendedora']];
+  return `<div class="form-group" style="margin-top:12px">
+    <label class="form-label">Nível de acesso <span class="badge-soon" style="background:var(--plum);color:#fff">Funcionária</span></label>
+    <select id="rev-role" class="form-control" onchange="definirPapel('${r.id}', this.value)">
+      ${opcoes.map(([v, l]) => `<option value="${v}" ${r.role === v ? 'selected' : ''}>${l}</option>`).join('')}
+    </select>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px">Também é revendedora. As permissões de menu são gerenciadas em Configurações → Funcionários.</div>
+  </div>`;
 }
 
 // Compat: onclicks antigos (verRevendedora / Cancelar da exclusão) abrem o form.
@@ -338,7 +359,7 @@ export async function salvarRevendedora(id) {
     const { error } = await sbQ(sb.from('profiles').update(profilePayload).eq('id', id));
     if (error) { desfazerBtn(); if (await handleSupabaseError(error, 'Erro ao salvar')) return; toast('Erro ao salvar'); return; }
   } else {
-    const { data, error } = await sbQ(sb.from('profiles').insert({ role: 'revendedora', aprovada: true, ...profilePayload }).select('id').single());
+    const { data, error } = await sbQ(sb.from('profiles').insert({ role: 'revendedora', is_revendedora: true, aprovada: true, ...profilePayload }).select('id').single());
     if (error || !data) { desfazerBtn(); if (await handleSupabaseError(error, 'Erro ao criar')) return; toast('Erro ao criar'); return; }
     profileId = data.id;
   }
@@ -377,7 +398,9 @@ export async function salvarRevendedora(id) {
     }
     if (dErr) {
       console.error('revendedora_docs:', dErr);
-      if (/revendedora_docs/i.test(dErr.message || '') && /relation|does not exist|schema cache/i.test(dErr.message || '')) {
+      if (/duplicate key|unique/i.test(dErr.message || '') && /cpf/i.test(dErr.message || '')) {
+        toast('Dados básicos salvos, mas este CPF já está cadastrado em outra pessoa. Corrija o CPF.');
+      } else if (/revendedora_docs/i.test(dErr.message || '') && /relation|does not exist|schema cache/i.test(dErr.message || '')) {
         toast('Dados básicos salvos. CPF/RG não gravaram — rode a migração 0016 no Supabase.');
       } else { toast('Dados básicos salvos, mas houve erro nos documentos: ' + (dErr.message || '')); }
     }
@@ -442,14 +465,68 @@ export async function marcarRevTeste(id, teste) {
 export async function definirPapel(id, novoPapel) {
   if (!ehAdmin()) { toast('Sem permissão'); return; }
   const { error } = await sbQ(sb.from('profiles').update({ role: novoPapel }).eq('id', id));
-  if (await handleSupabaseError(error, 'Erro ao definir papel')) return;
+  if (error) {
+    // Despromoção para 'revendedora' de quem não é revendedora bate na
+    // invariante (constraint). Mensagem amigável em vez do erro cru.
+    if (/profiles_revendedora_flag_chk|violates check constraint/i.test(error.message || '')) {
+      toast('Não é possível: esta pessoa não é revendedora. Use "Remover da lista" ou desative o cadastro.');
+      loadAdmin(); return;
+    }
+    if (await handleSupabaseError(error, 'Erro ao definir papel')) return;
+  }
   toast('Nível atualizado: ' + (ROLE_LABELS[novoPapel] || novoPapel));
   state.blingRevs = []; state.aprovadasCache = [];
   loadAdmin();
 }
 
+// Promover revendedora → funcionária: MESMO registro (histórico intacto),
+// is_revendedora continua true. Só admin.
+export function promoverFuncionaria(id, nome) {
+  if (!ehAdmin()) { toast('Sem permissão'); return; }
+  document.getElementById('cad-modal-titulo').textContent = 'Promover a funcionária';
+  document.getElementById('cad-modal-body').innerHTML = `
+    <p style="font-size:13px;margin:0 0 12px">Promover <b>${esc(nome || 'esta revendedora')}</b> a funcionária?<br>
+      <span style="color:var(--muted);font-size:12.5px">Ela continua como revendedora e todo o histórico de consignados, garantias e contratos é mantido. Ganhará acesso às telas de funcionária.</span></p>
+    <div class="form-group"><label class="form-label">Nível de acesso</label>
+      <select id="prom-nivel" class="form-control">
+        <option value="func_basico">${esc(ROLE_LABELS.func_basico)}</option>
+        <option value="func_completo">${esc(ROLE_LABELS.func_completo)}</option>
+        <option value="admin">${esc(ROLE_LABELS.admin)}</option>
+      </select></div>`;
+  document.getElementById('cad-modal-salvar').setAttribute('onclick', `promoverConfirmar('${id}')`);
+  openModal('modal-cadastro');
+}
+
+export async function promoverConfirmar(id) {
+  if (!ehAdmin()) { toast('Sem permissão'); return; }
+  const nivel = document.getElementById('prom-nivel').value;
+  const { error } = await sbQ(sb.from('profiles').update({ role: nivel }).eq('id', id));
+  if (error) { console.error('Promover:', error); if (await handleSupabaseError(error, `Erro ao promover: ${error.message}`)) return; }
+  closeModal('modal-cadastro');
+  toast('Promovida a funcionária. Ela continua na lista de revendedoras.');
+  state.blingRevs = []; state.aprovadasCache = [];
+  abrirFormRev(id);
+}
+
+// Remover da lista de revendedoras SEM apagar o profile (funcionária-revendedora
+// que deixa de revender). Só zera a flag; consignados/garantias ficam no histórico.
+export function removerDaListaRevendedoras(id, nome) {
+  if (!ehAdmin()) { toast('Sem permissão'); return; }
+  confirmarAcao('Remover da lista de revendedoras',
+    `${esc(nome || 'Esta pessoa')} sairá da lista de revendedoras, mas continua funcionária. Os consignados e garantias existentes são mantidos no histórico.`,
+    'Remover da lista', async () => {
+      const { error } = await sbQ(sb.from('profiles').update({ is_revendedora: false }).eq('id', id));
+      if (error) { console.error('Remover flag:', error); if (await handleSupabaseError(error, `Erro: ${error.message}`)) return; }
+      toast('Removida da lista de revendedoras.');
+      state.aprovadasCache = [];
+      loadAdmin();
+    });
+}
+
 export function confirmarExclusaoRev(id, btn) {
   const nome = (btn && btn.dataset.revNome) || 'esta revendedora';
+  // Funcionária-revendedora: não apaga o profile — só sai da lista (flag off).
+  if (btn && btn.dataset.func === '1') { removerDaListaRevendedoras(id, nome); return; }
   const actions = document.getElementById('rev-actions');
   if (!actions) return;
   actions.innerHTML = `

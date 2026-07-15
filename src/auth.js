@@ -218,7 +218,7 @@ export async function fazerCadastro() {
   // profile pelo cliente. ignoreDuplicates evita conflito com o trigger.
   if (data.user) {
     const { error: pErr } = await sb.from('profiles').upsert({
-      id: data.user.id, role: 'revendedora',
+      id: data.user.id, role: 'revendedora', is_revendedora: true,
       nome, telefone: tel, cidade, aprovada: false
     }, { onConflict: 'id', ignoreDuplicates: true });
     if (pErr && !data.session) {
