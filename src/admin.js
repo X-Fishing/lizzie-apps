@@ -474,6 +474,16 @@ export async function definirPapel(id, novoPapel) {
     }
     if (await handleSupabaseError(error, 'Erro ao definir papel')) return;
   }
+  // Voltou a ser só revendedora → desativa o acesso de funcionária (best-effort).
+  if (novoPapel === 'revendedora') {
+    const { data: prof } = await sbQ(sb.from('profiles').select('email').eq('id', id).single());
+    if (prof?.email) await sbQ(sb.from('funcionarios').update({ ativo: false }).eq('email', prof.email));
+  } else {
+    // Mudança de nível entre func_*: reflete o is_admin na tabela de funcionárias.
+    const { data: prof } = await sbQ(sb.from('profiles').select('nome,email').eq('id', id).single());
+    if (prof?.email) await sbQ(sb.from('funcionarios')
+      .upsert({ nome: prof.nome, email: prof.email, is_admin: novoPapel === 'admin', ativo: true }, { onConflict: 'email' }));
+  }
   toast('Nível atualizado: ' + (ROLE_LABELS[novoPapel] || novoPapel));
   state.blingRevs = []; state.aprovadasCache = [];
   loadAdmin();
@@ -500,10 +510,25 @@ export function promoverFuncionaria(id, nome) {
 export async function promoverConfirmar(id) {
   if (!ehAdmin()) { toast('Sem permissão'); return; }
   const nivel = document.getElementById('prom-nivel').value;
+  // Precisa do e-mail: é por ele que a tabela de funcionárias vincula o acesso.
+  const { data: prof } = await sbQ(sb.from('profiles').select('nome,email').eq('id', id).single());
+  if (!prof?.email) { toast('Informe o e-mail da revendedora antes de promover (é por ele que o acesso de funcionária é vinculado).'); return; }
+
+  // 1) nível de acesso (RLS) no próprio registro
   const { error } = await sbQ(sb.from('profiles').update({ role: nivel }).eq('id', id));
-  if (error) { console.error('Promover:', error); if (await handleSupabaseError(error, `Erro ao promover: ${error.message}`)) return; }
+  if (error) { console.error('Promover (role):', error); if (await handleSupabaseError(error, `Erro ao promover: ${error.message}`)) return; }
+
+  // 2) registra na tabela de funcionárias (é ela que a tela Funcionários lista;
+  //    vincula por e-mail no próximo login dela, como o cadastro de funcionárias).
+  const { error: fErr } = await sbQ(sb.from('funcionarios')
+    .upsert({ nome: prof.nome, email: prof.email, is_admin: nivel === 'admin', ativo: true }, { onConflict: 'email' }));
+  if (fErr) {
+    console.error('Promover (funcionarios):', fErr);
+    toast('Nível aplicado, mas não apareceu na lista de Funcionárias: ' + (fErr.message || '') + ' (rode a migração 0001 se faltar).');
+  }
+
   closeModal('modal-cadastro');
-  toast('Promovida a funcionária. Ela continua na lista de revendedoras.');
+  toast('Promovida a funcionária. Defina as permissões de menu em Configurações → Funcionários.');
   state.blingRevs = []; state.aprovadasCache = [];
   abrirFormRev(id);
 }
