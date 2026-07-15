@@ -127,7 +127,9 @@ function abrirFormFunc(f) {
     <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
       <input type="checkbox" id="func-f-admin" ${r.is_admin ? 'checked' : ''} style="width:auto"> Admin (acesso total)</label>
     <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
-      <input type="checkbox" id="func-f-ativo" ${(r.ativo ?? true) ? 'checked' : ''} style="width:auto"> Ativo</label>`;
+      <input type="checkbox" id="func-f-ativo" ${(r.ativo ?? true) ? 'checked' : ''} style="width:auto"> Ativo</label>
+    <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
+      <input type="checkbox" id="func-f-revend" ${r.eh_revendedora ? 'checked' : ''} style="width:auto"> Também é revendedora (vende no app)</label>`;
   document.getElementById('cad-modal-salvar').setAttribute('onclick', `funcSalvar(${f ? `'${r.id}'` : 'null'})`);
   openModal('modal-cadastro');
 }
@@ -145,12 +147,19 @@ export async function funcSalvar(id) {
     perfil_id: document.getElementById('func-f-perfil').value || null,
     is_admin: document.getElementById('func-f-admin').checked,
     ativo: document.getElementById('func-f-ativo').checked,
+    eh_revendedora: document.getElementById('func-f-revend').checked,
   };
   const q = id ? sb.from('funcionarios').update(payload).eq('id', id) : sb.from('funcionarios').insert(payload);
   const { error } = await sbQ(q);
   if (error) {
     if (/duplicate key|unique/i.test(error.message || '')) { toast('Já existe funcionário com esse e-mail.'); return; }
     if (await surfarErro(error, 'Erro ao salvar')) return;
+  }
+  // Papel duplo: reflete a flag no profile já vinculado (tela é admin-only, então
+  // o update passa no guard). Não vinculada ainda: aplica no 1º login (fn_vincular).
+  const alvo = id ? FUNCS.find(x => x.id === id) : null;
+  if (alvo?.auth_user_id) {
+    await sbQ(sb.from('profiles').update({ is_revendedora: payload.eh_revendedora }).eq('id', alvo.auth_user_id));
   }
   toast('Salvo!');
   closeModal('modal-cadastro');

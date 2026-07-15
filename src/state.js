@@ -4,6 +4,7 @@ export const state = {
   recoveryAtiva: false,
   currentUser: null,
   currentProfile: null,
+  modoAtual: 'staff',   // visão ativa: 'staff' | 'revendedora' (papel duplo alterna)
   allGarantias: [],
   allConsignados: [],
   allVendas: [],

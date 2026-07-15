@@ -1,5 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════
--- 0019 — Recria a policy de INSERT do gestor em profiles
+-- 0020 — Recria a policy de INSERT do gestor em profiles
+-- (numerada 0020: a 0019 "is_revendedora/flag" foi aplicada direto no
+--  dashboard e ainda precisa ser versionada como 0019_*.sql à parte.)
 -- Rodar no SQL Editor do Supabase (uma vez). Idempotente.
 --
 -- Contexto: a migração 0016 definia a policy profiles_insert_gestor, mas

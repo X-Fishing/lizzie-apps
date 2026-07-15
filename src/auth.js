@@ -22,11 +22,41 @@ export const ROLE_LABELS = {
   admin:         'Admin total'
 };
 
-export function ehAdmin()  { return state.currentProfile?.role === 'admin'; }
+// "Modo de visão": papel duplo (staff + revendedora) alterna entre operar como
+// funcionária ('staff') ou revendedora ('revendedora'). Os helpers de nível
+// respeitam o modo — em modo revendedora a pessoa é tratada como revendedora no
+// app inteiro (nav, dashboard, sidebar). Papel simples: o modo casa com o papel.
+function modoStaffAtivo() { return state.modoAtual !== 'revendedora'; }
 
-export function ehGestor() { return ['admin','func_completo'].includes(state.currentProfile?.role); }
+export function ehAdmin()  { return modoStaffAtivo() && state.currentProfile?.role === 'admin'; }
 
-export function ehStaff()  { return ['admin','func_completo','func_basico'].includes(state.currentProfile?.role); }
+export function ehGestor() { return modoStaffAtivo() && ['admin','func_completo'].includes(state.currentProfile?.role); }
+
+export function ehStaff()  { return modoStaffAtivo() && ['admin','func_completo','func_basico'].includes(state.currentProfile?.role); }
+
+// Papel duplo = é staff (por role) E revendedora (flag). Só ela pode alternar a
+// visão (usa role/flag crus, pois independe do modo atual).
+export function ehPapelDuplo() {
+  const p = state.currentProfile;
+  return !!p?.is_revendedora && ['admin','func_completo','func_basico'].includes(p?.role);
+}
+
+// Decide o modo inicial: papel simples segue o papel; papel duplo usa a escolha
+// salva ou, na falta, o dispositivo (celular=revendedora, desktop=funcionária).
+function calcularModo(profile) {
+  const dual = !!profile?.is_revendedora && ['admin','func_completo','func_basico'].includes(profile?.role);
+  if (!dual) return (profile?.is_revendedora || profile?.role === 'revendedora') ? 'revendedora' : 'staff';
+  const salvo = localStorage.getItem('lizzie_modo_visao');
+  if (salvo === 'revendedora' || salvo === 'staff') return salvo;
+  return window.matchMedia('(max-width: 899px)').matches ? 'revendedora' : 'staff';
+}
+
+// Alterna a visão (papel duplo) e recarrega para aplicar em todo o app.
+export function trocarVisao() {
+  const novo = state.modoAtual === 'revendedora' ? 'staff' : 'revendedora';
+  localStorage.setItem('lizzie_modo_visao', novo);
+  location.reload();
+}
 
 export async function loadUser(user) {
   state.currentUser = user;
@@ -55,10 +85,20 @@ export async function loadUser(user) {
   document.getElementById('app').style.display = 'flex';
   document.getElementById('app').style.flexDirection = 'column';
 
-  const ehRevendedora = profile.role === 'revendedora';
+  // Define o modo de visão ANTES de qualquer ehStaff()/ehGestor() (eles respeitam
+  // o modo). Papel duplo pode alternar; papel simples segue o papel.
+  state.modoAtual = calcularModo(profile);
+  const ehRevendedora = state.modoAtual === 'revendedora';
   const icone = '';
   const nomeBadge = ehRevendedora ? profile.nome.split(' ')[0] : (ROLE_LABELS[profile.role] || profile.nome.split(' ')[0]);
   document.getElementById('user-badge').textContent = nomeBadge;
+
+  // Botão "Trocar visão": só aparece para papel duplo.
+  const btnTrocar = document.getElementById('btn-trocar-visao');
+  if (btnTrocar) {
+    btnTrocar.style.display = ehPapelDuplo() ? 'inline-flex' : 'none';
+    btnTrocar.textContent = ehRevendedora ? 'Ver como funcionária' : 'Ver como revendedora';
+  }
 
   // Visibilidade por nível. Pagamentos/Histórico são do próprio (só revendedora).
   document.getElementById('btn-bling-sync').style.display = (ehRevendedora || ehGestor()) ? 'block' : 'none';
@@ -69,6 +109,7 @@ export async function loadUser(user) {
   document.getElementById('nav-pagamentos').style.display = ehRevendedora ? 'flex' : 'none';
   document.getElementById('nav-historico').style.display = ehRevendedora ? 'flex' : 'none';
   // Dashboard PC (barra lateral) só para staff; o CSS faz o resto em telas >=900px.
+  // ehStaff() já respeita o modo, então em visão de revendedora a sidebar some.
   document.getElementById('app').classList.toggle('staff-desktop', ehStaff());
 
   // Permissões por perfil ANTES de montar a sidebar (uma vez por login).
