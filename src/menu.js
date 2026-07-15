@@ -139,13 +139,21 @@ export function podeAcessarPanel(panel) {
 }
 
 // ── Render ─────────────────────────────────────────────────────────
+// hash da rota do painel (igual ao hashDePanel de nav.js).
+function hrefDePanel(panel) {
+  if (panel === 'dashboard') return '#/';
+  if (panel === 'admin') return '#/revendedoras';
+  return '#/' + panel;
+}
+// Itens são <a href="#/..."> — o hash dispara o router (voltar do navegador
+// funciona, e ganha middle-click / abrir em nova aba de graça).
 function btnItem(item) {
   if (item.em_breve) {
-    return `<button class="snav-item" data-panel="${item.panel}" disabled style="opacity:.55;cursor:default">
-      <span class="snav-ic">${item.icon}</span>${item.label}<span class="badge-soon">Em breve</span></button>`;
+    return `<span class="snav-item" data-panel="${item.panel}" style="opacity:.55;cursor:default">
+      <span class="snav-ic">${item.icon}</span>${item.label}<span class="badge-soon">Em breve</span></span>`;
   }
-  return `<button class="snav-item" data-panel="${item.panel}" onclick="showPanel('${item.panel}')">
-    <span class="snav-ic">${item.icon}</span>${item.label}</button>`;
+  return `<a class="snav-item" data-panel="${item.panel}" href="${hrefDePanel(item.panel)}">
+    <span class="snav-ic">${item.icon}</span>${item.label}</a>`;
 }
 
 export function renderSidebar() {
