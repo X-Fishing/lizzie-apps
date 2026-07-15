@@ -55,7 +55,12 @@ export async function loadUser(user) {
   document.getElementById('app').style.display = 'flex';
   document.getElementById('app').style.flexDirection = 'column';
 
-  const ehRevendedora = profile.role === 'revendedora';
+  // "É revendedora" vem da flag is_revendedora (independente do role). Papel duplo
+  // (staff + revendedora): no celular abre como revendedora, no desktop como
+  // funcionária. Revendedora pura (não-staff) segue sempre como revendedora.
+  const ehStaffAgora = ehStaff();
+  const mobile = window.matchMedia('(max-width: 899px)').matches;
+  const ehRevendedora = !!profile.is_revendedora && (!ehStaffAgora || mobile);
   const icone = '';
   const nomeBadge = ehRevendedora ? profile.nome.split(' ')[0] : (ROLE_LABELS[profile.role] || profile.nome.split(' ')[0]);
   document.getElementById('user-badge').textContent = nomeBadge;
@@ -69,7 +74,9 @@ export async function loadUser(user) {
   document.getElementById('nav-pagamentos').style.display = ehRevendedora ? 'flex' : 'none';
   document.getElementById('nav-historico').style.display = ehRevendedora ? 'flex' : 'none';
   // Dashboard PC (barra lateral) só para staff; o CSS faz o resto em telas >=900px.
-  document.getElementById('app').classList.toggle('staff-desktop', ehStaff());
+  // No celular do papel duplo a visão é de revendedora, então staff-desktop some.
+  const staffView = ehStaffAgora && !ehRevendedora;
+  document.getElementById('app').classList.toggle('staff-desktop', staffView);
 
   // Permissões por perfil ANTES de montar a sidebar (uma vez por login).
   if (ehStaff()) await carregarPermissoes();

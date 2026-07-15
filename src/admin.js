@@ -52,8 +52,8 @@ export async function loadAdmin() {
     <div id="rev-list"><div class="loading"><div class="spinner">⟳</div><br>Carregando...</div></div>`;
 
   const [{ data: pendentes, error: e1 }, { data: aprovadas, error: e2 }, { data: funcs }, { data: docs }] = await Promise.all([
-    sbQ(sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',false).order('created_at')),
-    sbQ(sb.from('profiles').select('*').eq('role','revendedora').eq('aprovada',true).order('nome')),
+    sbQ(sb.from('profiles').select('*').eq('is_revendedora',true).eq('aprovada',false).order('created_at')),
+    sbQ(sb.from('profiles').select('*').eq('is_revendedora',true).eq('aprovada',true).order('nome')),
     sbQ(sb.from('funcionarios').select('auth_user_id')),
     // Só gestor/admin recebem (RLS). func_basico → erro/vazio → sem selo, sem quebrar.
     sbQ(sb.from('revendedora_docs').select('profile_id,cpf,data_nascimento')),
@@ -64,9 +64,11 @@ export async function loadAdmin() {
     return;
   }
 
+  // Papel duplo: funcionárias que também revendem AParecem na lista (não excluímos
+  // mais por funcIds). Guardamos o vínculo só para o selo "Funcionária".
   const funcIds = new Set((funcs || []).map(f => f.auth_user_id).filter(Boolean));
   const docMap = new Map((docs || []).map(d => [String(d.profile_id), d]));
-  const prep = lista => (lista || []).filter(r => !funcIds.has(r.id)).map(r => ({ ...r, _doc: docMap.get(String(r.id)) || null }));
+  const prep = lista => (lista || []).map(r => ({ ...r, _doc: docMap.get(String(r.id)) || null, _func: funcIds.has(r.id) }));
   const pendentesRev = prep(pendentes);
 
   const pendDiv = document.getElementById('pendentes-list');
@@ -109,11 +111,13 @@ export function renderRevCard(r, pendente) {
   const trocaSlot = pendente ? '' : `<div data-troca-bling-id="${r.bling_contato_id || ''}" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><span style="font-size:11px;color:var(--muted)">Carregando próxima troca...</span></div>`;
   const seloIncompleto = revIncompleta(r)
     ? '<span class="badge-soon" style="background:var(--warning);color:#fff;margin-left:6px" title="Falta CPF, nascimento ou endereço">Cadastro incompleto</span>' : '';
+  const seloFunc = r._func
+    ? '<span class="badge-soon" style="background:var(--muted);color:#fff;margin-left:6px" title="Também é funcionária (papel duplo)">Funcionária</span>' : '';
   return `<div class="card rev-card" onclick="abrirRevendedora('${r.id}')">
     <div class="rev-header">
       <div class="rev-avatar">${inicial}</div>
       <div>
-        <div class="rev-nome">${esc(r.nome)}${r.teste ? ' <span class="badge-soon" style="background:var(--warning);color:#fff">TESTE</span>' : ''}${seloIncompleto}</div>
+        <div class="rev-nome">${esc(r.nome)}${r.teste ? ' <span class="badge-soon" style="background:var(--warning);color:#fff">TESTE</span>' : ''}${seloIncompleto}${seloFunc}</div>
         <div class="rev-cidade">${esc(local)} · ${esc(r.telefone || '—')}</div>
       </div>
       <div class="rev-status">
