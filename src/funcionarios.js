@@ -87,9 +87,13 @@ function renderPerfisPanel() {
 function renderFuncs() {
   const opcoesPerfil = f => `<option value="">— sem perfil —</option>` +
     PERFIS.map(p => `<option value="${p.id}" ${f.perfil_id === p.id ? 'selected' : ''}>${esc(p.nome)}</option>`).join('');
+  const iniciais = n => (n || '?').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
   const rows = FUNCS.length ? FUNCS.map(f => `
     <tr class="ciclo-row" style="${f.ativo ? '' : 'opacity:.55'}">
-      <td class="ciclo-td"><span class="ciclo-desc">${esc(f.nome)}</span>${f.auth_user_id ? '' : ' <span class="badge badge-aberta" style="font-size:10px" title="Vincula no 1º login com este e-mail">não vinculado</span>'}</td>
+      <td class="ciclo-td"><div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--blush);color:var(--rose);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;flex:none">${iniciais(f.nome)}</div>
+        <div><span class="ciclo-desc">${esc(f.nome)}</span>${f.auth_user_id ? '' : ' <span class="badge badge-aberta" style="font-size:10px" title="Vincula no 1º login com este e-mail">não vinculado</span>'}</div>
+      </div></td>
       <td class="ciclo-td">${esc(f.email || '—')}</td>
       <td class="ciclo-td"><select class="form-control" style="padding:5px 8px;font-size:12.5px;width:auto" ${f.is_admin ? 'disabled title="Admin tem acesso total"' : ''}
         onchange="funcUpdate('${f.id}','perfil_id',this.value||null)">${opcoesPerfil(f)}</select></td>
