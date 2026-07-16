@@ -326,7 +326,7 @@ export async function loadFinanceiro() {
     return `<tr class="ciclo-row">
       <td class="ciclo-td"><span class="ciclo-desc">${esc(l.pessoa_nome || l.descricao)}</span>
         <div style="font-size:11px;color:var(--muted)">${esc(l.categoria || '')} · ${refLinha(l)}</div></td>
-      <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(l.valor)}</span></td>
+      <td class="ciclo-td" style="text-align:right"><span class="ciclo-preco">${fmtBRL(l.valor)}</span></td>
       <td class="ciclo-td" style="white-space:nowrap;${vencido ? 'color:var(--danger);font-weight:600' : ''}">
         ${l.vencimento ? formatDate(l.vencimento) : '—'}${vencido ? ' ⚠ vencido' : ''}</td>
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
@@ -344,7 +344,7 @@ export async function loadFinanceiro() {
         ${l.estornado ? `<span class="badge badge-aberta" style="font-size:10px;margin-left:6px" title="Estornado em ${formatDate(l.estornado_em)}${l.estorno_motivo ? ' — ' + esc(l.estorno_motivo) : ''}">Estornado</span>` : ''}
         <div style="font-size:11px;color:var(--muted)">${esc(l.categoria || '')}${l.forma_pagamento ? ' · ' + esc(l.forma_pagamento) : ''} · ${refLinha(l)}</div></td>
       <td class="ciclo-td">${esc(l.pessoa_nome || '—')}</td>
-      <td class="ciclo-td"><span class="ciclo-preco" ${l.estornado ? 'style="text-decoration:line-through"' : ''}>${fmtBRL(l.valor)}</span></td>
+      <td class="ciclo-td" style="text-align:right"><span class="ciclo-preco" ${l.estornado ? 'style="text-decoration:line-through"' : ''}>${fmtBRL(l.valor)}</span></td>
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         ${l.pago && !l.estornado && l.tipo === 'receber' && podeEstornar()
           ? `<button class="btn-icon" title="Estornar recebimento" style="color:var(--danger)" onclick="estornarRecebimento('${l.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>` : ''}
@@ -366,13 +366,13 @@ export async function loadFinanceiro() {
     </div>
     <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:8px 0">A receber (pendente)</div>
     <div class="pag-wrap" style="margin-bottom:18px"><table class="pag-table"><thead><tr>
-      <th class="pag-th">Revendedora / referência</th><th class="pag-th">Valor</th>
+      <th class="pag-th">Revendedora / referência</th><th class="pag-th" style="text-align:right">Valor</th>
       <th class="pag-th">Vencimento</th><th class="pag-th" style="text-align:right">Ações</th>
     </tr></thead><tbody>${rowsPend}</tbody></table></div>
     <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:8px 0">Recebidos</div>
     <div class="pag-wrap"><table class="pag-table"><thead><tr>
       <th class="pag-th">Data</th><th class="pag-th">Descrição</th><th class="pag-th">Pessoa</th>
-      <th class="pag-th">Valor</th><th class="pag-th"></th>
+      <th class="pag-th" style="text-align:right">Valor</th><th class="pag-th"></th>
     </tr></thead><tbody>${rowsRec}</tbody></table></div>`;
 }
 
