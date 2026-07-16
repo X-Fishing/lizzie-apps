@@ -62,9 +62,9 @@ export async function loadPrecificacao() {
   const { params, banhos } = cfg;
 
   panel.innerHTML = `
-    <div class="section-header"><div>
-      <div class="section-title">Precificação</div>
-      <div class="section-subtitle">Parâmetros do cálculo de custo e preço sugerido</div>
+    <div class="page-head"><div>
+      <h2>Precificação</h2>
+      <div class="sub">Parâmetros do cálculo de custo e preço sugerido</div>
     </div></div>
 
     <div class="dash-card" style="margin-bottom:16px">
@@ -146,9 +146,9 @@ export async function loadCalculadora() {
   await carregarCadastrosParaSelect(); // fornecedores (com desconto)
 
   panel.innerHTML = `
-    <div class="section-header"><div>
-      <div class="section-title">Calculadora de custo</div>
-      <div class="section-subtitle">Simulador rápido de 1 peça — para lançar remessas use Vendas → Entrada de Mercadoria</div>
+    <div class="page-head"><div>
+      <h2>Calculadora de custo</h2>
+      <div class="sub">Simulador rápido de 1 peça — para lançar remessas use Vendas → Entrada de Mercadoria</div>
     </div></div>
     <div class="dash-card" style="max-width:640px">
       <div class="form-grid">
@@ -236,9 +236,9 @@ export async function loadEntradaMercadoria() {
   loteRows.forEach(r => { if (r.banhoManual && !(Number(r.banho) > 0)) r.banhoManual = false; });
 
   panel.innerHTML = `
-    <div class="section-header"><div>
-      <div class="section-title">Entrada de Mercadoria</div>
-      <div class="section-subtitle">Lance a remessa inteira como na planilha — cálculo ao vivo, produtos criados de uma vez</div>
+    <div class="page-head"><div>
+      <h2>Entrada de Mercadoria</h2>
+      <div class="sub">Lance a remessa inteira como na planilha — cálculo ao vivo, produtos criados de uma vez</div>
     </div></div>
     <div class="dash-card" style="margin-bottom:14px">
       <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">

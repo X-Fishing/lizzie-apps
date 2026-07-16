@@ -91,9 +91,9 @@ function render() {
   const podeEnviar = carrinho.length && maletaDestino;
 
   panel().innerHTML = `
-    <div class="section-header"><div>
-      <div class="section-title">Lançar Maleta</div>
-      <div class="section-subtitle">Bipe as peças para montar a maleta da revendedora</div>
+    <div class="page-head"><div>
+      <h2>Lançar Maleta</h2>
+      <div class="sub">Bipe as peças para montar a maleta da revendedora</div>
     </div></div>
 
     <div class="form-grid">

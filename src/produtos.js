@@ -402,16 +402,26 @@ function renderTabela() {
 }
 
 function renderLista() {
+  // Stats do topo (só render; usa o cache já carregado).
+  const totProd = produtosCache.length;
+  const totPecas = produtosCache.reduce((s, p) => s + (Number(p.estoque_qtd) || 0), 0);
+  const totValor = produtosCache.reduce((s, p) => s + (Number(p.preco_venda) || 0) * (Number(p.estoque_qtd) || 0), 0);
+  const semFoto = produtosCache.filter(p => !p.foto_url).length;
   panel().innerHTML = `
-    <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-      <div><div class="section-title">Produtos</div>
-      <div class="section-subtitle">${produtosCache.length} produto${produtosCache.length !== 1 ? 's' : ''} no catálogo</div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div class="page-head">
+      <div><h2>Produtos</h2><div class="sub">${totProd} produto${totProd !== 1 ? 's' : ''} no catálogo</div></div>
+      <div class="acts">
         <button class="btn-secondary btn-sm" onclick="produtoImportarBling()">${IC_BARCODE} Importar do Bling</button>
         <button class="btn-secondary btn-sm" onclick="produtoImportFotos()">${IC_CAM} Importar fotos em lote</button>
         ${ehGestor() ? `<button class="btn-secondary btn-sm" onclick="produtoPlanilha()">${IC_SHEET} Planilha</button>` : ''}
         <button class="btn-primary btn-sm" onclick="produtoNovo()">${IC_PLUS} Novo produto</button>
       </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Produtos</span><span class="kpi-ic">${IC_GEM}</span></div><div class="kpi-val">${totProd}</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Peças em estoque</span><span class="kpi-ic">${IC_BARCODE}</span></div><div class="kpi-val">${totPecas}</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Valor em estoque</span><span class="kpi-ic">${IC_SHEET}</span></div><div class="kpi-val">${fmtBRL(totValor)}</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Sem foto</span><span class="kpi-ic">${IC_CAM}</span></div><div class="kpi-val"${semFoto ? ' style="color:var(--warning)"' : ''}>${semFoto}</div></div>
     </div>
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <input type="text" class="form-control" style="flex:1;min-width:200px" placeholder="Buscar por nome, SKU, código, cód. fornecedor ou coleção..."
