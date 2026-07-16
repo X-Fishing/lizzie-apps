@@ -293,14 +293,21 @@ export function renderTrocas() {
     kpi('Este mês', noMes, 'var(--success)') +
     kpi('Sem data / vínculo', semVinculo, 'var(--muted)');
 
-  // Busca (substitui os chips — o agrupamento por urgência organiza a lista)
+  // Busca renderizada UMA vez (fora do renderTrocasLista) — senão o input era
+  // recriado a cada tecla e o foco se perdia.
   filtros.innerHTML = `<input type="text" class="form-control" placeholder="Buscar revendedora..." value="${esc(state.trocaBusca || '')}" oninput="trocaBuscar(this.value)">`;
 
+  renderTrocasLista();
+}
+
+// Só a lista (agrupada por urgência). A busca chama SÓ isto, preservando o foco.
+function renderTrocasLista() {
+  const lista = document.getElementById('trocas-lista');
+  if (!lista) return;
   const t = (state.trocaBusca || '').trim().toLowerCase();
   let itens = state.aprovadasCache.filter(r => !trocaResolvida(r));
   if (t) itens = itens.filter(r => (r.nome || '').toLowerCase().includes(t) || (r.telefone || '').includes(t));
 
-  // Agrupa por urgência
   const g = { venc: [], p7: [], mes: [], frente: [], sem: [] };
   for (const r of itens) {
     const info = infoTrocaRev(r);
@@ -330,7 +337,7 @@ export function renderTrocas() {
   }).join('');
 }
 
-export function trocaBuscar(v) { state.trocaBusca = v; renderTrocas(); }
+export function trocaBuscar(v) { state.trocaBusca = v; renderTrocasLista(); }
 
 export function setTrocaFiltro(id) {
   state.trocasFiltroAtivo = id;

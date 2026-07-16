@@ -14,7 +14,9 @@ const panelAdmin = () => document.getElementById('panel-admin');
 
 // Filtro da lista de revendedoras (busca + chip), client-side.
 let revBusca = '', revFiltro = 'todas';
-export function revBuscar(v) { revBusca = v; renderAprovadas(); }
+// Busca atualiza SÓ a grade (o input fica intacto, sem perder foco). Chip
+// re-renderiza tudo (o foco não está na busca ao clicar num chip).
+export function revBuscar(v) { revBusca = v; const w = document.getElementById('rev-grid-wrap'); if (w) w.innerHTML = gridRevendedoras(); else renderAprovadas(); }
 export function revChip(k) { revFiltro = k; renderAprovadas(); }
 
 // Cadastro considerado incompleto p/ contrato: falta CPF, nascimento ou endereço.
@@ -96,30 +98,33 @@ export async function loadAdmin() {
   await renderAprovadas();
 }
 
-export async function renderAprovadas() {
+export function renderAprovadas() {
   const revDiv = document.getElementById('rev-list');
   if (!revDiv) return;
   const pend = state.revPendentes || [];
-  const aprov = state.aprovadasCache || [];
-  // Filtro por chip
-  let base;
-  if (revFiltro === 'pendentes') base = pend;
-  else if (revFiltro === 'ativas') base = aprov.filter(r => !r.teste);
-  else if (revFiltro === 'teste') base = aprov.filter(r => r.teste);
-  else base = [...pend, ...aprov];
-  // Busca
-  const t = revBusca.trim().toLowerCase();
-  const lista = t ? base.filter(r => [r.nome, r.cidade, r.telefone, r.email].some(v => (v || '').toLowerCase().includes(t))) : base;
-
   const chip = (k, lbl, n) => `<button class="chip${revFiltro === k ? ' active' : ''}" onclick="revChip('${k}')">${lbl}${n != null ? ` (${n})` : ''}</button>`;
   revDiv.innerHTML = `
     <div style="margin-bottom:12px"><input type="text" class="form-control" placeholder="Buscar por nome, cidade ou telefone..." value="${esc(revBusca)}" oninput="revBuscar(this.value)"></div>
     <div class="chips" style="margin-bottom:14px">
       ${chip('todas', 'Todas')}${chip('ativas', 'Ativas')}${chip('pendentes', 'Pendentes', pend.length)}${chip('teste', 'Teste')}
     </div>
-    ${lista.length
-      ? `<div class="rev-grid">${lista.map(r => renderRevCard(r, r.aprovada === false)).join('')}</div>`
-      : `<div class="empty-state" style="padding:40px 0"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><p>Nenhuma revendedora ${t ? 'encontrada' : 'nesse filtro'}</p></div>`}`;
+    <div id="rev-grid-wrap">${gridRevendedoras()}</div>`;
+}
+
+// Grade filtrada (busca + chip). A busca atualiza só isto.
+function gridRevendedoras() {
+  const pend = state.revPendentes || [];
+  const aprov = state.aprovadasCache || [];
+  let base;
+  if (revFiltro === 'pendentes') base = pend;
+  else if (revFiltro === 'ativas') base = aprov.filter(r => !r.teste);
+  else if (revFiltro === 'teste') base = aprov.filter(r => r.teste);
+  else base = [...pend, ...aprov];
+  const t = revBusca.trim().toLowerCase();
+  const lista = t ? base.filter(r => [r.nome, r.cidade, r.telefone, r.email].some(v => (v || '').toLowerCase().includes(t))) : base;
+  return lista.length
+    ? `<div class="rev-grid">${lista.map(r => renderRevCard(r, r.aprovada === false)).join('')}</div>`
+    : `<div class="empty-state" style="padding:40px 0"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><p>Nenhuma revendedora ${t ? 'encontrada' : 'nesse filtro'}</p></div>`;
 }
 
 export function renderRevCard(r, pendente) {

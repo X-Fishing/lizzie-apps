@@ -40,24 +40,6 @@ function render() {
   const aniv = cache.filter(c => c.data_nascimento && Number(c.data_nascimento.slice(5, 7)) === mes).length;
   const comContato = cache.filter(c => c.celular).length;
 
-  const termo = busca.trim().toLowerCase();
-  const lista = termo
-    ? cache.filter(c => [c.nome, c.cidade, c.celular, c.email].some(v => (v || '').toLowerCase().includes(termo)))
-    : cache;
-
-  const rows = lista.length ? lista.map(c => `
-    <tr class="pag-row" style="cursor:pointer" onclick="clienteVer('${c.id}')">
-      <td class="pag-td"><span class="ciclo-desc">${esc(c.nome)}</span>${c.email ? `<div style="font-size:11px;color:var(--muted)">${esc(c.email)}</div>` : ''}</td>
-      <td class="pag-td">${esc(telFmt(c.celular))}</td>
-      <td class="pag-td">${esc(c.cidade || '—')}</td>
-      <td class="pag-td">${c.data_nascimento ? esc(isoToBR(c.data_nascimento)) : '—'}</td>
-      <td class="pag-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
-        <button class="btn-icon" title="Editar" onclick="clienteEditar('${c.id}')" style="color:var(--rose)">${IC_EDIT}</button>
-        <button class="btn-icon" title="Excluir" onclick="clienteExcluir('${c.id}')" style="color:var(--danger)">${IC_TRASH}</button>
-      </td>
-    </tr>`).join('')
-    : `<tr><td colspan="5"><div class="empty-state" style="padding:40px 0"><div class="empty-icon">${IC_USERS}</div><p>${termo ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado ainda'}</p></div></td></tr>`;
-
   panel().innerHTML = `
     <div class="page-head">
       <div><h2>Clientes</h2><div class="sub">${cache.length} cliente${cache.length !== 1 ? 's' : ''} cadastrado${cache.length !== 1 ? 's' : ''}</div></div>
@@ -72,10 +54,34 @@ function render() {
     <div class="pag-wrap"><table class="pag-table"><thead><tr>
       <th class="pag-th">Cliente</th><th class="pag-th">Telefone</th><th class="pag-th">Cidade</th><th class="pag-th">Nascimento</th>
       <th class="pag-th" style="text-align:right">Ações</th>
-    </tr></thead><tbody>${rows}</tbody></table></div>`;
+    </tr></thead><tbody id="cli-tbody">${linhasClientes()}</tbody></table></div>`;
 }
 
-export function clienteBuscar(v) { busca = v; render(); }
+// Só as linhas — a busca atualiza só isto (o input fica intacto, sem perder foco).
+function linhasClientes() {
+  const termo = busca.trim().toLowerCase();
+  const lista = termo
+    ? cache.filter(c => [c.nome, c.cidade, c.celular, c.email].some(v => (v || '').toLowerCase().includes(termo)))
+    : cache;
+  return lista.length ? lista.map(c => `
+    <tr class="pag-row" style="cursor:pointer" onclick="clienteVer('${c.id}')">
+      <td class="pag-td"><span class="ciclo-desc">${esc(c.nome)}</span>${c.email ? `<div style="font-size:11px;color:var(--muted)">${esc(c.email)}</div>` : ''}</td>
+      <td class="pag-td">${esc(telFmt(c.celular))}</td>
+      <td class="pag-td">${esc(c.cidade || '—')}</td>
+      <td class="pag-td">${c.data_nascimento ? esc(isoToBR(c.data_nascimento)) : '—'}</td>
+      <td class="pag-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
+        <button class="btn-icon" title="Editar" onclick="clienteEditar('${c.id}')" style="color:var(--rose)">${IC_EDIT}</button>
+        <button class="btn-icon" title="Excluir" onclick="clienteExcluir('${c.id}')" style="color:var(--danger)">${IC_TRASH}</button>
+      </td>
+    </tr>`).join('')
+    : `<tr><td colspan="5"><div class="empty-state" style="padding:40px 0"><div class="empty-icon">${IC_USERS}</div><p>${termo ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado ainda'}</p></div></td></tr>`;
+}
+
+export function clienteBuscar(v) {
+  busca = v;
+  const tb = document.getElementById('cli-tbody');
+  if (tb) tb.innerHTML = linhasClientes(); else render();
+}
 
 // ── Detalhe (modal) ────────────────────────────────────────────────
 export function clienteVer(id) {
