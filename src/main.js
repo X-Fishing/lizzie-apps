@@ -14,7 +14,7 @@ import { showPanel, toggleCadastros, abrirRevendedora } from './nav.js';
 import { mostrarRecovery, ehAdmin, ehGestor, ehStaff, loadUser, maskTelBR, salvarComplemento, showSplash, switchTab, fazerLogin, mostrarRecuperar, voltarLogin, loginGoogle, enviarLinkRecuperacao, salvarNovaSenha, fazerCadastro } from './auth.js';
 import { loadDashboard, loadMarketing } from './dashboard.js';
 import { loadCalculadora, calcularSimulacao, loadPrecificacao, precifSalvarParams, precifSalvarBanhos, loadEntradaMercadoria, loteAdd, loteRemover, loteSet, loteRecalcTudo, loteLancar, loteDuplicar, loteTecla, loteArredondarTodos, entradaColarAbrir, entradaColarProcessar, entradaLimparLote } from './precificacao.js';
-import { loadFinanceiro, abrirRecebimento, registrarRecebimento, recRecalc, recAtalho, copiarPixCola, pixConfigAbrir, pixConfigSalvar, zapCobranca, estornarRecebimento, estornarConfirmar } from './financeiro.js';
+import { loadFinanceiro, abrirRecebimento, registrarRecebimento, recRecalc, recAtalho, copiarPixCola, pixConfigAbrir, pixConfigSalvar, zapCobranca, estornarRecebimento, estornarConfirmar, excluirLancamento } from './financeiro.js';
 import { podeAcessarPanel, renderSidebar, toggleSnavGrupo, toggleSidebarLateral, primeiroPanelInicial, atualizarBreadcrumb } from './menu.js';
 import { loadFuncionarios, loadPerfis, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilFechar, perfilSalvarPermissoes } from './funcionarios.js';
 import { calcPrazoGarantia, loadGarantias, filtrarGarantias, sortGarantiasStaff, setGFilter, renderGarantiaCard, verGarantia, openNovaGarantia, editarGarantia, salvarGarantia, mudarStatus, atualizarStatusCard, excluirGarantia } from './garantias.js';
@@ -121,7 +121,7 @@ Object.assign(window, { renderAprovadas, renderGarantiaCard, ehAdmin, ehStaff, e
   loadCategorias, loadColecoes, loadFornecedores, loadFaixasComissao, loadConfigRaspadinha, cadNovo, cadEditar, cadSalvar, cadExcluir, fornBuscar,
   perfilAbrirFoto, perfilFecharFoto, perfilTirarSelfie, perfilCapturar, perfilArquivo, perfilSalvarFoto,
   toast, podeAcessarPanel, renderSidebar, toggleSnavGrupo, primeiroPanelInicial, abrirRevendedora,
-  abrirRecebimento, registrarRecebimento, recRecalc, recAtalho, copiarPixCola, pixConfigAbrir, pixConfigSalvar, zapCobranca, estornarRecebimento, estornarConfirmar,
+  abrirRecebimento, registrarRecebimento, recRecalc, recAtalho, copiarPixCola, pixConfigAbrir, pixConfigSalvar, zapCobranca, estornarRecebimento, estornarConfirmar, excluirLancamento,
   loadPerfis, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilFechar, perfilSalvarPermissoes,
   loadLancador, lancadorBipar, lancadorSetQtd, lancadorRemover, lancadorEnviar, lancadorCamera, fecharCamera, scanBarcodeInto, lancadorSelecionarRev, lancadorDestinoNova, lancadorDestinoExistente, lancadorTrocarDestino, lancadorAbrirBusca, lancadorFecharBusca, lancadorBuscaInput, lancadorBuscaTeclas, lancadorBuscaAdicionar,
   abrirDivulgarMaleta, copiarLinkMaleta, mostrarQrMaleta, regenerarLinkMaleta });

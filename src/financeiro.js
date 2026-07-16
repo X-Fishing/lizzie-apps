@@ -4,7 +4,7 @@
 // teste, mas nada é gravado em financeiro_lancamentos.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, toast, sbQ, fmtBRL, formatDate, openModal, closeModal, parseMoneyBR, moneyToInput, handleSupabaseError, ehRevTeste } from './utils.js';
+import { esc, toast, sbQ, fmtBRL, formatDate, openModal, closeModal, parseMoneyBR, moneyToInput, handleSupabaseError, ehRevTeste, confirmarAcao } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 
 const podeEstornar = () => IS_ADMIN || PERMISSOES.has('acao_estornar_recebimento');
@@ -254,7 +254,7 @@ export async function registrarRecebimento(btn) {
   if (e1) { console.error('Recebimento:', e1); toast(`Erro ao registrar: ${e1.message}`); reab(); return; }
   // 2) substitui a pendência pelo novo restante (recebimentos parciais)
   const { error: e2 } = await sbQ(sb.from('financeiro_lancamentos')
-    .delete().eq('fechamento_id', f.id).eq('pago', false));
+    .delete().eq('fechamento_id', f.id).eq('pago', false).eq('estornado', false));
   if (e2) { console.error('Recebimento (pendência):', e2); toast(`Recebido gravado, mas erro ao atualizar a pendência: ${e2.message}`); reab(); return; }
   if (restante > 0.001) {
     const e3 = await insLanc([{ ...base, valor: restante, pago: false, vencimento: venc, forma_pagamento: null }]);
@@ -332,6 +332,7 @@ export async function loadFinanceiro() {
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         ${ehGestor() && l.fechamento_id ? `<button class="btn-secondary btn-sm" onclick="abrirRecebimento('${l.fechamento_id}')">Registrar pagamento</button>` : ''}
         ${finTelefones[l.pessoa_id] ? `<button class="btn-secondary btn-sm" style="border-color:#25D366;color:#128C7E" onclick="zapCobranca('${l.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> WhatsApp</button>` : ''}
+        ${IS_ADMIN ? `<button class="btn-icon" title="Excluir lançamento" style="color:var(--danger)" onclick="excluirLancamento('${l.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>` : ''}
       </td>
     </tr>`;
   }).join('') :
@@ -348,6 +349,7 @@ export async function loadFinanceiro() {
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         ${l.pago && !l.estornado && l.tipo === 'receber' && podeEstornar()
           ? `<button class="btn-icon" title="Estornar recebimento" style="color:var(--danger)" onclick="estornarRecebimento('${l.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>` : ''}
+        ${IS_ADMIN ? `<button class="btn-icon" title="Excluir lançamento" style="color:var(--danger)" onclick="excluirLancamento('${l.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>` : ''}
       </td>
     </tr>`).join('') :
     '<tr><td colspan="5"><div class="empty-state" style="padding:18px 0"><p style="font-size:13px">Nenhum recebimento ainda — feche uma maleta para começar.</p></div></td></tr>';
@@ -452,6 +454,23 @@ export function zapCobranca(lancId) {
     : `tem vencimento em ${vencFmt}`;
   const msg = `Oi ${primeiro}, tudo bem? 💗 Passando só para lembrar com carinho do acerto do seu mostruário (${fmtMostruario(l).replace('Mostruário ', 'Mostruário ')}) no valor de ${fmtBRL(l.valor)}, que ${frase}. ${finChavePix ? `Se preferir, a chave PIX é ${finChavePix}. ` : ''}Qualquer dúvida estou à disposição! Obrigada 🌸 — Lizzie Semijoias`;
   window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// Excluir lançamento — só admin (gate na UI + policy RESTRICTIVE 0022).
+// Diferente do estorno: apaga de vez, sem devolver nada para "A receber".
+export function excluirLancamento(id) {
+  if (!IS_ADMIN) { toast('Só o administrador pode excluir lançamentos.'); return; }
+  const l = finLancamentos.find(x => String(x.id) === String(id));
+  if (!l) return;
+  confirmarAcao('Excluir lançamento',
+    `Excluir "${l.pessoa_nome || l.descricao || 'lançamento'}" de ${fmtBRL(l.valor)}? `
+    + 'Diferente do estorno, nada volta para "A receber". Isso não pode ser desfeito.',
+    'Excluir', async () => {
+      const { error } = await sbQ(sb.from('financeiro_lancamentos').delete().eq('id', id));
+      if (error) { console.error('Excluir lançamento:', error); toast(`Erro ao excluir: ${error.message}`); return; }
+      toast('Lançamento excluído.');
+      loadFinanceiro();
+    });
 }
 
 // ── Config PIX (chave, nome máx 25, cidade máx 15) ──────────────────
