@@ -41,13 +41,11 @@ export function cadastroCompletoParaContrato(r, doc) {
 
 export async function loadAdmin() {
   panelAdmin().innerHTML = `
-    <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-      <div>
-        <div class="section-title">Revendedoras</div>
-        <div class="section-subtitle">Cadastro e gestão de acesso</div>
-      </div>
-      ${ehGestor() ? `<button class="btn-primary btn-sm" onclick="novaRevendedora()">${IC_PLUS} Nova revendedora</button>` : ''}
+    <div class="page-head">
+      <div><h2>Revendedoras</h2><div class="sub">Cadastro e gestão de acesso</div></div>
+      <div class="acts">${ehGestor() ? `<button class="btn-primary btn-sm" onclick="novaRevendedora()">${IC_PLUS} Nova revendedora</button>` : ''}</div>
     </div>
+    <div id="rev-stats"></div>
     <div id="pendentes-list"></div>
     <div id="rev-list"><div class="loading"><div class="spinner">⟳</div><br>Carregando...</div></div>`;
 
@@ -76,6 +74,24 @@ export async function loadAdmin() {
   } else pendDiv.innerHTML = '';
 
   state.aprovadasCache = prep(aprovadas);
+
+  const stats = document.getElementById('rev-stats');
+  if (stats) {
+    const ativas = state.aprovadasCache.length;
+    const incompletas = state.aprovadasCache.filter(revIncompleta).length;
+    const teste = state.aprovadasCache.filter(r => r.teste).length;
+    const IC_U = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>';
+    const IC_C = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+    const IC_A = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg>';
+    const IC_T = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2v7.31"/><path d="M14 9.3V1.99"/><path d="M8.5 2h7"/><path d="M14 9.3a6.5 6.5 0 1 1-4 0"/><path d="M5.52 16h12.96"/></svg>';
+    const card = (lbl, val, ic, cor) => `<div class="kpi-card"><div class="kpi-top"><span class="kpi-label">${lbl}</span><span class="kpi-ic">${ic}</span></div><div class="kpi-val"${cor ? ` style="color:${cor}"` : ''}>${val}</div></div>`;
+    stats.innerHTML = `<div class="kpi-grid">
+      ${card('Ativas', ativas, IC_U)}
+      ${card('Pendentes', pendentesRev.length, IC_C, pendentesRev.length ? 'var(--warning)' : '')}
+      ${card('Cadastro incompleto', incompletas, IC_A, incompletas ? 'var(--warning)' : '')}
+      ${card('Contas de teste', teste, IC_T)}
+    </div>`;
+  }
   await renderAprovadas();
 }
 
