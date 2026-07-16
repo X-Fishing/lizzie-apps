@@ -784,6 +784,9 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .chips .chip:hover { border-color: var(--rose); color: var(--rose); }
 .chips .chip.active { background: var(--grad-rose); color: #fff; border-color: transparent; }
 
+/* Grids de 2 colunas do redesign (calculadora etc.) colapsam no estreito */
+@media (max-width: 900px) { .calc-cols { grid-template-columns: 1fr !important; } }
+
 /* ── DASHBOARD PC (staff, tela larga): barra lateral dedicada estilo Bling/Zenply.
    Só aparece com .staff-desktop (setada no loadUser p/ staff) E >=900px. Sem isso,
    tudo no-op -> mobile e revendedora 100% intactos (continuam na nav inferior). */
