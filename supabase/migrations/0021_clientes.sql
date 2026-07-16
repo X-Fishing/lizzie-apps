@@ -1,20 +1,16 @@
--- ═══════════════════════════════════════════════════════════════════
--- 0021 — Clientes finais (Fase 1 redesign)
+-- 0021 - Clientes finais (Fase 1 redesign)
 -- Rodar no SQL Editor do Supabase (uma vez). Idempotente.
--- Base de clientes finais das revendedoras. Chave de dedup = CELULAR
--- (normalizado, só dígitos). LGPD: leitura/escrita só STAFF; delete gestor.
--- Sem acesso anônimo. A ligação com vendas (cliente_id) fica p/ ciclo futuro.
--- ═══════════════════════════════════════════════════════════════════
+-- Chave de dedup = CELULAR (so digitos). LGPD: leitura/escrita so STAFF; delete gestor.
 
 create table if not exists public.clientes (
   id              uuid primary key default gen_random_uuid(),
   nome            text not null,
-  celular         text unique,        -- só dígitos (com DDD) — dedup
+  celular         text unique,
   email           text,
   cidade          text,
   data_nascimento date,
   observacao      text,
-  criado_por      uuid,               -- auth.uid de quem cadastrou
+  criado_por      uuid,
   created_at      timestamptz not null default now()
 );
 create index if not exists idx_clientes_nome on public.clientes (lower(nome));
