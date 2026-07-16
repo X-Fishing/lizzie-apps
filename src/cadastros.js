@@ -10,6 +10,7 @@ const IC_EDIT  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path 
 const IC_TRASH = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
 const IC_EMPTY = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>';
 const IC_CARD  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>';
+const IC_FABRICA = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7 3 5"/><path d="M9 6V3h6v3"/><rect width="18" height="12" x="3" y="7" rx="2"/><path d="M3 13h18"/></svg>';
 
 // ── Configuração de cada cadastro ──────────────────────────────────────
 const CFG = {
@@ -68,8 +69,24 @@ const CFG = {
       { key: 'ativo',      label: 'Ativo', type: 'bool', default: true },
     ],
     colunas: ['nome', 'telefone', 'desconto'],
+    novoLabel: 'Novo fornecedor',
     fmt: { desconto: v => (Number(v) || 0) + '%' },
     validar: p => (p.desconto != null && (p.desconto < 0 || p.desconto > 100)) ? 'Desconto deve estar entre 0 e 100.' : null,
+    render: linhas => {
+      const ativos = linhas.filter(f => f.ativo !== false);
+      const comDesc = ativos.filter(f => Number(f.desconto) > 0);
+      const descMedio = comDesc.length ? Math.round(comDesc.reduce((a, f) => a + Number(f.desconto), 0) / comDesc.length) : 0;
+      const kpi = (lbl, val, cor) => `<div class="kpi-card"><div class="kpi-top"><span class="kpi-label">${lbl}</span></div><div class="kpi-val"${cor ? ` style="color:${cor}"` : ''}>${val}</div></div>`;
+      const t = fornBusca.trim().toLowerCase();
+      const vis = t ? linhas.filter(f => [f.nome, f.contato, f.cnpj_cpf, f.telefone].some(x => (x || '').toLowerCase().includes(t))) : linhas;
+      return `
+        <div class="kpi-grid">${kpi('Total', linhas.length)}${kpi('Ativos', ativos.length, 'var(--success)')}${kpi('Desconto médio', descMedio + '%', 'var(--gold)')}</div>
+        <div style="margin-bottom:14px"><input type="text" class="form-control" placeholder="Buscar por nome, contato ou CNPJ/CPF..." value="${esc(fornBusca)}" oninput="fornBuscar(this.value)"></div>
+        <div class="pag-wrap"><table class="pag-table"><thead><tr>
+          <th class="pag-th">Fornecedor</th><th class="pag-th">Contato</th><th class="pag-th">Telefone</th>
+          <th class="pag-th" style="text-align:right">Desconto</th><th class="pag-th" style="text-align:right">Status / Ações</th>
+        </tr></thead><tbody id="forn-tbody">${fornRows(vis)}</tbody></table></div>`;
+    },
   },
   faixas_comissao: {
     panel: 'faixas-comissao', titulo: 'Faixas de Comissão', singular: 'faixa de comissão',
@@ -266,6 +283,31 @@ function render(tabela, linhas) {
 export function cadAcoesHtml(tabela, id) {
   return `<button class="btn-icon" title="Editar" onclick="event.stopPropagation();cadEditar('${tabela}','${id}')" style="color:var(--rose)">${IC_EDIT}</button>
     <button class="btn-icon" title="Excluir" onclick="event.stopPropagation();cadExcluir('${tabela}','${id}')" style="color:var(--danger)">${IC_TRASH}</button>`;
+}
+
+// ── Fornecedores: busca client-side (atualiza só o tbody, sem perder foco) ──
+let fornBusca = '';
+function fornRows(lista) {
+  if (!lista.length) return '<tr><td class="pag-td" colspan="5" style="text-align:center;color:var(--muted);padding:24px">Nenhum fornecedor encontrado</td></tr>';
+  return lista.map(f => `
+    <tr class="pag-row">
+      <td class="pag-td"><div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:9px;background:var(--blush);display:flex;align-items:center;justify-content:center;color:var(--rose);flex:none">${IC_FABRICA}</div>
+        <div><div class="ciclo-desc">${esc(f.nome)}</div><div style="font-size:11px;color:var(--muted)">${esc(f.cnpj_cpf || 'sem CNPJ/CPF')}</div></div>
+      </div></td>
+      <td class="pag-td">${esc(f.contato || '—')}</td>
+      <td class="pag-td">${esc(f.telefone || '—')}</td>
+      <td class="pag-td" style="text-align:right;font-family:'Cormorant Garamond',serif;font-size:16px;color:var(--plum)">${Number(f.desconto) || 0}%</td>
+      <td class="pag-td" style="text-align:right;white-space:nowrap">${f.ativo === false ? '<span class="badge badge-aberta">Inativo</span>' : '<span class="badge badge-ativo">Ativo</span>'} ${cadAcoesHtml('fornecedores', f.id)}</td>
+    </tr>`).join('');
+}
+export function fornBuscar(v) {
+  fornBusca = v;
+  const tb = document.getElementById('forn-tbody');
+  if (!tb) return;
+  const t = v.trim().toLowerCase();
+  const lista = (cadastroCache.fornecedores || []).filter(f => !t || [f.nome, f.contato, f.cnpj_cpf, f.telefone].some(x => (x || '').toLowerCase().includes(t)));
+  tb.innerHTML = fornRows(lista);
 }
 
 // ── Formulário (modal genérico) ─────────────────────────────────────────
