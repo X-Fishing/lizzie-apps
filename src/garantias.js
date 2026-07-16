@@ -269,7 +269,7 @@ export function openNovaGarantia() {
   document.getElementById('g-edit-id').value = '';
   document.getElementById('modal-gTitle').textContent = 'Nova Garantia';
   document.getElementById('g-status-group').style.display = 'none';
-  ['g-desc','g-cliente','g-tel','g-problema','g-obs'].forEach(id => document.getElementById(id).value = '');
+  ['g-desc','g-cliente','g-tel','g-nasc','g-problema','g-obs'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('g-foto-preview').style.display = 'none';
   document.getElementById('g-foto-placeholder').style.display = 'block';
   document.getElementById('g-foto-input').value = '';
@@ -286,6 +286,7 @@ export async function editarGarantia(id) {
   document.getElementById('g-desc').value = g.descricao_item;
   document.getElementById('g-cliente').value = g.nome_cliente;
   document.getElementById('g-tel').value = g.telefone_cliente || '';
+  document.getElementById('g-nasc').value = isoToBR(g.nascimento_cliente) || '';
   document.getElementById('g-problema').value = g.problema_relatado;
   document.getElementById('g-entrada').value = isoToBR(g.data_entrada);
   document.getElementById('g-prazo').value = isoToBR(g.prazo_maximo);
@@ -311,10 +312,18 @@ export async function salvarGarantia(btn) {
   const desc = document.getElementById('g-desc').value.trim();
   const cliente = document.getElementById('g-cliente').value.trim();
   const problema = document.getElementById('g-problema').value.trim();
+  const telCliente = document.getElementById('g-tel').value.trim();
+  const nascCliente = brToISO(document.getElementById('g-nasc').value);
   if (!desc || !cliente || !problema) {
     toast('Preencha os campos obrigatórios');
     btn.disabled = false;
     return;
+  }
+  // Revendedora: WhatsApp + aniversário obrigatórios (envio da garantia por
+  // WhatsApp). Staff continua opcional — garantias de balcão/antigas sem o dado.
+  if (!ehStaff()) {
+    if (telCliente.replace(/\D/g, '').length < 10) { toast('Informe o WhatsApp da cliente com DDD'); btn.disabled = false; return; }
+    if (!nascCliente) { toast('Informe o aniversário da cliente (dd/mm/aaaa)'); btn.disabled = false; return; }
   }
 
   const editId = document.getElementById('g-edit-id').value;
@@ -336,7 +345,8 @@ export async function salvarGarantia(btn) {
   const payload = {
     descricao_item: desc,
     nome_cliente: cliente,
-    telefone_cliente: document.getElementById('g-tel').value.trim() || null,
+    telefone_cliente: telCliente || null,
+    nascimento_cliente: nascCliente || null,
     problema_relatado: problema,
     data_entrada: brToISO(document.getElementById('g-entrada').value),
     prazo_maximo: brToISO(document.getElementById('g-prazo').value),

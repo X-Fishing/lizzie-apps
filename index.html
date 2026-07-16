@@ -323,9 +323,15 @@
       <label class="form-label">Nome da cliente *</label>
       <input type="text" id="g-cliente" class="form-control" placeholder="Nome completo">
     </div>
-    <div class="form-group">
-      <label class="form-label">Telefone da cliente</label>
-      <input type="tel" id="g-tel" class="form-control" placeholder="(00) 00000-0000">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">WhatsApp da cliente</label>
+        <input type="tel" id="g-tel" class="form-control" placeholder="(00) 00000-0000" maxlength="16" inputmode="numeric" oninput="maskTelBR(this)">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Aniversário da cliente</label>
+        <input type="text" id="g-nasc" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)">
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Problema relatado *</label>
