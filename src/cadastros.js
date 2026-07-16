@@ -76,7 +76,7 @@ const CFG = {
     avisos: linhas => avisoFaixasComissao(linhas),
   },
   formas_pagamento: {
-    panel: 'formas-pagamento', titulo: 'Formas de Pagamento', singular: 'forma de pagamento', novoLabel: 'Nova forma',
+    panel: 'formas-pagamento', titulo: 'Formas de Pagamento', singular: 'forma de pagamento', novoLabel: 'Nova forma', migracao: '0020_formas_pgto_categorias_fin.sql',
     subtitulo: 'Taxas e prazos usados no fechamento de vendas',
     order: 'nome',
     campos: [
@@ -103,7 +103,7 @@ const CFG = {
       : `<div class="empty-state" style="padding:24px 0"><div class="empty-icon">${IC_CARD}</div><p>Nenhuma forma de pagamento ainda</p></div>`,
   },
   categorias_financeiras: {
-    panel: 'categorias-financeiras', titulo: 'Categorias Financeiras', singular: 'categoria financeira', novoLabel: 'Nova categoria',
+    panel: 'categorias-financeiras', titulo: 'Categorias Financeiras', singular: 'categoria financeira', novoLabel: 'Nova categoria', migracao: '0020_formas_pgto_categorias_fin.sql',
     subtitulo: 'Organização de receitas e despesas nos lançamentos',
     order: 'nome',
     campos: [
@@ -193,7 +193,16 @@ async function carregar(tabela) {
   const el = panelEl(tabela);
   el.innerHTML = '<div class="loading"><div class="spinner"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div><br>Carregando...</div>';
   const { data, error } = await sbQ(sb.from(tabela).select('*').order(cfg.order, { ascending: true }));
-  if (error) { if (await handleSupabaseError(error, 'Erro ao carregar ' + cfg.titulo)) return; }
+  if (error) {
+    // Tabela ainda não criada: mensagem clara em vez de spinner eterno.
+    const faltaTabela = /relation|does not exist|schema cache/i.test(error.message || '');
+    el.innerHTML = `<div class="empty-state" style="padding:40px 0"><div class="empty-icon">${IC_EMPTY}</div><p>${
+      faltaTabela && cfg.migracao
+        ? `Rode a migração <b>${cfg.migracao}</b> no Supabase para ativar "${cfg.titulo}".`
+        : 'Erro ao carregar ' + cfg.titulo + '.'}</p></div>`;
+    if (!faltaTabela) await handleSupabaseError(error, 'Erro ao carregar ' + cfg.titulo);
+    return;
+  }
   cadastroCache[tabela] = data || [];
   render(tabela, data || []);
 }
