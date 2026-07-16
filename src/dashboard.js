@@ -211,10 +211,23 @@ export async function loadDashboardStaff() {
   vendas.forEach(v => { const mm = meses.find(x => x.ym === ym(v.data_venda)); if (mm) mm.total += num(v.valor_total); });
   const maxMes = Math.max(1, ...meses.map(m => m.total));
 
-  const porRev = {};
-  vendas.forEach(v => { porRev[v.revendedora_id] = (porRev[v.revendedora_id] || 0) + num(v.valor_total); });
-  const ranking = Object.entries(porRev).map(([id, tot]) => ({ nome: nomeDe[id] || '—', tot }))
+  const porRev = {}, porRevCount = {};
+  vendas.forEach(v => {
+    porRev[v.revendedora_id] = (porRev[v.revendedora_id] || 0) + num(v.valor_total);
+    porRevCount[v.revendedora_id] = (porRevCount[v.revendedora_id] || 0) + 1;
+  });
+  const ranking = Object.entries(porRev).map(([id, tot]) => ({ id, nome: nomeDe[id] || '—', tot, n: porRevCount[id] || 0 }))
     .sort((a, b) => b.tot - a.tot).slice(0, 5);
+
+  // Barras dos últimos 7 dias (agrega o MESMO array vendas por dia).
+  const DIA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const dias7 = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(agora.getFullYear(), agora.getMonth(), agora.getDate() - i);
+    dias7.push({ iso: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`, lbl: DIA[d.getDay()], total: 0 });
+  }
+  vendas.forEach(v => { const dd = dias7.find(x => (v.data_venda || '').slice(0, 10) === x.iso); if (dd) dd.total += num(v.valor_total); });
+  const max7 = Math.max(1, ...dias7.map(d => d.total));
 
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const diasPrazo = g => Math.ceil((new Date(g.prazo_maximo + 'T00:00:00') - hoje) / 86400000);
@@ -232,11 +245,35 @@ export async function loadDashboardStaff() {
   const IC_TICKET = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>';
   const IC_CLOCK = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
 
+  const primeiroNome = (state.currentProfile?.nome || '').split(' ')[0] || 'Dashboard';
+  const iniciais = n => (n || '?').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+  const diasAtras = iso => { const d = new Date((iso || '').slice(0, 10) + 'T00:00:00'); const n2 = Math.round((hoje - d) / 86400000); return n2 <= 0 ? 'hoje' : n2 === 1 ? 'ontem' : `há ${n2}d`; };
+  const atividades = [...vendas].sort((a, b) => (b.data_venda || '').localeCompare(a.data_venda || '')).slice(0, 6)
+    .map(v => ({ texto: `Venda de ${fmtBRL(num(v.valor_total))}${nomeDe[v.revendedora_id] ? ' — ' + nomeDe[v.revendedora_id] : ''}`, tempo: diasAtras(v.data_venda) }));
+
   panel.innerHTML = `
     <div class="page-head"><div>
-      <h2>Dashboard</h2>
+      <h2>Olá, ${esc(primeiroNome)}</h2>
       <div class="sub">${mesLabel} · ${revsAtivas} revendedora${revsAtivas !== 1 ? 's' : ''} ativa${revsAtivas !== 1 ? 's' : ''}${temTeste ? ' · totais não incluem contas de teste' : ''}</div>
     </div></div>
+    <div class="dash-grid" style="grid-template-columns:1.6fr 1fr;margin-bottom:16px">
+      <div class="dash-card">
+        <h3>Vendas nos últimos 7 dias</h3><div class="dash-sub">Total vendido por dia</div>
+        <div class="dash-bars">
+          ${dias7.map(d => `<div class="dash-bar-col">
+            <div class="dash-bar" style="height:${Math.round(d.total / max7 * 100)}%" title="${fmtBRL(d.total)}"></div>
+            <div class="dash-bar-lbl">${d.lbl}</div></div>`).join('')}
+        </div>
+      </div>
+      <div class="dash-card">
+        <h3>Top revendedoras</h3><div class="dash-sub">Por total vendido no período</div>
+        ${ranking.length ? ranking.map(r => `<div style="display:flex;align-items:center;gap:10px;padding:7px 0">
+          <div style="width:30px;height:30px;border-radius:9px;background:var(--blush);color:var(--rose);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none">${iniciais(r.nome)}</div>
+          <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;color:var(--plum);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.nome)}</div><div style="font-size:11px;color:var(--muted)">${r.n} venda${r.n !== 1 ? 's' : ''}</div></div>
+          <div style="font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--plum)">${fmtBRL(r.tot)}</div>
+        </div>`).join('') : '<div class="dash-sub">Sem vendas ainda.</div>'}
+      </div>
+    </div>
     <div class="kpi-grid">
       <div class="kpi-card">
         <div class="kpi-top"><span class="kpi-label">Faturamento do mês</span><span class="kpi-ic">${IC_MONEY}</span></div>
@@ -272,10 +309,6 @@ export async function loadDashboardStaff() {
         <div class="dash-row"><span>Recebido</span><b style="color:var(--success)">${fmtBRL(recebidoMes)}</b></div>
       </div>
       <div class="dash-card">
-        <h3>Ranking de revendedoras</h3><div class="dash-sub">Por total vendido</div>
-        ${ranking.length ? ranking.map((r, i) => `<div class="dash-row"><span>${i + 1}. ${esc(r.nome)}</span><b>${fmtBRL(r.tot)}</b></div>`).join('') : '<div class="dash-sub">Sem vendas ainda.</div>'}
-      </div>
-      <div class="dash-card">
         <h3>Garantias</h3><div class="dash-sub">Situação atual</div>
         <div class="dash-row"><span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#3f7fe0;margin-right:5px;vertical-align:middle"></span>Abertas</span><b>${gAbertas}</b></div>
         <div class="dash-row"><span><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--warning);margin-right:5px;vertical-align:middle"></span>Em conserto</span><b>${gConserto}</b></div>
@@ -287,5 +320,12 @@ export async function loadDashboardStaff() {
         <div class="dash-sub">Despesas, lucro e DRE chegam com o módulo Financeiro</div>
         <div class="empty-state" style="padding:18px 0"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg></div><p style="font-size:12px">Em construção</p></div>
       </div>
+    </div>
+    <div class="dash-card" style="margin-top:16px">
+      <h3>Atividade recente</h3><div class="dash-sub">Últimas vendas</div>
+      ${atividades.length ? atividades.map(a => `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">
+        <div style="width:32px;height:32px;border-radius:9px;background:rgba(76,175,130,0.12);color:var(--success);display:flex;align-items:center;justify-content:center;flex:none">${IC_MONEY}</div>
+        <div style="flex:1;min-width:0"><div style="font-size:13px;color:var(--text)">${esc(a.texto)}</div><div style="font-size:11px;color:var(--muted)">${a.tempo}</div></div>
+      </div>`).join('') : '<div class="dash-sub">Sem vendas recentes.</div>'}
     </div>`;
 }
