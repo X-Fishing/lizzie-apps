@@ -128,7 +128,7 @@ function abrirFormFunc(f) {
       <input type="checkbox" id="func-f-admin" ${r.is_admin ? 'checked' : ''} style="width:auto"> Admin (acesso total)</label>
     <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
       <input type="checkbox" id="func-f-ativo" ${(r.ativo ?? true) ? 'checked' : ''} style="width:auto"> Ativo</label>`;
-  document.getElementById('cad-modal-salvar').setAttribute('onclick', `funcSalvar(${f ? `'${r.id}'` : 'null'})`);
+  { const s = document.getElementById('cad-modal-salvar'); s.style.display = ''; s.setAttribute('onclick', `funcSalvar(${f ? `'${r.id}'` : 'null'})`); }
   openModal('modal-cadastro');
 }
 
@@ -268,7 +268,7 @@ function abrirFormPerfil(p) {
       <input type="text" id="perfil-f-desc" class="form-control" value="${esc(r.descricao || '')}"></div>
     <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
       <input type="checkbox" id="perfil-f-ativo" ${(r.ativo ?? true) ? 'checked' : ''} style="width:auto"> Ativo</label>`;
-  document.getElementById('cad-modal-salvar').setAttribute('onclick', `perfilSalvar(${p ? `'${r.id}'` : 'null'})`);
+  { const s = document.getElementById('cad-modal-salvar'); s.style.display = ''; s.setAttribute('onclick', `perfilSalvar(${p ? `'${r.id}'` : 'null'})`); }
   openModal('modal-cadastro');
 }
 

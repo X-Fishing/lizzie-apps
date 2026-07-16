@@ -268,8 +268,9 @@ function abrirForm(tabela, registro) {
   document.getElementById('cad-modal-titulo').textContent =
     (editando ? 'Editar ' : 'Nova ') + cfg.singular;
   document.getElementById('cad-modal-body').innerHTML = campos;
-  document.getElementById('cad-modal-salvar').setAttribute(
-    'onclick', `cadSalvar('${tabela}',${editando ? `'${r.id}'` : 'null'})`);
+  const salvar = document.getElementById('cad-modal-salvar');
+  salvar.style.display = '';   // pode ter sido escondido por um modal de detalhe
+  salvar.setAttribute('onclick', `cadSalvar('${tabela}',${editando ? `'${r.id}'` : 'null'})`);
   document.getElementById('modal-cadastro').classList.add('show');
 }
 
