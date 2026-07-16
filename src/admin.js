@@ -367,7 +367,7 @@ export async function salvarRevendedora(id) {
     const { error } = await sbQ(sb.from('profiles').update(profilePayload).eq('id', id));
     if (error) { console.error('salvarRevendedora update:', error); desfazerBtn(); if (isAuthError(error)) { await handleSupabaseError(error); return; } toast('Erro ao salvar: ' + detalhe(error)); return; }
   } else {
-    const { data, error } = await sbQ(sb.from('profiles').insert({ role: 'revendedora', aprovada: true, ...profilePayload }).select('id').single());
+    const { data, error } = await sbQ(sb.from('profiles').insert({ role: 'revendedora', is_revendedora: true, aprovada: true, ...profilePayload }).select('id').single());
     if (error || !data) { console.error('salvarRevendedora insert:', error); desfazerBtn(); if (error && isAuthError(error)) { await handleSupabaseError(error); return; } toast('Erro ao criar: ' + detalhe(error)); return; }
     profileId = data.id;
   }
