@@ -67,7 +67,7 @@ export const MENU = [
   ]},
   { grupo: 'grp_marketing', label: 'Marketing', icon: IC.mega, filhos: [
       { chave: 'cad_raspadinha',       panel: 'config-raspadinha', label: 'Raspadinha', icon: IC.tag, admin_only: true },
-      { chave: 'marketing_fidelidade', panel: 'fidelidade',        label: 'Fidelidade', icon: IC.star, em_breve: true },
+      { chave: 'marketing_fidelidade', panel: 'fidelidade',        label: 'Fidelidade', icon: IC.star },
       { chave: 'marketing_bonus',      panel: 'bonus',             label: 'Bônus',      icon: IC.gift, em_breve: true },
   ]},
   { secao: 'Configurações', grupo: 'grp_cadastros', filhos: [

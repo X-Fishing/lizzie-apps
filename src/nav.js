@@ -65,6 +65,7 @@ function aplicarTela(name) {
   if (name === 'config-raspadinha') loadConfigRaspadinha();
   if (name === 'precificacao') loadPrecificacao();
   if (name === 'entrada-mercadoria') loadEntradaMercadoria();
+  if (name === 'fidelidade') loadFidelidade();
   if (name === 'lancador') loadLancador();
   window.scrollTo(0, 0);
 }
