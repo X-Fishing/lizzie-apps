@@ -3,7 +3,7 @@
 // nascimento/fiador) vivem em revendedora_docs (RLS só gestor — LGPD).
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, sbQ, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, formatDate,
+import { esc, sbQ, toast, handleSupabaseError, isAuthError, confirmarAcao, openModal, closeModal, formatDate,
          maskCpf, maskCep, cpfValido, buscarCep, maskDateBR, isoToBR, brToISO, hojeBR } from './utils.js';
 import { ROLE_LABELS, maskTelBR } from './auth.js';
 import { carregarProximasTrocas, compararPorTroca, atualizarBadgesTroca } from './trocas.js';
@@ -359,13 +359,16 @@ export async function salvarRevendedora(id) {
 
   const desfazerBtn = () => { if (btn) { btn.disabled = false; btn.textContent = id ? 'Salvar alterações' : 'Salvar revendedora'; } };
 
+  // Mostra o erro REAL do Postgres (código + mensagem) — antes ficava só
+  // "Erro ao criar" genérico, o que impedia diagnosticar RLS/schema.
+  const detalhe = e => `${e?.code ? '[' + e.code + '] ' : ''}${e?.message || e?.hint || e?.details || 'erro desconhecido'}`;
   let profileId = id;
   if (id) {
     const { error } = await sbQ(sb.from('profiles').update(profilePayload).eq('id', id));
-    if (error) { desfazerBtn(); if (await handleSupabaseError(error, 'Erro ao salvar')) return; toast('Erro ao salvar'); return; }
+    if (error) { console.error('salvarRevendedora update:', error); desfazerBtn(); if (isAuthError(error)) { await handleSupabaseError(error); return; } toast('Erro ao salvar: ' + detalhe(error)); return; }
   } else {
     const { data, error } = await sbQ(sb.from('profiles').insert({ role: 'revendedora', aprovada: true, ...profilePayload }).select('id').single());
-    if (error || !data) { desfazerBtn(); if (await handleSupabaseError(error, 'Erro ao criar')) return; toast('Erro ao criar'); return; }
+    if (error || !data) { console.error('salvarRevendedora insert:', error); desfazerBtn(); if (error && isAuthError(error)) { await handleSupabaseError(error); return; } toast('Erro ao criar: ' + detalhe(error)); return; }
     profileId = data.id;
   }
 
