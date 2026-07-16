@@ -798,7 +798,8 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   }
   #app.staff-desktop .topbar { margin-left: 232px; }
   #app.staff-desktop .content { max-width: 1280px; margin-left: 252px; padding: 26px 32px 48px; }
-  #app.staff-desktop .topbar-crumb { display: flex; }
+  #app.staff-desktop .topbar-logo { display: none; }   /* sidebar já mostra "Lizzie" */
+  #app.staff-desktop .topbar-crumb { display: flex; margin-left: 4px; }
   /* Recolhida = TRILHO de 60px (só ícones), não some mais */
   #app.staff-desktop.snav-fechada .staff-nav { width: 60px; padding: 14px 8px; }
   #app.staff-desktop.snav-fechada .topbar { margin-left: 60px; }
