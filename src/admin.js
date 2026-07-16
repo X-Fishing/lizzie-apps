@@ -12,6 +12,11 @@ const IC_PLUS = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d
 
 const panelAdmin = () => document.getElementById('panel-admin');
 
+// Filtro da lista de revendedoras (busca + chip), client-side.
+let revBusca = '', revFiltro = 'todas';
+export function revBuscar(v) { revBusca = v; renderAprovadas(); }
+export function revChip(k) { revFiltro = k; renderAprovadas(); }
+
 // Cadastro considerado incompleto p/ contrato: falta CPF, nascimento ou endereço.
 function revIncompleta(r) {
   const d = r._doc || {};
@@ -67,12 +72,8 @@ export async function loadAdmin() {
   const prep = lista => (lista || []).filter(r => !funcIds.has(r.id)).map(r => ({ ...r, _doc: docMap.get(String(r.id)) || null }));
   const pendentesRev = prep(pendentes);
 
-  const pendDiv = document.getElementById('pendentes-list');
-  if (pendentesRev.length) {
-    pendDiv.innerHTML = `<div class="alert alert-warning"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 22h14"/><path d="M5 2h14"/><path d="M17 22v-4.172a2 2 0 0 0-.586-1.414L12 12l-4.414 4.414A2 2 0 0 0 7 17.828V22"/><path d="M7 2v4.172a2 2 0 0 0 .586 1.414L12 12l4.414-4.414A2 2 0 0 0 17 6.172V2"/></svg> ${pendentesRev.length} cadastro${pendentesRev.length>1?'s':''} aguardando aprovação</div>` +
-      pendentesRev.map(r => renderRevCard(r, true)).join('');
-  } else pendDiv.innerHTML = '';
-
+  state.revPendentes = pendentesRev;
+  document.getElementById('pendentes-list').innerHTML = '';   // vão pro grid unificado (chip Pendentes)
   state.aprovadasCache = prep(aprovadas);
 
   const stats = document.getElementById('rev-stats');
@@ -98,45 +99,49 @@ export async function loadAdmin() {
 export async function renderAprovadas() {
   const revDiv = document.getElementById('rev-list');
   if (!revDiv) return;
-  if (!state.aprovadasCache.length) {
-    revDiv.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div><p>Nenhuma revendedora aprovada</p></div>';
-    return;
-  }
-  if (state.ordemTrocaProxima && !state.proximaTrocaCarregado) {
-    revDiv.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando próximas trocas...</div>';
-    await carregarProximasTrocas();
-  }
-  const lista = state.ordemTrocaProxima ? [...state.aprovadasCache].sort(compararPorTroca) : state.aprovadasCache;
-  const btnLabel = state.ordemTrocaProxima ? '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 16 4 4 4-4"/><path d="M7 20V4"/><path d="M20 8h-5"/><path d="M15 10V6.5a2.5 2.5 0 0 1 5 0V10"/><path d="M15 14h5l-5 6h5"/></svg> Ordem alfabética' : '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><line x1="16" x2="16" y1="2" y2="6"/><line x1="8" x2="8" y1="2" y2="6"/><line x1="3" x2="21" y1="10" y2="10"/></svg> Trocas próximas';
+  const pend = state.revPendentes || [];
+  const aprov = state.aprovadasCache || [];
+  // Filtro por chip
+  let base;
+  if (revFiltro === 'pendentes') base = pend;
+  else if (revFiltro === 'ativas') base = aprov.filter(r => !r.teste);
+  else if (revFiltro === 'teste') base = aprov.filter(r => r.teste);
+  else base = [...pend, ...aprov];
+  // Busca
+  const t = revBusca.trim().toLowerCase();
+  const lista = t ? base.filter(r => [r.nome, r.cidade, r.telefone, r.email].some(v => (v || '').toLowerCase().includes(t))) : base;
+
+  const chip = (k, lbl, n) => `<button class="chip${revFiltro === k ? ' active' : ''}" onclick="revChip('${k}')">${lbl}${n != null ? ` (${n})` : ''}</button>`;
   revDiv.innerHTML = `
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:8px;flex-wrap:wrap">
-      <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">
-        ${state.aprovadasCache.length} revendedora${state.aprovadasCache.length!==1?'s':''} ativas<span id="troca-count"></span>
-      </div>
-      <button class="btn-secondary btn-sm" style="font-size:11px;white-space:nowrap" onclick="toggleOrdemTroca()">${btnLabel}</button>
-    </div>` +
-    lista.map(r => renderRevCard(r, false)).join('');
-  atualizarBadgesTroca();
+    <div style="margin-bottom:12px"><input type="text" class="form-control" placeholder="Buscar por nome, cidade ou telefone..." value="${esc(revBusca)}" oninput="revBuscar(this.value)"></div>
+    <div class="chips" style="margin-bottom:14px">
+      ${chip('todas', 'Todas')}${chip('ativas', 'Ativas')}${chip('pendentes', 'Pendentes', pend.length)}${chip('teste', 'Teste')}
+    </div>
+    ${lista.length
+      ? `<div class="rev-grid">${lista.map(r => renderRevCard(r, r.aprovada === false)).join('')}</div>`
+      : `<div class="empty-state" style="padding:40px 0"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><p>Nenhuma revendedora ${t ? 'encontrada' : 'nesse filtro'}</p></div>`}`;
 }
 
 export function renderRevCard(r, pendente) {
   const inicial = r.nome.charAt(0).toUpperCase();
   const local = [r.cidade, r.estado].filter(Boolean).join('/') || 'Cidade não informada';
-  const trocaSlot = pendente ? '' : `<div data-troca-bling-id="${r.bling_contato_id || ''}" style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border)"><span style="font-size:11px;color:var(--muted)">Carregando próxima troca...</span></div>`;
-  const seloIncompleto = revIncompleta(r)
-    ? '<span class="badge-soon" style="background:var(--warning);color:#fff;margin-left:6px" title="Falta CPF, nascimento ou endereço">Cadastro incompleto</span>' : '';
+  const badges = [
+    pendente
+      ? '<span class="badge badge-pendente"><span class="pending-dot"></span>Pendente</span>'
+      : '<span class="badge badge-ativo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Ativa</span>',
+    r.teste ? '<span class="badge-soon" style="background:var(--warning);color:#fff;margin-left:0">Teste</span>' : '',
+    revIncompleta(r) ? '<span class="badge-soon" style="background:var(--warning);color:#fff;margin-left:0" title="Falta CPF, nascimento ou endereço">Cadastro incompleto</span>' : '',
+  ].filter(Boolean).join(' ');
   return `<div class="card rev-card" onclick="abrirRevendedora('${r.id}')">
     <div class="rev-header">
       <div class="rev-avatar">${inicial}</div>
-      <div>
-        <div class="rev-nome">${esc(r.nome)}${r.teste ? ' <span class="badge-soon" style="background:var(--warning);color:#fff">TESTE</span>' : ''}${seloIncompleto}</div>
+      <div style="min-width:0">
+        <div class="rev-nome">${esc(r.nome)}</div>
         <div class="rev-cidade">${esc(local)} · ${esc(r.telefone || '—')}</div>
       </div>
-      <div class="rev-status">
-        ${pendente ? '<span class="badge badge-pendente"><span class="pending-dot"></span>Pendente</span>' : '<span class="badge badge-ativo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Ativa</span>'}
-      </div>
     </div>
-    ${trocaSlot}
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px">${badges}</div>
+    ${r.email ? `<div style="font-size:12px;color:var(--muted);margin-top:10px;padding-top:10px;border-top:1px solid var(--border);word-break:break-all">${esc(r.email)}</div>` : ''}
   </div>`;
 }
 
