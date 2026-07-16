@@ -9,6 +9,7 @@ const IC_PLUS  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path 
 const IC_EDIT  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
 const IC_TRASH = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
 const IC_EMPTY = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>';
+const IC_CARD  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>';
 
 // ── Configuração de cada cadastro ──────────────────────────────────────
 const CFG = {
@@ -73,6 +74,58 @@ const CFG = {
       return null;
     },
     avisos: linhas => avisoFaixasComissao(linhas),
+  },
+  formas_pagamento: {
+    panel: 'formas-pagamento', titulo: 'Formas de Pagamento', singular: 'forma de pagamento', novoLabel: 'Nova forma',
+    subtitulo: 'Taxas e prazos usados no fechamento de vendas',
+    order: 'nome',
+    campos: [
+      { key: 'nome',  label: 'Nome (ex.: Cartão de crédito 3x)', type: 'text', required: true },
+      { key: 'taxa',  label: 'Taxa (%)', type: 'number', default: 0 },
+      { key: 'prazo', label: 'Prazo de recebimento (ex.: na hora, 30 dias)', type: 'text' },
+      { key: 'ativo', label: 'Ativo', type: 'bool', default: true },
+    ],
+    colunas: ['nome', 'taxa', 'prazo'],
+    render: linhas => linhas.length
+      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px">${linhas.map(f => `
+          <div class="card" style="display:flex;align-items:center;gap:14px${f.ativo === false ? ';opacity:.55' : ''}">
+            <div class="kpi-ic" style="width:40px;height:40px">${IC_CARD}</div>
+            <div style="flex:1;min-width:0">
+              <div class="ciclo-desc">${esc(f.nome)}${f.ativo === false ? ' <span class="badge badge-aberta" style="font-size:10px">inativo</span>' : ''}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">Recebimento em ${esc(f.prazo || '—')}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--plum)">${Number(f.taxa || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%</div>
+              <div style="font-size:11px;color:var(--muted)">taxa</div>
+            </div>
+            <div style="white-space:nowrap">${cadAcoesHtml('formas_pagamento', f.id)}</div>
+          </div>`).join('')}</div>`
+      : `<div class="empty-state" style="padding:24px 0"><div class="empty-icon">${IC_CARD}</div><p>Nenhuma forma de pagamento ainda</p></div>`,
+  },
+  categorias_financeiras: {
+    panel: 'categorias-financeiras', titulo: 'Categorias Financeiras', singular: 'categoria financeira', novoLabel: 'Nova categoria',
+    subtitulo: 'Organização de receitas e despesas nos lançamentos',
+    order: 'nome',
+    campos: [
+      { key: 'nome', label: 'Nome', type: 'text', required: true },
+      { key: 'tipo', label: 'Tipo', type: 'select', default: 'despesa',
+        options: [{ value: 'receita', label: 'Receita' }, { value: 'despesa', label: 'Despesa' }] },
+      { key: 'ativo', label: 'Ativo', type: 'bool', default: true },
+    ],
+    colunas: ['nome', 'tipo'],
+    render: linhas => {
+      const col = (titulo, cor, itens) => `
+        <div style="flex:1;min-width:240px">
+          <div style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:${cor};margin-bottom:10px">${titulo} (${itens.length})</div>
+          ${itens.length ? itens.map(c => `<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;margin-bottom:8px${c.ativo === false ? ';opacity:.55' : ''}">
+            <span class="ciclo-desc">${esc(c.nome)}${c.ativo === false ? ' <span class="badge badge-aberta" style="font-size:10px">inativo</span>' : ''}</span>
+            <span style="white-space:nowrap">${cadAcoesHtml('categorias_financeiras', c.id)}</span></div>`).join('')
+            : '<div style="font-size:12px;color:var(--muted)">Nenhuma ainda</div>'}
+        </div>`;
+      return `<div style="display:flex;gap:20px;flex-wrap:wrap">
+        ${col('Receitas', 'var(--success)', linhas.filter(c => c.tipo === 'receita'))}
+        ${col('Despesas', 'var(--danger)', linhas.filter(c => c.tipo === 'despesa'))}</div>`;
+    },
   },
   config_raspadinha: {
     panel: 'config-raspadinha', titulo: 'Raspadinha', singular: 'configuração de raspadinha',
@@ -163,16 +216,27 @@ function render(tabela, linhas) {
     </tr>`).join('') :
     `<tr><td colspan="${cols.length + 1}"><div class="empty-state" style="padding:24px 0"><div class="empty-icon">${IC_EMPTY}</div><p>Nenhum registro ainda</p></div></td></tr>`;
 
+  // Corpo: render customizado (cards/colunas) ou a tabela padrão.
+  const corpo = cfg.render
+    ? cfg.render(linhas, tabela)
+    : `<div class="pag-wrap"><table class="pag-table"><thead><tr>${thead}</tr></thead><tbody>${rows}</tbody></table></div>`;
+
   panelEl(tabela).innerHTML = `
-    <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+    <div class="page-head">
       <div>
-        <div class="section-title">${cfg.titulo}</div>
-        <div class="section-subtitle">${cfg.subtitulo ? cfg.subtitulo + ' · ' : ''}${linhas.length} registro${linhas.length !== 1 ? 's' : ''}</div>
+        <h2>${cfg.titulo}</h2>
+        <div class="sub">${cfg.subtitulo ? cfg.subtitulo + ' · ' : ''}${linhas.length} registro${linhas.length !== 1 ? 's' : ''}</div>
       </div>
-      <button class="btn-primary btn-sm" onclick="cadNovo('${tabela}')">${IC_PLUS} Novo</button>
+      <div class="acts"><button class="btn-primary btn-sm" onclick="cadNovo('${tabela}')">${IC_PLUS} ${cfg.novoLabel || 'Novo'}</button></div>
     </div>
     ${cfg.avisos ? cfg.avisos(linhas) : ''}
-    <div class="pag-wrap"><table class="pag-table"><thead><tr>${thead}</tr></thead><tbody>${rows}</tbody></table></div>`;
+    ${corpo}`;
+}
+
+// Botões de ação (editar/excluir) reusados pelo render customizado (cards).
+export function cadAcoesHtml(tabela, id) {
+  return `<button class="btn-icon" title="Editar" onclick="event.stopPropagation();cadEditar('${tabela}','${id}')" style="color:var(--rose)">${IC_EDIT}</button>
+    <button class="btn-icon" title="Excluir" onclick="event.stopPropagation();cadExcluir('${tabela}','${id}')" style="color:var(--danger)">${IC_TRASH}</button>`;
 }
 
 // ── Formulário (modal genérico) ─────────────────────────────────────────
@@ -190,6 +254,11 @@ function abrirForm(tabela, registro) {
     if (f.type === 'textarea') {
       return `<div class="form-group"><label class="form-label">${f.label}</label>
         <textarea id="cad-f-${f.key}" class="form-control" rows="2">${esc(val)}</textarea></div>`;
+    }
+    if (f.type === 'select') {
+      const cur = r[f.key] ?? f.default ?? (f.options[0]?.value);
+      return `<div class="form-group"><label class="form-label">${f.label}${f.required ? ' *' : ''}</label>
+        <select id="cad-f-${f.key}" class="form-control">${f.options.map(o => `<option value="${esc(o.value)}" ${String(cur) === String(o.value) ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></div>`;
     }
     const inputType = f.type === 'number' ? 'number' : 'text';
     return `<div class="form-group"><label class="form-label">${f.label}${f.required ? ' *' : ''}</label>
@@ -269,6 +338,8 @@ export function loadColecoes()        { carregar('colecoes'); }
 export function loadFornecedores()    { carregar('fornecedores'); }
 export function loadFaixasComissao()  { carregar('faixas_comissao'); }
 export function loadConfigRaspadinha() { carregar('config_raspadinha'); }
+export function loadFormasPagamento() { carregar('formas_pagamento'); }
+export function loadCategoriasFinanceiras() { carregar('categorias_financeiras'); }
 
 // Carrega os 3 cadastros para alimentar selects do produto (uma vez por abertura).
 export async function carregarCadastrosParaSelect() {
