@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(201,116,138,0.35); border-radius: 8px; }
+  a { color: #c9748a; }
+  a:hover { color: #1a0a2e; }
+</style>
+<script src="./image-slot.js"></script>
+</helmet>
+
+<div style="display:flex; min-height:100vh; background:#faf7f2; font-family:'DM Sans',sans-serif; color:#2d1f35;">
+
+  <!-- SIDEBAR -->
+  <div style="width:{{ sidebarWidth }}; flex-shrink:0; background:#fff; border-right:1px solid rgba(201,116,138,0.2); box-shadow:2px 0 16px rgba(0,0,0,0.05); position:fixed; top:0; left:0; bottom:0; padding:14px 10px; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:1px; transition:width 0.2s;">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:4px 10px 18px 12px;">
+      <sc-if value="{{ sidebarAberta }}" hint-placeholder-val="{{ true }}"><div style="font-family:'Cormorant Garamond',serif; font-size:20px; letter-spacing:3px; color:#1a0a2e; text-transform:uppercase; white-space:nowrap;">Lizzie</div></sc-if>
+      <button onclick="{{ toggleSidebar }}" style="width:24px; height:24px; border-radius:8px; border:1px solid rgba(201,116,138,0.2); background:#fff; color:#8a7590; font-size:11px; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center;">{{ sidebarToggleIcon }}</button>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:11px; padding:10px 14px; border-radius:10px; font-size:13px; color:#2d1f35; cursor:pointer; white-space:nowrap; overflow:hidden;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoGrid }}</span><sc-if value="{{ sidebarAberta }}" hint-placeholder-val="{{ true }}"><span>Dashboard</span></sc-if>
+    </div>
+
+    <sc-if value="{{ sidebarAberta }}" hint-placeholder-val="{{ true }}">
+    <div style="font-size:13px; font-weight:600; color:#1a0a2e; padding:11px 14px; margin-top:2px; display:flex; align-items:center; gap:10px; white-space:nowrap;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoBag }}</span>Vendas
+    </div>
+    <div style="margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid rgba(201,116,138,0.2); display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoGem }}</span>Controle de Vendas</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoUserCheck }}</span>Revendedoras</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoUsers }}</span>Clientes</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoColumns }}</span>Lançar Mostruário</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoRepeat }}</span>Troca de Mostruário</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoShield }}</span>Garantias</div>
+    </div>
+
+    <div style="font-size:13px; font-weight:600; color:#1a0a2e; padding:11px 14px; margin-top:8px; display:flex; align-items:center; gap:10px; white-space:nowrap;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoPackage }}</span>Estoque
+    </div>
+    <div style="margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid rgba(201,116,138,0.2); display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoFabrica }}</span>Fornecedores</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; border-radius:8px; background:rgba(201,116,138,0.10); color:#c9748a; font-weight:600;"><span style="width:15px; display:inline-flex;">{{ icoGem }}</span>Produtos</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoTag }}</span>Categorias</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoLayers }}</span>Coleções</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoCart }}</span>Entrada de Mercadoria</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoPercent }}</span>Precificação</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoCalc }}</span>Calculadora</div>
+    </div>
+
+    <div style="font-size:13px; font-weight:600; color:#1a0a2e; padding:11px 14px; margin-top:8px; display:flex; align-items:center; gap:10px; white-space:nowrap;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoFin }}</span>Financeiro
+    </div>
+    <div style="margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid rgba(201,116,138,0.2); display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoFin }}</span>Lançamentos</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#c2c2c2;"><span style="width:15px; display:inline-flex;">{{ icoCard }}</span>Formas de Pagamento<span style="margin-left:auto; font-size:9px; font-weight:600; color:#d4a84b; background:rgba(212,168,75,0.12); border:1px solid rgba(212,168,75,0.4); border-radius:8px; padding:1px 6px; white-space:nowrap;">EM BREVE</span></div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#c2c2c2;"><span style="width:15px; display:inline-flex;">{{ icoTag }}</span>Categorias Financeiras<span style="margin-left:auto; font-size:9px; font-weight:600; color:#d4a84b; background:rgba(212,168,75,0.12); border:1px solid rgba(212,168,75,0.4); border-radius:8px; padding:1px 6px; white-space:nowrap;">EM BREVE</span></div>
+    </div>
+
+    <div style="font-size:13px; font-weight:600; color:#1a0a2e; padding:11px 14px; margin-top:8px; display:flex; align-items:center; gap:10px; white-space:nowrap;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoMega }}</span>Marketing
+    </div>
+    <div style="margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid rgba(201,116,138,0.2); display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoTag }}</span>Raspadinha</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoGift }}</span>Fidelidade<span style="margin-left:auto; font-size:9px; font-weight:600; color:#d4a84b; background:rgba(212,168,75,0.12); border:1px solid rgba(212,168,75,0.4); border-radius:8px; padding:1px 6px; white-space:nowrap;">EM BREVE</span></div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#c2c2c2;"><span style="width:15px; display:inline-flex;">{{ icoGift }}</span>Bônus<span style="margin-left:auto; font-size:9px; font-weight:600; color:#d4a84b; background:rgba(212,168,75,0.12); border:1px solid rgba(212,168,75,0.4); border-radius:8px; padding:1px 6px; white-space:nowrap;">EM BREVE</span></div>
+    </div>
+
+    <div style="font-size:11px; font-weight:600; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:14px 14px 6px;">Configurações</div>
+    <div style="display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:13px; padding:9px 14px; color:#2d1f35;"><span style="width:18px; display:inline-flex;">{{ icoCrachaFunc }}</span>Funcionários</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:13px; padding:9px 14px; color:#2d1f35;"><span style="width:18px; display:inline-flex;">{{ icoShield }}</span>Perfis &amp; Permissões</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:13px; padding:9px 14px; color:#2d1f35;"><span style="width:18px; display:inline-flex;">{{ icoPercent }}</span>Faixas de Comissão</div>
+    </div>
+    </sc-if>
+  </div>
+
+  <!-- MAIN -->
+  <div style="margin-left:{{ sidebarWidth }}; flex:1; display:flex; flex-direction:column; min-width:0; transition:margin-left 0.2s;">
+
+    <!-- TOPBAR -->
+    <div style="background:#1a0a2e; padding:14px 28px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; box-shadow:0 2px 20px rgba(0,0,0,0.3);">
+      <div style="font-size:13px; color:rgba(255,255,255,0.5);">Estoque / <span style="color:#d4a84b;">Produtos</span></div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="background:rgba(201,116,138,0.2); border:1px solid #c9748a; border-radius:20px; padding:4px 12px; font-size:11px; color:#c9748a; font-weight:500;">STAFF</div>
+      </div>
+    </div>
+
+    <!-- ══════════ LISTA ══════════ -->
+    <sc-if value="{{ ehLista }}" hint-placeholder-val="{{ true }}">
+    <div style="max-width:1280px; width:100%; padding:26px 32px 48px;">
+
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; gap:16px; flex-wrap:wrap;">
+        <div>
+          <div style="font-size:19px; font-weight:600; color:#1a0a2e;">Produtos</div>
+          <div style="font-size:12px; color:#8a7590; margin-top:2px;">{{ total }} produtos no catálogo</div>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button style="height:36px; padding:0 13px; border-radius:10px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; color:#8a7590; font-size:12.5px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif; display:inline-flex; align-items:center; gap:6px;"><span style="display:inline-flex;">{{ icoBarcode }}</span>Importar do Bling</button>
+          <button style="height:36px; padding:0 13px; border-radius:10px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; color:#8a7590; font-size:12.5px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif; display:inline-flex; align-items:center; gap:6px;"><span style="display:inline-flex;">{{ icoCam }}</span>Fotos em lote</button>
+          <button style="height:36px; padding:0 13px; border-radius:10px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; color:#8a7590; font-size:12.5px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif; display:inline-flex; align-items:center; gap:6px;"><span style="display:inline-flex;">{{ icoSheet }}</span>Planilha</button>
+          <button onclick="{{ novoProduto }}" style="height:36px; padding:0 16px; border-radius:10px; border:none; background:linear-gradient(135deg,#c9748a,#b5526a); color:#fff; font-size:12.5px; font-weight:500; font-family:'DM Sans',sans-serif; cursor:pointer;">+ Novo produto</button>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px;">
+        <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-radius:14px; padding:15px 16px;">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:28px; color:#1a0a2e; line-height:1;">{{ total }}</div>
+          <div style="font-size:11px; color:#8a7590; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Produtos</div>
+        </div>
+        <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-radius:14px; padding:15px 16px;">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:28px; color:#c9748a; line-height:1;">{{ totalEstoque }}</div>
+          <div style="font-size:11px; color:#8a7590; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Peças em estoque</div>
+        </div>
+        <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-radius:14px; padding:15px 16px;">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:28px; color:#d4a84b; line-height:1;">{{ valorEstoqueFmt }}</div>
+          <div style="font-size:11px; color:#8a7590; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Valor em estoque</div>
+        </div>
+        <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-radius:14px; padding:15px 16px;">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:28px; color:#e05555; line-height:1;">{{ semFoto }}</div>
+          <div style="font-size:11px; color:#8a7590; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Sem foto</div>
+        </div>
+      </div>
+
+      <!-- FILTROS -->
+      <div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">
+        <input value="{{ busca }}" oninput="{{ onBusca }}" placeholder="Buscar por nome, SKU, código, cód. fornecedor..." style="flex:1; min-width:220px; padding:11px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        <select value="{{ fColecao }}" onchange="{{ onColecao }}" style="height:44px; padding:0 12px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:13px; color:#2d1f35; outline:none; font-family:'DM Sans',sans-serif;">
+          <option value="">Todas as coleções</option>
+          <sc-for list="{{ colecaoOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o }}">{{ o }}</option></sc-for>
+        </select>
+        <select value="{{ fCategoria }}" onchange="{{ onCategoria }}" style="height:44px; padding:0 12px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:13px; color:#2d1f35; outline:none; font-family:'DM Sans',sans-serif;">
+          <option value="">Todas as categorias</option>
+          <sc-for list="{{ categoriaOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o }}">{{ o }}</option></sc-for>
+        </select>
+        <select value="{{ fFornecedor }}" onchange="{{ onFornecedor }}" style="height:44px; padding:0 12px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:13px; color:#2d1f35; outline:none; font-family:'DM Sans',sans-serif;">
+          <option value="">Todos os fornecedores</option>
+          <sc-for list="{{ fornecedorOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o }}">{{ o }}</option></sc-for>
+        </select>
+        <select value="{{ fCaract }}" onchange="{{ onCaract }}" style="height:44px; padding:0 12px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:13px; color:#2d1f35; outline:none; font-family:'DM Sans',sans-serif;">
+          <sc-for list="{{ caractOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o.value }}">{{ o.label }}</option></sc-for>
+        </select>
+      </div>
+
+      <!-- TABELA -->
+      <sc-if value="{{ temResultados }}" hint-placeholder-val="{{ true }}">
+        <div style="overflow-x:auto; border-radius:16px; background:#fff; border:1px solid rgba(201,116,138,0.2); box-shadow:0 2px 12px rgba(0,0,0,0.04);">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="font-size:11px; font-weight:500; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:12px 16px; text-align:left; border-bottom:2px solid rgba(201,116,138,0.2);">Produto</th>
+                <th style="font-size:11px; font-weight:500; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:12px 16px; text-align:left; border-bottom:2px solid rgba(201,116,138,0.2);">SKU</th>
+                <th style="font-size:11px; font-weight:500; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:12px 16px; text-align:center; border-bottom:2px solid rgba(201,116,138,0.2);">Estoque</th>
+                <th style="font-size:11px; font-weight:500; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:12px 16px; text-align:right; border-bottom:2px solid rgba(201,116,138,0.2);">Preço</th>
+                <th style="font-size:11px; font-weight:500; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:12px 16px; text-align:right; border-bottom:2px solid rgba(201,116,138,0.2);">Custo</th>
+                <th style="width:70px; border-bottom:2px solid rgba(201,116,138,0.2);"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{ linhas }}" as="p" hint-placeholder-count="8">
+                <tr onclick="{{ p.onClick }}" style="cursor:pointer;" style-hover="background:rgba(201,116,138,0.04);">
+                  <td style="padding:8px 16px; border-bottom:1px solid rgba(201,116,138,0.2); font-size:13px;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                      <div style="width:42px; height:42px; border-radius:9px; overflow:hidden; background:#f5e6ec; flex-shrink:0;">
+                        <image-slot id="{{ p.fotoId }}" shape="rounded" radius="9" fit="cover" placeholder=""></image-slot>
+                      </div>
+                      <div style="min-width:0;">
+                        <div style="font-weight:500; color:#1a0a2e; display:flex; align-items:center; gap:6px;">{{ p.nome }}<sc-if value="{{ p.temColecao }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; background:rgba(201,116,138,0.1); color:#c9748a; border-radius:10px; padding:1px 8px; font-weight:500;">{{ p.colecao }}</span></sc-if><sc-if value="{{ p.temVar }}" hint-placeholder-val="{{ false }}"><span style="font-size:10px; background:rgba(212,168,75,0.14); color:#b8902f; border-radius:10px; padding:1px 8px; font-weight:600;">{{ p.varLabel }}</span></sc-if></div>
+                        <sc-if value="{{ p.temBarras }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#8a7590;">{{ p.barras }}</div></sc-if>
+                      </div>
+                    </div>
+                  </td>
+                  <td style="padding:8px 16px; border-bottom:1px solid rgba(201,116,138,0.2); font-size:12.5px; color:#8a7590; white-space:nowrap;">{{ p.sku }}</td>
+                  <td style="padding:8px 16px; border-bottom:1px solid rgba(201,116,138,0.2); text-align:center;"><span style="font-family:'Cormorant Garamond',serif; font-size:17px; color:{{ p.estoqueCor }};">{{ p.estoque }}</span></td>
+                  <td style="padding:8px 16px; border-bottom:1px solid rgba(201,116,138,0.2); text-align:right; font-family:'Cormorant Garamond',serif; font-size:16px; color:#1a0a2e; white-space:nowrap;">{{ p.precoFmt }}</td>
+                  <td style="padding:8px 16px; border-bottom:1px solid rgba(201,116,138,0.2); text-align:right; font-size:13px; color:#8a7590; white-space:nowrap;">{{ p.custoFmt }}</td>
+                  <td style="padding:8px 16px; border-bottom:1px solid rgba(201,116,138,0.2); text-align:right; white-space:nowrap;">
+                    <span style="color:#c9748a; font-size:16px;">›</span>
+                  </td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- PAGINAÇÃO -->
+        <sc-if value="{{ temPaginacao }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; align-items:center; justify-content:center; gap:14px; margin-top:16px;">
+            <button onclick="{{ pagAnterior }}" style="height:34px; padding:0 14px; border-radius:8px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; color:#8a7590; font-size:13px; cursor:pointer; font-family:'DM Sans',sans-serif;">‹ Anterior</button>
+            <span style="font-size:12px; color:#8a7590;">Página {{ pagAtual }} de {{ pagTotal }}</span>
+            <button onclick="{{ pagProxima }}" style="height:34px; padding:0 14px; border-radius:8px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; color:#8a7590; font-size:13px; cursor:pointer; font-family:'DM Sans',sans-serif;">Próxima ›</button>
+          </div>
+        </sc-if>
+      </sc-if>
+      <sc-if value="{{ semResultados }}" hint-placeholder-val="{{ false }}">
+        <div style="text-align:center; padding:60px 24px; color:#8a7590; background:#fff; border-radius:16px; border:1px solid rgba(201,116,138,0.2);">
+          <div style="font-size:40px; margin-bottom:14px;">🔍</div>
+          <div style="font-family:'Cormorant Garamond',serif; font-size:20px; color:#1a0a2e; margin-bottom:6px;">Nenhum produto encontrado</div>
+          <p style="font-size:13px;">Ajuste os filtros ou cadastre um novo produto.</p>
+        </div>
+      </sc-if>
+    </div>
+    </sc-if>
+
+    <!-- ══════════ FORMULÁRIO ══════════ -->
+    <sc-if value="{{ ehForm }}" hint-placeholder-val="{{ false }}">
+    <div style="max-width:960px; width:100%; padding:24px 32px 60px;">
+
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:20px;">
+        <button onclick="{{ voltarLista }}" style="height:34px; padding:0 14px; border-radius:9px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; color:#c9748a; font-size:13px; cursor:pointer; font-family:'DM Sans',sans-serif;">← Voltar</button>
+        <div style="font-size:19px; font-weight:600; color:#1a0a2e;">{{ tituloForm }}</div>
+      </div>
+
+      <!-- Dados básicos -->
+      <div style="font-size:13px; font-weight:600; color:#1a0a2e; margin:0 0 12px; padding-bottom:6px; border-bottom:1px solid rgba(201,116,138,0.2);">Dados básicos</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:24px;">
+        <div style="grid-column:1/-1;">
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Nome *</label>
+          <input value="{{ form.nome }}" oninput="{{ f.nome }}" placeholder="Ex.: Anel Solitário Zircônia Ouro 18k" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Código (SKU)</label>
+          <input value="{{ form.sku }}" oninput="{{ f.sku }}" placeholder="LZ0000" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Preço de venda (R$)</label>
+          <input value="{{ form.preco }}" oninput="{{ f.preco }}" placeholder="0,00" inputmode="numeric" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Categoria</label>
+          <select value="{{ form.categoria }}" onchange="{{ f.categoria }}" style="width:100%; height:46px; padding:0 12px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; color:#2d1f35; outline:none; font-family:'DM Sans',sans-serif;">
+            <option value="">Selecione...</option>
+            <sc-for list="{{ categoriaOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o }}">{{ o }}</option></sc-for>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Formato</label>
+          <select value="{{ form.formato }}" onchange="{{ f.formato }}" style="width:100%; height:46px; padding:0 12px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; color:#2d1f35; outline:none; font-family:'DM Sans',sans-serif;">
+            <option value="simples">Simples</option>
+            <option value="variacao">Com variação</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Imagens -->
+      <div style="font-size:13px; font-weight:600; color:#1a0a2e; margin:0 0 4px; padding-bottom:6px; border-bottom:1px solid rgba(201,116,138,0.2);">Imagens</div>
+      <div style="font-size:11px; color:#8a7590; margin:8px 0 12px;">Até 5 fotos · a 1ª é a principal</div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:24px;">
+        <sc-for list="{{ imgSlots }}" as="s" hint-placeholder-count="5">
+          <div style="width:110px; height:110px; border-radius:12px; overflow:hidden; border:2px dashed rgba(201,116,138,0.3); position:relative;">
+            <sc-if value="{{ s.principal }}" hint-placeholder-val="{{ false }}"><div style="position:absolute; top:5px; left:5px; z-index:2; font-size:9px; font-weight:600; background:#c9748a; color:#fff; border-radius:8px; padding:2px 7px; pointer-events:none;">PRINCIPAL</div></sc-if>
+            <image-slot id="{{ s.id }}" shape="rounded" radius="12" fit="cover" placeholder="Foto"></image-slot>
+          </div>
+        </sc-for>
+      </div>
+
+      <!-- Características -->
+      <div style="font-size:13px; font-weight:600; color:#1a0a2e; margin:0 0 12px; padding-bottom:6px; border-bottom:1px solid rgba(201,116,138,0.2);">Características</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:24px;">
+        <div style="grid-column:1/-1;">
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Código de barras (GTIN/EAN)</label>
+          <input value="{{ form.barras }}" oninput="{{ f.barras }}" placeholder="Bipe ou digite" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div style="grid-column:1/-1;">
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Descrição curta</label>
+          <textarea value="{{ form.descricao }}" oninput="{{ f.descricao }}" placeholder="Breve descrição da peça" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif; min-height:60px; resize:vertical;"></textarea>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Peso líquido (g)</label>
+          <input value="{{ form.pesoLiq }}" oninput="{{ f.pesoLiq }}" inputmode="numeric" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Peso bruto (g)</label>
+          <input value="{{ form.pesoBruto }}" oninput="{{ f.pesoBruto }}" inputmode="numeric" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Largura (cm)</label>
+          <input value="{{ form.largura }}" oninput="{{ f.largura }}" inputmode="numeric" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Altura (cm)</label>
+          <input value="{{ form.altura }}" oninput="{{ f.altura }}" inputmode="numeric" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Profundidade (cm)</label>
+          <input value="{{ form.profundidade }}" oninput="{{ f.profundidade }}" inputmode="numeric" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+      </div>
+
+      <!-- Coleção e estoque -->
+      <div style="font-size:13px; font-weight:600; color:#1a0a2e; margin:0 0 12px; padding-bottom:6px; border-bottom:1px solid rgba(201,116,138,0.2);">Coleção e estoque</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:14px; margin-bottom:24px;">
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Coleção</label>
+          <select value="{{ form.colecao }}" onchange="{{ f.colecao }}" style="width:100%; height:46px; padding:0 12px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; color:#2d1f35; outline:none; font-family:'DM Sans',sans-serif;">
+            <option value="">Selecione...</option>
+            <sc-for list="{{ colecaoOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o }}">{{ o }}</option></sc-for>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Depósito</label>
+          <input value="{{ form.deposito }}" oninput="{{ f.deposito }}" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Qtd. em estoque</label>
+          <input value="{{ form.estoque }}" oninput="{{ f.estoque }}" inputmode="numeric" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Custo de compra (R$)</label>
+          <input value="{{ form.custo }}" oninput="{{ f.custo }}" placeholder="0,00" inputmode="numeric" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+      </div>
+
+      <!-- Fornecedor -->
+      <div style="font-size:13px; font-weight:600; color:#1a0a2e; margin:0 0 12px; padding-bottom:6px; border-bottom:1px solid rgba(201,116,138,0.2);">Fornecedor</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:24px;">
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Fornecedor</label>
+          <select value="{{ form.fornecedor }}" onchange="{{ f.fornecedor }}" style="width:100%; height:46px; padding:0 12px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; color:#2d1f35; outline:none; font-family:'DM Sans',sans-serif;">
+            <option value="">Selecione...</option>
+            <sc-for list="{{ fornecedorOpts }}" as="o" hint-placeholder-count="3"><option value="{{ o }}">{{ o }}</option></sc-for>
+          </select>
+          <sc-if value="{{ temDescFornecedor }}" hint-placeholder-val="{{ false }}"><div style="font-size:11px; color:#8a7590; margin-top:4px;">Desconto do fornecedor: <b style="color:#c9748a;">{{ descFornecedor }}%</b> (aplicado na peça bruta)</div></sc-if>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Código no fornecedor</label>
+          <input value="{{ form.codFornecedor }}" oninput="{{ f.codFornecedor }}" placeholder="código da peça no fornecedor" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+      </div>
+
+      <!-- Precificação -->
+      <div style="font-size:13px; font-weight:600; color:#1a0a2e; margin:0 0 12px; padding-bottom:6px; border-bottom:1px solid rgba(201,116,138,0.2);">Precificação</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:14px;">
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Tipo de banho</label>
+          <select value="{{ form.banhoTipo }}" onchange="{{ f.banhoTipo }}" style="width:100%; height:46px; padding:0 12px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; color:#2d1f35; outline:none; font-family:'DM Sans',sans-serif;">
+            <option value="">— sem precificação —</option>
+            <sc-for list="{{ banhoOpts }}" as="b" hint-placeholder-count="3"><option value="{{ b.codigo }}">{{ b.label }}</option></sc-for>
+          </select>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Banho (milésimos — só ouro)</label>
+          <input value="{{ form.banho }}" oninput="{{ f.banho }}" inputmode="numeric" placeholder="0" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Peso p/ cálculo (g)</label>
+          <input value="{{ form.pesoCalc }}" oninput="{{ f.pesoCalc }}" inputmode="numeric" placeholder="0" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Peça bruta (R$)</label>
+          <input value="{{ form.pecaBruta }}" oninput="{{ f.pecaBruta }}" placeholder="0,00" inputmode="numeric" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Verniz (milésimos)</label>
+          <input value="{{ form.verniz }}" oninput="{{ f.verniz }}" inputmode="numeric" placeholder="0" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        </div>
+      </div>
+      <sc-if value="{{ mostrarPreview }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; gap:24px; flex-wrap:wrap; align-items:flex-end; padding:14px 18px; border:1px solid rgba(201,116,138,0.2); border-radius:12px; background:#f5e6ec; margin-bottom:24px;">
+          <div><div style="font-size:11px; color:#8a7590;">Custo</div><div style="font-family:'Cormorant Garamond',serif; font-size:20px; color:#1a0a2e;">{{ prevCusto }}</div></div>
+          <div><div style="font-size:11px; color:#8a7590;">Custo c/ verniz</div><div style="font-family:'Cormorant Garamond',serif; font-size:20px; color:#1a0a2e;">{{ prevCustoVerniz }}</div></div>
+          <div><div style="font-size:11px; color:#8a7590;">Preço sugerido</div><div style="font-family:'Cormorant Garamond',serif; font-size:22px; color:#c9748a;">{{ prevSugerido }}</div></div>
+          <button onclick="{{ usarSugerido }}" style="height:36px; padding:0 14px; border-radius:10px; border:1.5px solid #c9748a; background:#fff; color:#c9748a; font-size:12.5px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif; margin-left:auto;">Usar sugerido no preço</button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ semPreview }}" hint-placeholder-val="{{ true }}">
+        <div style="font-size:12px; color:#8a7590; margin-bottom:24px;">Escolha o tipo de banho e informe peso/peça bruta para ver o custo e o preço sugerido.</div>
+      </sc-if>
+
+      <!-- Variações -->
+      <sc-if value="{{ ehVariacao }}" hint-placeholder-val="{{ false }}">
+        <div style="font-size:13px; font-weight:600; color:#1a0a2e; margin:0 0 12px; padding-bottom:6px; border-bottom:1px solid rgba(201,116,138,0.2);">Variações</div>
+        <div style="margin-bottom:12px;">
+          <sc-for list="{{ variacoes }}" as="v" hint-placeholder-count="2">
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr 0.8fr 0.8fr 40px; gap:8px; margin-bottom:8px; align-items:center;">
+              <input value="{{ v.atributo }}" oninput="{{ v.onAtributo }}" placeholder="Atributo (ex.: Tamanho)" style="padding:9px 12px; border-radius:10px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:13px; outline:none; font-family:'DM Sans',sans-serif;"/>
+              <input value="{{ v.valor }}" oninput="{{ v.onValor }}" placeholder="Valor (ex.: 16)" style="padding:9px 12px; border-radius:10px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:13px; outline:none; font-family:'DM Sans',sans-serif;"/>
+              <input value="{{ v.sku }}" oninput="{{ v.onSku }}" placeholder="SKU" style="padding:9px 12px; border-radius:10px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:13px; outline:none; font-family:'DM Sans',sans-serif;"/>
+              <input value="{{ v.preco }}" oninput="{{ v.onPreco }}" placeholder="Preço" inputmode="numeric" style="padding:9px 12px; border-radius:10px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:13px; outline:none; font-family:'DM Sans',sans-serif;"/>
+              <input value="{{ v.estoque }}" oninput="{{ v.onEstoque }}" placeholder="Qtd" inputmode="numeric" style="padding:9px 12px; border-radius:10px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:13px; outline:none; font-family:'DM Sans',sans-serif;"/>
+              <button onclick="{{ v.onRemover }}" style="width:34px; height:34px; border:none; background:rgba(224,85,85,0.08); border-radius:9px; color:#e05555; cursor:pointer; display:inline-flex; align-items:center; justify-content:center;">{{ icoTrash }}</button>
+            </div>
+          </sc-for>
+        </div>
+        <button onclick="{{ addVariacao }}" style="height:36px; padding:0 16px; border-radius:10px; border:1.5px dashed rgba(201,116,138,0.4); background:#fff; color:#c9748a; font-size:13px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif; margin-bottom:24px;">+ Adicionar variação</button>
+      </sc-if>
+
+      <div style="display:flex; gap:10px; margin-top:8px;">
+        <button onclick="{{ salvar }}" style="flex:1; height:48px; border-radius:12px; border:none; background:linear-gradient(135deg,#c9748a,#b5526a); color:#fff; font-size:15px; font-weight:600; cursor:pointer; font-family:'DM Sans',sans-serif;">{{ salvarLabel }}</button>
+        <sc-if value="{{ ehEdicao }}" hint-placeholder-val="{{ false }}"><button onclick="{{ excluir }}" style="height:48px; padding:0 20px; border-radius:12px; border:1px solid rgba(224,85,85,0.35); background:rgba(224,85,85,0.08); color:#e05555; font-size:14px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif;">Excluir</button></sc-if>
+        <button onclick="{{ voltarLista }}" style="height:48px; padding:0 22px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; color:#8a7590; font-size:14px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif;">Cancelar</button>
+      </div>
+    </div>
+    </sc-if>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+
+const IC = {
+  grid:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>',
+  bag:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>',
+  gem:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg>',
+  columns:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg>',
+  repeat:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
+  fin:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>',
+  calc:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>',
+  mega:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>',
+  tag:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>',
+  layers:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>',
+  fabrica:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7 3 5"/><path d="M9 6V3h6v3"/><rect width="18" height="12" x="3" y="7" rx="2"/><path d="M3 13h18"/></svg>',
+  users:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  userCheck:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>',
+  shield:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>',
+  crachaFunc:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2v2"/><path d="M7 22v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/><path d="M8 2v2"/><circle cx="12" cy="11" r="3"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>',
+  card:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>',
+  percent:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>',
+  cart:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>',
+  package:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+  gift:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>',
+  barcode:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg>',
+  cam:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>',
+  sheet:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8 13h8"/><path d="M8 17h8"/></svg>',
+  trash:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>',
+};
+function icoEl(svg) { return React.createElement('span', { style: { display: 'inline-flex' }, dangerouslySetInnerHTML: { __html: svg } }); }
+const ICONS = Object.fromEntries(Object.entries(IC).map(([k, v]) => [k, icoEl(v)]));
+
+const COLECOES = ['Verão', 'Inverno', 'Clássicos'];
+const CATEGORIAS = ['Anel', 'Colar', 'Brinco', 'Pulseira', 'Pingente'];
+const FORNECEDORES = [
+  { nome:'Prata Fina Distribuidora', desconto:12 },
+  { nome:'Ouro & Cia Semijoias', desconto:8 },
+  { nome:'Import Joias LTDA', desconto:15 },
+];
+const BANHOS = [
+  { codigo:'o', nome:'Ouro 18k', cotacao:380 },
+  { codigo:'r', nome:'Ródio', cotacao:210 },
+  { codigo:'p', nome:'Prata 925', cotacao:120 },
+];
+const PARAMS = { mao_de_obra: 3, rateio: 4, margem: 3 };
+
+const MOCK = [
+  { id:1, nome:'Anel Solitário Zircônia', sku:'LZ1001', barras:'7891000010011', preco:59.9, custo:22.5, estoque:34, colecao:'Clássicos', categoria:'Anel', fornecedor:'Ouro & Cia Semijoias', foto:true },
+  { id:2, nome:'Colar Ponto de Luz', sku:'LZ1002', barras:'7891000010028', preco:74.9, custo:29.0, estoque:18, colecao:'Verão', categoria:'Colar', fornecedor:'Prata Fina Distribuidora', foto:true },
+  { id:3, nome:'Brinco Argola Média', sku:'LZ1003', barras:'', preco:45.0, custo:16.8, estoque:52, colecao:'Verão', categoria:'Brinco', fornecedor:'Import Joias LTDA', foto:false },
+  { id:4, nome:'Pulseira Riviera Colorida', sku:'LZ1004', barras:'7891000010042', preco:129.9, custo:54.0, estoque:9, colecao:'Verão', categoria:'Pulseira', fornecedor:'Import Joias LTDA', foto:true },
+  { id:5, nome:'Pingente Coração Cravejado', sku:'LZ1005', barras:'', preco:39.9, custo:12.0, estoque:0, colecao:'Clássicos', categoria:'Pingente', fornecedor:'Prata Fina Distribuidora', foto:false },
+  { id:6, nome:'Aliança Lisa 4mm', sku:'LZ1006', barras:'7891000010066', preco:120.0, custo:48.0, estoque:26, colecao:'Clássicos', categoria:'Anel', fornecedor:'Ouro & Cia Semijoias', foto:true, variacoes:[
+    { atributo:'Tamanho', valor:'14', sku:'LZ1006-14', preco:120, estoque:8 },
+    { atributo:'Tamanho', valor:'16', sku:'LZ1006-16', preco:120, estoque:10 },
+    { atributo:'Tamanho', valor:'18', sku:'LZ1006-18', preco:125, estoque:8 },
+  ] },
+  { id:7, nome:'Choker Cristal', sku:'LZ1007', barras:'7891000010073', preco:84.9, custo:33.0, estoque:14, colecao:'Inverno', categoria:'Colar', fornecedor:'Prata Fina Distribuidora', foto:true },
+  { id:8, nome:'Brinco Gota Zircônia', sku:'LZ1008', barras:'', preco:52.0, custo:19.0, estoque:41, colecao:'Inverno', categoria:'Brinco', fornecedor:'Import Joias LTDA', foto:false },
+  { id:9, nome:'Anel Duplo Cravejado', sku:'LZ1009', barras:'7891000010097', preco:68.0, custo:25.0, estoque:22, colecao:'Verão', categoria:'Anel', fornecedor:'Ouro & Cia Semijoias', foto:true },
+  { id:10, nome:'Colar Elos Grossos', sku:'LZ1010', barras:'', preco:98.0, custo:40.0, estoque:7, colecao:'Inverno', categoria:'Colar', fornecedor:'Prata Fina Distribuidora', foto:false },
+  { id:11, nome:'Pulseira Berloque', sku:'LZ1011', barras:'7891000010110', preco:76.0, custo:30.0, estoque:19, colecao:'Verão', categoria:'Pulseira', fornecedor:'Import Joias LTDA', foto:true },
+  { id:12, nome:'Pingente Mandala', sku:'LZ1012', barras:'', preco:44.0, custo:15.0, estoque:33, colecao:'Clássicos', categoria:'Pingente', fornecedor:'Prata Fina Distribuidora', foto:false },
+];
+
+const r2 = n => Math.round(n * 100) / 100;
+function calcular(tipoBanho, cotacao, banho, peso, precoBruto, verniz, descontoPct) {
+  const desconto = Number(descontoPct || 0) / 100;
+  const cot = Number(cotacao || 0);
+  const brutoLiquido = Number(precoBruto || 0) * (1 - desconto);
+  const custo = tipoBanho === 'o'
+    ? ((PARAMS.mao_de_obra + Number(banho || 0)) * (cot / 1000) * Number(peso || 0)) + brutoLiquido
+    : ((cot / 1000) * Number(peso || 0)) + brutoLiquido;
+  const custoVerniz = Number(verniz || 0) > 0 ? custo + Number(peso || 0) * (Number(verniz) / 1000) : custo;
+  const precoSugerido = (custoVerniz * PARAMS.margem) + PARAMS.rateio;
+  return { custo: r2(custo), custoVerniz: r2(custoVerniz), precoSugerido: r2(precoSugerido) };
+}
+
+function fmtMoney(v) { return (Number(v)||0).toLocaleString('pt-BR', { style:'currency', currency:'BRL', minimumFractionDigits:2 }); }
+function parseMoney(s) { return parseFloat(String(s||'').replace(/\./g,'').replace(',','.')) || 0; }
+const CARACT = {
+  '': 'Todas as características',
+  com_foto:'Com foto', sem_foto:'Sem foto', sem_descricao:'Sem descrição',
+  sem_custo:'Sem preço de custo', sem_venda:'Sem preço de venda',
+  sem_sku:'Sem SKU', sem_barras:'Sem código de barras', sem_estoque:'Sem estoque',
+};
+const POR_PAGINA = 8;
+const emptyForm = () => ({ nome:'', sku:'', preco:'', categoria:'', formato:'simples', barras:'', descricao:'',
+  pesoLiq:'', pesoBruto:'', largura:'', altura:'', profundidade:'', colecao:'', deposito:'Geral', estoque:'0', custo:'',
+  fornecedor:'', codFornecedor:'', banhoTipo:'', banho:'', pesoCalc:'', pecaBruta:'', verniz:'', variacoes:[] });
+
+class Component extends DCLogic {
+  state = {
+    sidebarAberta:true, vista:'lista',
+    busca:'', fColecao:'', fCategoria:'', fFornecedor:'', fCaract:'', pagina:1,
+    editId:null, form: emptyForm(),
+  };
+
+  toggleSidebar = () => this.setState(s => ({ sidebarAberta: !s.sidebarAberta }));
+  onBusca = (e) => this.setState({ busca: e.target.value, pagina:1 });
+  onColecao = (e) => this.setState({ fColecao: e.target.value, pagina:1 });
+  onCategoria = (e) => this.setState({ fCategoria: e.target.value, pagina:1 });
+  onFornecedor = (e) => this.setState({ fFornecedor: e.target.value, pagina:1 });
+  onCaract = (e) => this.setState({ fCaract: e.target.value, pagina:1 });
+  pagAnterior = () => this.setState(s => ({ pagina: Math.max(1, s.pagina-1) }));
+  pagProxima = () => this.setState(s => ({ pagina: s.pagina+1 }));
+
+  novoProduto = () => this.setState({ vista:'form', editId:null, form: emptyForm() });
+  editarProduto = (id) => {
+    const p = MOCK.find(x => x.id === id);
+    this.setState({ vista:'form', editId:id, form: {
+      ...emptyForm(),
+      nome:p.nome, sku:p.sku, preco: p.preco ? String(p.preco).replace('.',',') : '', categoria:p.categoria,
+      formato: p.variacoes ? 'variacao' : 'simples', barras:p.barras, colecao:p.colecao,
+      estoque:String(p.estoque), custo: p.custo ? String(p.custo).replace('.',',') : '', fornecedor:p.fornecedor,
+      variacoes: (p.variacoes||[]).map(v => ({ ...v, preco: String(v.preco).replace('.',','), estoque:String(v.estoque) })),
+    } });
+  };
+  voltarLista = () => this.setState({ vista:'lista' });
+
+  fld = (k) => (e) => this.setState(s => ({ form: { ...s.form, [k]: e.target.value } }));
+  addVariacao = () => this.setState(s => ({ form: { ...s.form, variacoes: [...s.form.variacoes, { atributo:'Tamanho', valor:'', sku:'', preco:'', estoque:'' }] } }));
+  removerVariacao = (i) => this.setState(s => ({ form: { ...s.form, variacoes: s.form.variacoes.filter((_,idx) => idx !== i) } }));
+  setVar = (i, k) => (e) => this.setState(s => ({ form: { ...s.form, variacoes: s.form.variacoes.map((v,idx) => idx===i ? { ...v, [k]: e.target.value } : v) } }));
+  usarSugerido = () => { const c = this._calc; if (c) this.setState(s => ({ form: { ...s.form, preco: String(c.precoSugerido).replace('.',',') } })); };
+  salvar = () => this.setState({ vista:'lista' });
+  excluir = () => this.setState({ vista:'lista' });
+
+  renderVals() {
+    const { sidebarAberta, vista, busca, fColecao, fCategoria, fFornecedor, fCaract, pagina, editId, form } = this.state;
+    const buscaLower = busca.trim().toLowerCase();
+
+    const total = MOCK.length;
+    const totalEstoque = MOCK.reduce((a,p) => a + (p.estoque||0), 0);
+    const valorEstoque = MOCK.reduce((a,p) => a + (p.estoque||0) * (p.preco||0), 0);
+    const semFoto = MOCK.filter(p => !p.foto).length;
+
+    const passaCaract = (p) => {
+      switch (fCaract) {
+        case 'com_foto': return !!p.foto;
+        case 'sem_foto': return !p.foto;
+        case 'sem_descricao': return true;
+        case 'sem_custo': return !(p.custo > 0);
+        case 'sem_venda': return !(p.preco > 0);
+        case 'sem_sku': return !p.sku;
+        case 'sem_barras': return !p.barras;
+        case 'sem_estoque': return !(p.estoque > 0);
+        default: return true;
+      }
+    };
+    let lista = MOCK.filter(p => {
+      if (buscaLower && !([p.nome, p.sku, p.barras, p.colecao].join(' ').toLowerCase().includes(buscaLower))) return false;
+      if (fColecao && p.colecao !== fColecao) return false;
+      if (fCategoria && p.categoria !== fCategoria) return false;
+      if (fFornecedor && p.fornecedor !== fFornecedor) return false;
+      if (!passaCaract(p)) return false;
+      return true;
+    });
+
+    const pagTotal = Math.max(1, Math.ceil(lista.length / POR_PAGINA));
+    const pagAtual = Math.min(pagina, pagTotal);
+    const visiveis = lista.slice((pagAtual-1)*POR_PAGINA, pagAtual*POR_PAGINA);
+
+    // precificação preview
+    const banhoSel = BANHOS.find(b => b.codigo === form.banhoTipo);
+    const fornSel = FORNECEDORES.find(f => f.nome === form.fornecedor);
+    const descPct = fornSel ? fornSel.desconto : 0;
+    let preview = null;
+    if (banhoSel && (parseMoney(form.pesoCalc) > 0 || parseMoney(form.pecaBruta) > 0)) {
+      preview = calcular(form.banhoTipo, banhoSel.cotacao, parseMoney(form.banho), parseMoney(form.pesoCalc), parseMoney(form.pecaBruta), parseMoney(form.verniz), descPct);
+    }
+    this._calc = preview;
+
+    const fldWrap = {};
+    ['nome','sku','preco','categoria','formato','barras','descricao','pesoLiq','pesoBruto','largura','altura','profundidade','colecao','deposito','estoque','custo','fornecedor','codFornecedor','banhoTipo','banho','pesoCalc','pecaBruta','verniz'].forEach(k => { fldWrap[k] = this.fld(k); });
+
+    const pid = editId != null ? ('p'+editId) : 'novo';
+
+    return {
+      icoGrid: ICONS.grid, icoBag: ICONS.bag, icoGem: ICONS.gem, icoUserCheck: ICONS.userCheck,
+      icoUsers: ICONS.users, icoColumns: ICONS.columns, icoRepeat: ICONS.repeat, icoShield: ICONS.shield,
+      icoPackage: ICONS.package, icoFabrica: ICONS.fabrica, icoTag: ICONS.tag, icoLayers: ICONS.layers,
+      icoCart: ICONS.cart, icoPercent: ICONS.percent, icoCalc: ICONS.calc, icoFin: ICONS.fin,
+      icoCard: ICONS.card, icoMega: ICONS.mega, icoGift: ICONS.gift, icoCrachaFunc: ICONS.crachaFunc,
+      icoBarcode: ICONS.barcode, icoCam: ICONS.cam, icoSheet: ICONS.sheet, icoTrash: ICONS.trash,
+      sidebarAberta,
+      sidebarWidth: sidebarAberta ? '232px' : '60px',
+      sidebarToggleIcon: sidebarAberta ? '‹' : '›',
+      toggleSidebar: this.toggleSidebar,
+      ehLista: vista === 'lista',
+      ehForm: vista === 'form',
+
+      total, totalEstoque, valorEstoqueFmt: fmtMoney(valorEstoque), semFoto,
+      busca, onBusca: this.onBusca,
+      fColecao, onColecao: this.onColecao, fCategoria, onCategoria: this.onCategoria,
+      fFornecedor, onFornecedor: this.onFornecedor, fCaract, onCaract: this.onCaract,
+      colecaoOpts: COLECOES, categoriaOpts: CATEGORIAS, fornecedorOpts: FORNECEDORES.map(f => f.nome),
+      caractOpts: Object.entries(CARACT).map(([value,label]) => ({ value, label })),
+      banhoOpts: BANHOS.map(b => ({ codigo: b.codigo, label: b.nome + ' (cot. ' + b.cotacao + ')' })),
+      novoProduto: this.novoProduto,
+      temResultados: visiveis.length > 0,
+      semResultados: visiveis.length === 0,
+      linhas: visiveis.map(p => ({
+        nome: p.nome, sku: p.sku || '—',
+        fotoId: 'pimg-p' + p.id + '-0',
+        temColecao: !!p.colecao, colecao: p.colecao,
+        temVar: !!p.variacoes, varLabel: p.variacoes ? (p.variacoes.length + ' var.') : '',
+        temBarras: !!p.barras, barras: p.barras,
+        estoque: p.variacoes ? p.variacoes.reduce((a,v)=>a+v.estoque,0) : p.estoque,
+        estoqueCor: (p.estoque === 0 && !p.variacoes) ? '#e05555' : '#1a0a2e',
+        precoFmt: fmtMoney(p.preco), custoFmt: p.custo ? fmtMoney(p.custo) : '—',
+        onClick: () => this.editarProduto(p.id),
+      })),
+      temPaginacao: pagTotal > 1,
+      pagAtual, pagTotal, pagAnterior: this.pagAnterior, pagProxima: this.pagProxima,
+
+      // form
+      tituloForm: editId != null ? 'Editar produto' : 'Cadastrar novo produto',
+      ehEdicao: editId != null,
+      salvarLabel: editId != null ? 'Salvar alterações' : 'Salvar produto',
+      voltarLista: this.voltarLista, salvar: this.salvar, excluir: this.excluir,
+      form,
+      f: fldWrap,
+      imgSlots: [0,1,2,3,4].map(i => ({ id: 'pimg-' + pid + '-' + i, principal: i === 0 })),
+      ehVariacao: form.formato === 'variacao',
+      variacoes: form.variacoes.map((v,i) => ({
+        atributo:v.atributo, valor:v.valor, sku:v.sku, preco:v.preco, estoque:v.estoque,
+        onAtributo:this.setVar(i,'atributo'), onValor:this.setVar(i,'valor'), onSku:this.setVar(i,'sku'),
+        onPreco:this.setVar(i,'preco'), onEstoque:this.setVar(i,'estoque'), onRemover:() => this.removerVariacao(i),
+      })),
+      addVariacao: this.addVariacao,
+      temDescFornecedor: !!fornSel && descPct > 0, descFornecedor: descPct,
+      mostrarPreview: !!preview, semPreview: !preview,
+      prevCusto: preview ? fmtMoney(preview.custo) : '—',
+      prevCustoVerniz: preview ? fmtMoney(preview.custoVerniz) : '—',
+      prevSugerido: preview ? fmtMoney(preview.precoSugerido) : '—',
+      usarSugerido: this.usarSugerido,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(201,116,138,0.35); border-radius: 8px; }
+  a { color: #c9748a; }
+  a:hover { color: #1a0a2e; }
+</style>
+</helmet>
+
+<div style="display:flex; min-height:100vh; background:#faf7f2; font-family:'DM Sans',sans-serif; color:#2d1f35;">
+
+  <!-- SIDEBAR -->
+  <div style="width:{{ sidebarWidth }}; flex-shrink:0; background:#fff; border-right:1px solid rgba(201,116,138,0.2); box-shadow:2px 0 16px rgba(0,0,0,0.05); position:fixed; top:0; left:0; bottom:0; padding:14px 10px; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:1px; transition:width 0.2s;">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:4px 10px 18px 12px;">
+      <sc-if value="{{ sidebarAberta }}" hint-placeholder-val="{{ true }}"><div style="font-family:'Cormorant Garamond',serif; font-size:20px; letter-spacing:3px; color:#1a0a2e; text-transform:uppercase; white-space:nowrap;">Lizzie</div></sc-if>
+      <button onclick="{{ toggleSidebar }}" style="width:24px; height:24px; border-radius:8px; border:1px solid rgba(201,116,138,0.2); background:#fff; color:#8a7590; font-size:11px; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center;">{{ sidebarToggleIcon }}</button>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:11px; padding:10px 14px; border-radius:10px; font-size:13px; color:#2d1f35; cursor:pointer; white-space:nowrap; overflow:hidden;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoGrid }}</span><sc-if value="{{ sidebarAberta }}" hint-placeholder-val="{{ true }}"><span>Dashboard</span></sc-if>
+    </div>
+
+    <sc-if value="{{ sidebarAberta }}" hint-placeholder-val="{{ true }}">
+    <div style="font-size:13px; font-weight:600; color:#1a0a2e; padding:11px 14px; margin-top:2px; display:flex; align-items:center; gap:10px; white-space:nowrap;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoBag }}</span>Vendas
+    </div>
+    <div style="margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid rgba(201,116,138,0.2); display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoGem }}</span>Controle de Vendas</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoUserCheck }}</span>Revendedoras</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; border-radius:8px; background:rgba(201,116,138,0.10); color:#c9748a; font-weight:600;"><span style="width:15px; display:inline-flex;">{{ icoUsers }}</span>Clientes</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoColumns }}</span>Lançar Mostruário</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoRepeat }}</span>Troca de Mostruário</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoShield }}</span>Garantias</div>
+    </div>
+
+    <div style="font-size:13px; font-weight:600; color:#1a0a2e; padding:11px 14px; margin-top:8px; display:flex; align-items:center; gap:10px; white-space:nowrap;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoPackage }}</span>Estoque
+    </div>
+    <div style="margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid rgba(201,116,138,0.2); display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoFabrica }}</span>Fornecedores</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoGem }}</span>Produtos</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoTag }}</span>Categorias</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoLayers }}</span>Coleções</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoCart }}</span>Entrada de Mercadoria</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoPercent }}</span>Precificação</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoCalc }}</span>Calculadora</div>
+    </div>
+
+    <div style="font-size:13px; font-weight:600; color:#1a0a2e; padding:11px 14px; margin-top:8px; display:flex; align-items:center; gap:10px; white-space:nowrap;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoFin }}</span>Financeiro
+    </div>
+    <div style="margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid rgba(201,116,138,0.2); display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoFin }}</span>Lançamentos</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#c2c2c2;"><span style="width:15px; display:inline-flex;">{{ icoCard }}</span>Formas de Pagamento<span style="margin-left:auto; font-size:9px; font-weight:600; color:#d4a84b; background:rgba(212,168,75,0.12); border:1px solid rgba(212,168,75,0.4); border-radius:8px; padding:1px 6px; white-space:nowrap;">EM BREVE</span></div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#c2c2c2;"><span style="width:15px; display:inline-flex;">{{ icoTag }}</span>Categorias Financeiras<span style="margin-left:auto; font-size:9px; font-weight:600; color:#d4a84b; background:rgba(212,168,75,0.12); border:1px solid rgba(212,168,75,0.4); border-radius:8px; padding:1px 6px; white-space:nowrap;">EM BREVE</span></div>
+    </div>
+
+    <div style="font-size:13px; font-weight:600; color:#1a0a2e; padding:11px 14px; margin-top:8px; display:flex; align-items:center; gap:10px; white-space:nowrap;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoMega }}</span>Marketing
+    </div>
+    <div style="margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid rgba(201,116,138,0.2); display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoTag }}</span>Raspadinha</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoGift }}</span>Fidelidade<span style="margin-left:auto; font-size:9px; font-weight:600; color:#d4a84b; background:rgba(212,168,75,0.12); border:1px solid rgba(212,168,75,0.4); border-radius:8px; padding:1px 6px; white-space:nowrap;">EM BREVE</span></div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#c2c2c2;"><span style="width:15px; display:inline-flex;">{{ icoGift }}</span>Bônus<span style="margin-left:auto; font-size:9px; font-weight:600; color:#d4a84b; background:rgba(212,168,75,0.12); border:1px solid rgba(212,168,75,0.4); border-radius:8px; padding:1px 6px; white-space:nowrap;">EM BREVE</span></div>
+    </div>
+
+    <div style="font-size:11px; font-weight:600; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:14px 14px 6px;">Configurações</div>
+    <div style="display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:13px; padding:9px 14px; color:#2d1f35;"><span style="width:18px; display:inline-flex;">{{ icoCrachaFunc }}</span>Funcionários</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:13px; padding:9px 14px; color:#2d1f35;"><span style="width:18px; display:inline-flex;">{{ icoShield }}</span>Perfis &amp; Permissões</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:13px; padding:9px 14px; color:#2d1f35;"><span style="width:18px; display:inline-flex;">{{ icoPercent }}</span>Faixas de Comissão</div>
+    </div>
+    </sc-if>
+  </div>
+
+  <!-- MAIN -->
+  <div style="margin-left:{{ sidebarWidth }}; flex:1; display:flex; flex-direction:column; min-width:0; transition:margin-left 0.2s;">
+
+    <!-- TOPBAR -->
+    <div style="background:#1a0a2e; padding:14px 28px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; box-shadow:0 2px 20px rgba(0,0,0,0.3);">
+      <div style="font-size:13px; color:rgba(255,255,255,0.5);">Vendas / <span style="color:#d4a84b;">Clientes</span></div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="background:rgba(201,116,138,0.2); border:1px solid #c9748a; border-radius:20px; padding:4px 12px; font-size:11px; color:#c9748a; font-weight:500;">STAFF</div>
+      </div>
+    </div>
+
+    <div style="max-width:1280px; width:100%; padding:26px 32px 48px;">
+
+      <!-- HEADER -->
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:22px; gap:16px; flex-wrap:wrap;">
+        <div>
+          <div style="font-size:19px; font-weight:600; color:#1a0a2e;">Clientes</div>
+          <div style="font-size:12px; color:#8a7590; margin-top:2px;">{{ totalClientes }} clientes cadastrados</div>
+        </div>
+        <button onclick="{{ abrirNovo }}" style="height:38px; padding:0 18px; border-radius:10px; border:none; background:linear-gradient(135deg,#c9748a,#b5526a); color:#fff; font-size:13px; font-weight:500; font-family:'DM Sans',sans-serif; cursor:pointer; display:inline-flex; align-items:center; gap:8px;">+ Novo Cliente</button>
+      </div>
+
+      <!-- STATS -->
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:20px;">
+        <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-radius:14px; padding:16px;">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:30px; color:#1a0a2e; line-height:1;">{{ totalClientes }}</div>
+          <div style="font-size:11px; color:#8a7590; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Total</div>
+        </div>
+        <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-radius:14px; padding:16px;">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:30px; color:#4caf82; line-height:1;">{{ totalAtivos }}</div>
+          <div style="font-size:11px; color:#8a7590; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Ativos (90d)</div>
+        </div>
+        <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-radius:14px; padding:16px;">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:30px; color:#d4a84b; line-height:1;">{{ totalVips }}</div>
+          <div style="font-size:11px; color:#8a7590; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">VIP</div>
+        </div>
+        <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-radius:14px; padding:16px;">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:30px; color:#c9748a; line-height:1;">{{ ticketMedioFmt }}</div>
+          <div style="font-size:11px; color:#8a7590; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Ticket Médio</div>
+        </div>
+      </div>
+
+      <!-- SEARCH + FILTERS -->
+      <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
+        <input value="{{ busca }}" oninput="{{ onBusca }}" placeholder="Buscar por nome, telefone ou cidade..." style="flex:1; min-width:220px; padding:11px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+        <select value="{{ revendedoraSel }}" onchange="{{ onRevendedora }}" style="padding:0 12px; height:42px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:13px; color:#2d1f35; font-family:'DM Sans',sans-serif; outline:none;">
+          <sc-for list="{{ revendedorasOpts }}" as="r" hint-placeholder-count="3">
+            <option value="{{ r.value }}">{{ r.label }}</option>
+          </sc-for>
+        </select>
+        <select value="{{ periodoSel }}" onchange="{{ onPeriodo }}" style="padding:0 12px; height:42px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:13px; color:#2d1f35; font-family:'DM Sans',sans-serif; outline:none;">
+          <sc-for list="{{ periodosOpts }}" as="p" hint-placeholder-count="4">
+            <option value="{{ p.value }}">{{ p.label }}</option>
+          </sc-for>
+        </select>
+      </div>
+      <div style="display:flex; gap:8px; overflow-x:auto; margin-bottom:12px;">
+        <sc-for list="{{ filtros }}" as="f" hint-placeholder-count="4">
+          <div onclick="{{ f.onClick }}" style="padding:9px 16px; border-radius:20px; font-size:12px; cursor:pointer; white-space:nowrap; border:1.5px solid rgba(201,116,138,0.2); background:{{ f.bg }}; color:{{ f.color }}; border-color:{{ f.borderColor }}; font-family:'DM Sans',sans-serif; font-weight:500;">{{ f.label }}</div>
+        </sc-for>
+      </div>
+
+      <!-- TABLE -->
+      <sc-if value="{{ temResultados }}" hint-placeholder-val="{{ true }}">
+        <div style="overflow-x:auto; border-radius:16px; background:#fff; border:1px solid rgba(201,116,138,0.2); box-shadow:0 2px 12px rgba(0,0,0,0.04);">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr>
+                <th style="font-size:11px; font-weight:500; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:12px 16px; text-align:left; border-bottom:2px solid rgba(201,116,138,0.2); white-space:nowrap;">Cliente</th>
+                <th style="font-size:11px; font-weight:500; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:12px 16px; text-align:left; border-bottom:2px solid rgba(201,116,138,0.2); white-space:nowrap;">Revendedora</th>
+                <th style="font-size:11px; font-weight:500; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:12px 16px; text-align:left; border-bottom:2px solid rgba(201,116,138,0.2); white-space:nowrap;">Cidade</th>
+                <th style="font-size:11px; font-weight:500; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:12px 16px; text-align:left; border-bottom:2px solid rgba(201,116,138,0.2); white-space:nowrap;">Telefone</th>
+                <th style="font-size:11px; font-weight:500; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:12px 16px; text-align:left; border-bottom:2px solid rgba(201,116,138,0.2); white-space:nowrap;">Última compra</th>
+                <th style="font-size:11px; font-weight:500; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:12px 16px; text-align:right; border-bottom:2px solid rgba(201,116,138,0.2); white-space:nowrap;">Total gasto</th>
+                <th style="font-size:11px; font-weight:500; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:12px 16px; text-align:left; border-bottom:2px solid rgba(201,116,138,0.2); white-space:nowrap;">Status</th>
+                <th style="width:40px; border-bottom:2px solid rgba(201,116,138,0.2);"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <sc-for list="{{ clientesFiltrados }}" as="c" hint-placeholder-count="6">
+                <tr onclick="{{ c.onClick }}" style="cursor:pointer; transition:background 0.15s;" style-hover="background:rgba(201,116,138,0.04);">
+                  <td style="padding:12px 16px; border-bottom:1px solid rgba(201,116,138,0.2); font-size:13px;">
+                    <div style="display:flex; align-items:center; gap:12px;">
+                      <div style="width:36px; height:36px; border-radius:50%; background:linear-gradient(135deg,#c9748a,#1a0a2e); display:flex; align-items:center; justify-content:center; font-size:14px; color:#fff; font-family:'Cormorant Garamond',serif; flex-shrink:0;">{{ c.iniciais }}</div>
+                      <div>
+                        <div style="font-weight:500; color:#1a0a2e;">{{ c.nome }}</div>
+                        <sc-if value="{{ c.vip }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#d4a84b; font-weight:600; letter-spacing:0.5px; text-transform:uppercase;">★ VIP</div></sc-if>
+                      </div>
+                    </div>
+                  </td>
+                  <td style="padding:12px 16px; border-bottom:1px solid rgba(201,116,138,0.2); font-size:13px; color:#8a7590;">{{ c.revendedora }}</td>
+                  <td style="padding:12px 16px; border-bottom:1px solid rgba(201,116,138,0.2); font-size:13px; color:#8a7590;">{{ c.cidade }}</td>
+                  <td style="padding:12px 16px; border-bottom:1px solid rgba(201,116,138,0.2); font-size:13px; color:#8a7590;">{{ c.telefone }}</td>
+                  <td style="padding:12px 16px; border-bottom:1px solid rgba(201,116,138,0.2); font-size:13px; color:#8a7590;">{{ c.ultimaCompraFmt }}</td>
+                  <td style="padding:12px 16px; border-bottom:1px solid rgba(201,116,138,0.2); font-size:14px; text-align:right; font-family:'Cormorant Garamond',serif; color:#1a0a2e;">{{ c.totalGastoFmt }}</td>
+                  <td style="padding:12px 16px; border-bottom:1px solid rgba(201,116,138,0.2);">
+                    <span style="display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:500; background:{{ c.statusBg }}; color:{{ c.statusColor }};">{{ c.statusLabel }}</span>
+                  </td>
+                  <td style="padding:12px 16px; border-bottom:1px solid rgba(201,116,138,0.2); text-align:right; color:#8a7590; font-size:16px;">›</td>
+                </tr>
+              </sc-for>
+            </tbody>
+          </table>
+        </div>
+      </sc-if>
+      <sc-if value="{{ semResultados }}" hint-placeholder-val="{{ false }}">
+        <div style="text-align:center; padding:60px 24px; color:#8a7590; background:#fff; border-radius:16px; border:1px solid rgba(201,116,138,0.2);">
+          <div style="font-size:40px; margin-bottom:14px;">🔍</div>
+          <div style="font-family:'Cormorant Garamond',serif; font-size:20px; color:#1a0a2e; margin-bottom:6px;">Nenhum cliente encontrado</div>
+          <p style="font-size:13px;">Tente ajustar a busca ou o filtro selecionado.</p>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVO / EDITAR / DETALHE -->
+  <sc-if value="{{ modalAberto }}" hint-placeholder-val="{{ false }}">
+    <div onclick="{{ fecharModal }}" style="position:fixed; inset:0; z-index:500; background:rgba(26,10,46,0.7); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center;">
+      <div onclick="{{ pararPropagacao }}" style="background:#faf7f2; border-radius:20px; width:100%; max-width:520px; max-height:86vh; overflow-y:auto; padding:28px; position:relative;">
+        <button onclick="{{ fecharModal }}" style="position:absolute; top:18px; right:18px; width:32px; height:32px; border-radius:50%; border:1px solid rgba(201,116,138,0.2); background:#faf7f2; color:#8a7590; font-size:16px; cursor:pointer; font-family:'DM Sans',sans-serif;">×</button>
+
+        <sc-if value="{{ ehDetalhe }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex; align-items:center; gap:14px; margin-bottom:20px;">
+            <div style="width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg,#c9748a,#1a0a2e); display:flex; align-items:center; justify-content:center; font-size:20px; color:#fff; font-family:'Cormorant Garamond',serif; flex-shrink:0;">{{ clienteAtual.iniciais }}</div>
+            <div>
+              <div style="font-family:'Cormorant Garamond',serif; font-size:24px; color:#1a0a2e;">{{ clienteAtual.nome }}</div>
+              <div style="font-size:12px; color:#8a7590; margin-top:2px;">Cliente desde {{ clienteAtual.desdeFmt }}</div>
+            </div>
+          </div>
+          <div style="display:grid; gap:12px; margin-bottom:20px;">
+            <div style="display:flex; gap:8px;"><div style="font-size:12px; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; min-width:110px;">Revendedora</div><div style="font-size:14px; flex:1;">{{ clienteAtual.revendedora }}</div></div>
+            <div style="display:flex; gap:8px;"><div style="font-size:12px; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; min-width:110px;">Telefone</div><div style="font-size:14px; flex:1;">{{ clienteAtual.telefone }}</div></div>
+            <div style="display:flex; gap:8px;"><div style="font-size:12px; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; min-width:110px;">Cidade</div><div style="font-size:14px; flex:1;">{{ clienteAtual.cidade }}</div></div>
+            <div style="display:flex; gap:8px;"><div style="font-size:12px; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; min-width:110px;">Total gasto</div><div style="font-size:14px; flex:1;">{{ clienteAtual.totalGastoFmt }}</div></div>
+            <div style="display:flex; gap:8px;"><div style="font-size:12px; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; min-width:110px;">Última compra</div><div style="font-size:14px; flex:1;">{{ clienteAtual.ultimaCompraFmt }}</div></div>
+            <div style="display:flex; gap:8px;"><div style="font-size:12px; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; min-width:110px;">Observações</div><div style="font-size:14px; flex:1;">{{ clienteAtual.obs }}</div></div>
+          </div>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button onclick="{{ irParaEdicao }}" style="height:36px; padding:0 16px; border-radius:10px; border:1.5px solid #c9748a; background:#fff; color:#c9748a; font-size:13px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif;">Editar</button>
+            <a href="{{ clienteAtual.whatsappLink }}" style="height:36px; padding:0 16px; border-radius:10px; background:#25d366; color:#fff; font-size:13px; font-weight:500; text-decoration:none; display:inline-flex; align-items:center; font-family:'DM Sans',sans-serif;">WhatsApp</a>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ ehFormulario }}" hint-placeholder-val="{{ true }}">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:22px; color:#1a0a2e; margin-bottom:18px;">{{ tituloForm }}</div>
+          <div style="display:grid; gap:14px;">
+            <div>
+              <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Nome completo</label>
+              <input value="{{ form.nome }}" oninput="{{ setNome }}" placeholder="Nome da cliente" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+              <div>
+                <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Telefone / WhatsApp</label>
+                <input value="{{ form.telefone }}" oninput="{{ setTelefone }}" placeholder="(19) 99999-0000" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+              </div>
+              <div>
+                <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Cidade</label>
+                <input value="{{ form.cidade }}" oninput="{{ setCidade }}" placeholder="Cidade" style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+              </div>
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:500; color:#8a7590; letter-spacing:0.5px; text-transform:uppercase; margin-bottom:6px; display:block;">Observações</label>
+              <textarea value="{{ form.obs }}" oninput="{{ setObs }}" placeholder="Preferências, datas especiais, etc." style="width:100%; padding:12px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif; min-height:70px; resize:vertical;"></textarea>
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; margin-top:22px;">
+            <button onclick="{{ salvar }}" style="flex:1; height:44px; border-radius:12px; border:none; background:linear-gradient(135deg,#c9748a,#b5526a); color:#fff; font-size:14px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif;">Salvar Cliente</button>
+            <button onclick="{{ fecharModal }}" style="height:44px; padding:0 20px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; color:#8a7590; font-size:14px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif;">Cancelar</button>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+
+const MOCK = [
+  { id:1, nome:'Ana Beatriz Souza', telefone:'(19) 99123-4501', cidade:'Campinas', revendedora:'Juliana Alves', ultimaCompra:'2026-06-28', totalGasto:2840, vip:true, ativo:true, desde:'2024-02-10', obs:'Prefere peças em ouro. Aniversário em março.' },
+  { id:2, nome:'Camila Ferraz', telefone:'(19) 99876-2211', cidade:'Valinhos', revendedora:'Patrícia Nunes', ultimaCompra:'2026-05-02', totalGasto:960, vip:false, ativo:true, desde:'2025-01-15', obs:'—' },
+  { id:3, nome:'Débora Lins', telefone:'(11) 98212-9090', cidade:'São Paulo', revendedora:'Juliana Alves', ultimaCompra:'2026-01-11', totalGasto:410, vip:false, ativo:false, desde:'2023-11-02', obs:'Comprou no lançamento de coleção verão.' },
+  { id:4, nome:'Fernanda Prado', telefone:'(19) 99001-7744', cidade:'Campinas', revendedora:'Renata Costa', ultimaCompra:'2026-07-01', totalGasto:5320, vip:true, ativo:true, desde:'2022-06-20', obs:'Cliente recorrente, indica amigas.' },
+  { id:5, nome:'Giovanna Rezende', telefone:'(19) 98555-3320', cidade:'Vinhedo', revendedora:'Patrícia Nunes', ultimaCompra:'2026-04-19', totalGasto:1180, vip:false, ativo:true, desde:'2025-03-08', obs:'—' },
+  { id:6, nome:'Helena Martins', telefone:'(19) 99777-6600', cidade:'Campinas', revendedora:'Renata Costa', ultimaCompra:'2025-11-30', totalGasto:250, vip:false, ativo:false, desde:'2025-09-01', obs:'Primeira compra apenas.' },
+];
+
+const REVENDEDORAS = ['Juliana Alves', 'Patrícia Nunes', 'Renata Costa'];
+
+const IC = {
+  grid:      '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>',
+  bag:       '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>',
+  gem:       '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg>',
+  columns:   '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg>',
+  repeat:    '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
+  fin:       '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>',
+  calc:      '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>',
+  mega:      '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>',
+  tag:       '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>',
+  layers:    '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>',
+  fabrica:   '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7 3 5"/><path d="M9 6V3h6v3"/><rect width="18" height="12" x="3" y="7" rx="2"/><path d="M3 13h18"/></svg>',
+  users:     '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  userCheck: '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>',
+  shield:    '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>',
+  crachaFunc:'<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2v2"/><path d="M7 22v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/><path d="M8 2v2"/><circle cx="12" cy="11" r="3"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>',
+  card:      '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>',
+  percent:   '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>',
+  cart:      '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>',
+  package:   '<svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+  gift:      '<svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>',
+};
+
+function icoEl(svg) {
+  return React.createElement('span', { style: { display: 'inline-flex' }, dangerouslySetInnerHTML: { __html: svg } });
+}
+const ICONS = Object.fromEntries(Object.entries(IC).map(([k, v]) => [k, icoEl(v)]));
+
+function dentroDoPeriodo(iso, periodo) {
+  if (periodo === 'todos') return true;
+  const d = new Date(iso + 'T00:00:00');
+  const hoje = new Date('2026-07-15T00:00:00');
+  const dias = (hoje - d) / 86400000;
+  if (periodo === '30') return dias <= 30;
+  if (periodo === '90') return dias <= 90;
+  if (periodo === 'ano') return d.getFullYear() === hoje.getFullYear();
+  return true;
+}
+
+function fmtMoney(v) { return v.toLocaleString('pt-BR', { style:'currency', currency:'BRL', maximumFractionDigits:0 }); }
+function fmtData(iso) { const d = new Date(iso+'T00:00:00'); return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'short', year:'numeric' }); }
+function iniciais(nome) { return nome.split(' ').filter(Boolean).slice(0,2).map(p=>p[0]).join('').toUpperCase(); }
+
+class Component extends DCLogic {
+  state = {
+    busca: '',
+    filtro: 'todos',
+    revendedoraSel: 'todas',
+    periodoSel: 'todos',
+    sidebarAberta: true,
+    modalAberto: false,
+    modo: 'form', // 'form' | 'detalhe'
+    clienteSelecionadoId: null,
+    form: { nome: '', telefone: '', cidade: '', obs: '' },
+  };
+
+  onBusca = (e) => this.setState({ busca: e.target.value });
+  onRevendedora = (e) => this.setState({ revendedoraSel: e.target.value });
+  onPeriodo = (e) => this.setState({ periodoSel: e.target.value });
+  toggleSidebar = () => this.setState(s => ({ sidebarAberta: !s.sidebarAberta }));
+  setNome = (e) => this.setState(s => ({ form: { ...s.form, nome: e.target.value } }));
+  setTelefone = (e) => this.setState(s => ({ form: { ...s.form, telefone: e.target.value } }));
+  setCidade = (e) => this.setState(s => ({ form: { ...s.form, cidade: e.target.value } }));
+  setObs = (e) => this.setState(s => ({ form: { ...s.form, obs: e.target.value } }));
+
+  abrirNovo = () => this.setState({ modalAberto: true, modo: 'form', form: { nome:'', telefone:'', cidade:'', obs:'' }, clienteSelecionadoId: null });
+  fecharModal = () => this.setState({ modalAberto: false });
+  pararPropagacao = (e) => e.stopPropagation();
+  abrirDetalhe = (id) => this.setState({ modalAberto: true, modo: 'detalhe', clienteSelecionadoId: id });
+  irParaEdicao = () => {
+    const c = MOCK.find(x => x.id === this.state.clienteSelecionadoId);
+    this.setState({ modo: 'form', form: { nome: c?.nome || '', telefone: c?.telefone || '', cidade: c?.cidade || '', obs: c?.obs || '' } });
+  };
+  salvar = () => this.setState({ modalAberto: false });
+  setFiltro = (f) => this.setState({ filtro: f });
+
+  renderVals() {
+    const { busca, filtro, revendedoraSel, periodoSel, sidebarAberta, modalAberto, modo, clienteSelecionadoId, form } = this.state;
+    const buscaLower = busca.trim().toLowerCase();
+
+    let lista = MOCK.filter(c => {
+      if (buscaLower && !(c.nome.toLowerCase().includes(buscaLower) || c.telefone.includes(buscaLower) || c.cidade.toLowerCase().includes(buscaLower))) return false;
+      if (filtro === 'ativos' && !c.ativo) return false;
+      if (filtro === 'vip' && !c.vip) return false;
+      if (filtro === 'inativos' && c.ativo) return false;
+      if (revendedoraSel !== 'todas' && c.revendedora !== revendedoraSel) return false;
+      if (!dentroDoPeriodo(c.ultimaCompra, periodoSel)) return false;
+      return true;
+    });
+
+    const filtrosDef = [
+      { key: 'todos', label: 'Todos' },
+      { key: 'ativos', label: 'Ativos' },
+      { key: 'vip', label: 'VIP' },
+      { key: 'inativos', label: 'Inativos' },
+    ];
+
+    const clienteAtualRaw = MOCK.find(c => c.id === clienteSelecionadoId);
+
+    return {
+      icoGrid: ICONS.grid, icoBag: ICONS.bag, icoGem: ICONS.gem, icoUserCheck: ICONS.userCheck,
+      icoUsers: ICONS.users, icoColumns: ICONS.columns, icoRepeat: ICONS.repeat, icoShield: ICONS.shield,
+      icoPackage: ICONS.package, icoFabrica: ICONS.fabrica, icoTag: ICONS.tag, icoLayers: ICONS.layers,
+      icoCart: ICONS.cart, icoPercent: ICONS.percent, icoCalc: ICONS.calc, icoFin: ICONS.fin,
+      icoCard: ICONS.card, icoMega: ICONS.mega, icoGift: ICONS.gift, icoCrachaFunc: ICONS.crachaFunc,
+      sidebarAberta,
+      sidebarWidth: sidebarAberta ? '232px' : '60px',
+      sidebarToggleIcon: sidebarAberta ? '‹' : '›',
+      toggleSidebar: this.toggleSidebar,
+      revendedoraSel,
+      onRevendedora: this.onRevendedora,
+      revendedorasOpts: [{ value: 'todas', label: 'Todas as revendedoras' }, ...REVENDEDORAS.map(r => ({ value: r, label: r }))],
+      periodoSel,
+      onPeriodo: this.onPeriodo,
+      periodosOpts: [
+        { value: 'todos', label: 'Qualquer período' },
+        { value: '30', label: 'Últimos 30 dias' },
+        { value: '90', label: 'Últimos 90 dias' },
+        { value: 'ano', label: 'Este ano' },
+      ],
+      totalClientes: MOCK.length,
+      totalAtivos: MOCK.filter(c => c.ativo).length,
+      totalVips: MOCK.filter(c => c.vip).length,
+      ticketMedioFmt: fmtMoney(Math.round(MOCK.reduce((a,c)=>a+c.totalGasto,0) / MOCK.length)),
+      busca,
+      onBusca: this.onBusca,
+      filtros: filtrosDef.map(f => ({
+        label: f.label,
+        onClick: () => this.setFiltro(f.key),
+        bg: filtro === f.key ? '#c9748a' : '#fff',
+        color: filtro === f.key ? '#fff' : '#8a7590',
+        borderColor: filtro === f.key ? '#c9748a' : 'rgba(201,116,138,0.2)',
+      })),
+      temResultados: lista.length > 0,
+      semResultados: lista.length === 0,
+      clientesFiltrados: lista.map(c => ({
+        nome: c.nome, cidade: c.cidade, telefone: c.telefone, revendedora: c.revendedora, vip: c.vip,
+        iniciais: iniciais(c.nome),
+        ultimaCompraFmt: fmtData(c.ultimaCompra),
+        totalGastoFmt: fmtMoney(c.totalGasto),
+        statusLabel: c.ativo ? 'Ativo' : 'Inativo',
+        statusBg: c.ativo ? 'rgba(76,175,130,0.12)' : 'rgba(138,117,144,0.12)',
+        statusColor: c.ativo ? '#4caf82' : '#8a7590',
+        onClick: () => this.abrirDetalhe(c.id),
+      })),
+      modalAberto,
+      ehDetalhe: modalAberto && modo === 'detalhe',
+      ehFormulario: modalAberto && modo === 'form',
+      tituloForm: clienteSelecionadoId ? 'Editar Cliente' : 'Novo Cliente',
+      fecharModal: this.fecharModal,
+      pararPropagacao: this.pararPropagacao,
+      irParaEdicao: this.irParaEdicao,
+      abrirNovo: this.abrirNovo,
+      salvar: this.salvar,
+      form,
+      setNome: this.setNome, setTelefone: this.setTelefone, setCidade: this.setCidade, setObs: this.setObs,
+      clienteAtual: clienteAtualRaw ? {
+        nome: clienteAtualRaw.nome, telefone: clienteAtualRaw.telefone, cidade: clienteAtualRaw.cidade, revendedora: clienteAtualRaw.revendedora,
+        totalGastoFmt: fmtMoney(clienteAtualRaw.totalGasto),
+        ultimaCompraFmt: fmtData(clienteAtualRaw.ultimaCompra),
+        desdeFmt: fmtData(clienteAtualRaw.desde),
+        obs: clienteAtualRaw.obs,
+        iniciais: iniciais(clienteAtualRaw.nome),
+        whatsappLink: 'https://wa.me/55' + clienteAtualRaw.telefone.replace(/\D/g,''),
+      } : { nome:'', telefone:'', cidade:'', revendedora:'', totalGastoFmt:'', ultimaCompraFmt:'', desdeFmt:'', obs:'', iniciais:'', whatsappLink:'#' },
+    };
+  }
+}
+
+</script>
+</body>
+</html>
