@@ -353,16 +353,16 @@ export async function loadFinanceiro() {
     '<tr><td colspan="5"><div class="empty-state" style="padding:18px 0"><p style="font-size:13px">Nenhum recebimento ainda — feche uma maleta para começar.</p></div></td></tr>';
 
   panel.innerHTML = `
-    <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+    <div class="page-head">
       <div>
-        <div class="section-title">Financeiro</div>
-        <div class="section-subtitle">Recebimentos das maletas (fase 1) · contas de teste não entram</div>
+        <h2>Lançamentos</h2>
+        <div class="sub">Recebimentos das maletas (fase 1) · contas de teste não entram</div>
       </div>
-      ${ehGestor() ? `<button class="btn btn-outline" onclick="pixConfigAbrir()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> Config PIX</button>` : ''}
+      <div class="acts">${ehGestor() ? `<button class="btn btn-outline" onclick="pixConfigAbrir()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> Config PIX</button>` : ''}</div>
     </div>
-    <div class="dash-grid" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-bottom:16px">
-      <div class="dash-card"><h3>Recebido</h3><div class="dash-kpi" style="color:var(--success)">${fmtBRL(totalRecebido)}</div></div>
-      <div class="dash-card"><h3>A receber</h3><div class="dash-kpi" style="color:var(--rose)">${fmtBRL(totalAReceber)}</div></div>
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Recebido</span><span class="kpi-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span></div><div class="kpi-val" style="color:var(--success)">${fmtBRL(totalRecebido)}</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">A receber</span><span class="kpi-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span></div><div class="kpi-val" style="color:var(--rose)">${fmtBRL(totalAReceber)}</div></div>
     </div>
     <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:8px 0">A receber (pendente)</div>
     <div class="pag-wrap" style="margin-bottom:18px"><table class="pag-table"><thead><tr>
