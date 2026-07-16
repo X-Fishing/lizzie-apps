@@ -134,6 +134,26 @@ export function maskDateBR(input) {
   input.value = v;
 }
 
+// Máscara dd/mm (sem ano) — usada na data combinada do fiado.
+export function maskDiaMes(input) {
+  let v = input.value.replace(/\D/g, '').slice(0, 4);
+  if (v.length >= 3) v = v.slice(0,2) + '/' + v.slice(2);
+  input.value = v;
+}
+
+// dd/mm -> ISO yyyy-mm-dd, inferindo o ano da PRÓXIMA ocorrência (hoje ou futuro).
+export function diaMesParaISO(s) {
+  const m = (s || '').trim().match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!m) return null;
+  const dd = +m[1], mm = +m[2];
+  if (dd < 1 || dd > 31 || mm < 1 || mm > 12) return null;
+  const hojeISO = new Date().toISOString().slice(0, 10);
+  const iso = y => `${y}-${String(mm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`;
+  let ano = Number(hojeISO.slice(0, 4));
+  if (iso(ano) < hojeISO) ano += 1;
+  return iso(ano);
+}
+
 export function brToISO(s) {
   if (!s) return null;
   const m = s.trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);

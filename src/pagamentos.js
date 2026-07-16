@@ -111,7 +111,7 @@ export async function verVenda(id) {
       <div class="detail-row"><div class="detail-key">Pendente</div><div class="detail-val" style="color:var(--danger)">R$ ${restante.toFixed(2)}</div></div>
       ${v.telefone_cliente ? `<div class="detail-row"><div class="detail-key">WhatsApp</div><div class="detail-val">${esc(v.telefone_cliente)}</div></div>` : ''}
       ${v.nascimento_cliente ? `<div class="detail-row"><div class="detail-key">Aniversário</div><div class="detail-val">${formatDate(v.nascimento_cliente)}</div></div>` : ''}
-      ${v.data_combinada ? `<div class="detail-row"><div class="detail-key">Data combinada</div><div class="detail-val"${(v.data_combinada < new Date().toISOString().slice(0,10) && restante > 0) ? ' style="color:var(--danger)"' : ''}>${formatDate(v.data_combinada)}</div></div>` : ''}
+      ${v.data_combinada ? `<div class="detail-row"><div class="detail-key">Data combinada</div><div class="detail-val"${(v.data_combinada < new Date().toISOString().slice(0,10) && restante > 0) ? ' style="color:var(--danger)"' : ''}>${(() => { const p = v.data_combinada.split('T')[0].split('-'); return `${p[2]}/${p[1]}`; })()}</div></div>` : ''}
       ${v.observacao ? `<div class="detail-row"><div class="detail-key">Obs.</div><div class="detail-val">${esc(v.observacao)}</div></div>` : ''}
     </div>
     ${restante > 0 && v.telefone_cliente ? `<button class="btn-secondary" style="width:100%;margin-bottom:10px;border-color:#25D366;color:#128C7E" onclick="zapCobrancaCliente('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Cobrar no WhatsApp</button>` : ''}
@@ -206,7 +206,8 @@ export function zapCobrancaCliente(vendaId) {
   const primeiro = (v.nome_cliente || '').trim().split(' ')[0] || 'tudo bem';
   const hoje = new Date().toISOString().slice(0, 10);
   const dc = v.data_combinada;
-  const dcFmt = dc ? formatDate(dc) : '';
+  const ddmm = iso => { const p = iso.split('T')[0].split('-'); return `${p[2]}/${p[1]}`; };
+  const dcFmt = dc ? ddmm(dc) : '';
   const frase = !dc ? 'está em aberto'
     : dc < hoje ? `estava combinado para ${dcFmt}`
     : dc === hoje ? `combinamos para hoje (${dcFmt})`

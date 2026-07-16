@@ -526,8 +526,8 @@
     </div>
     <div class="form-group" id="f-combinada-wrap" style="display:none">
       <label class="form-label">Data combinada de pagamento *</label>
-      <input type="text" id="f-combinada" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)">
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">Aparece na cobrança por WhatsApp da tela de Pagamentos.</div>
+      <input type="text" id="f-combinada" class="form-control" placeholder="dd/mm" maxlength="5" inputmode="numeric" oninput="maskDiaMes(this)">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Só o dia e o mês. Aparece na cobrança por WhatsApp da tela de Pagamentos.</div>
     </div>
     <div class="form-group">
       <label class="form-label">Valor recebido agora (R$)</label>

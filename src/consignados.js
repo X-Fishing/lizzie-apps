@@ -1,7 +1,7 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
 const soDigitos = s => (s || '').replace(/\D/g, '');
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 export async function loadConsignados() {
@@ -1412,7 +1412,7 @@ export async function confirmarVendaCarrinho(btn) {
   const forma = document.getElementById('f-forma').value;
   const pago = parseMoneyBR(document.getElementById('f-pago').value);
   const obs = document.getElementById('f-obs').value.trim();
-  const combinada = forma === 'Fiado' ? brToISO(document.getElementById('f-combinada').value) : null;
+  const combinada = forma === 'Fiado' ? diaMesParaISO(document.getElementById('f-combinada').value) : null;
 
   if (!cliente) { toast('Informe o nome da cliente'); return; }
   if (tel.length < 10) { toast('Informe o WhatsApp da cliente com DDD'); return; }
