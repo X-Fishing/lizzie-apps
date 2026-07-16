@@ -43,7 +43,7 @@ export const MENU = [
   { grupo: 'grp_vendas', label: 'Vendas', icon: IC.bag, filhos: [
       { chave: 'vendas_controle',  panel: 'consignados', label: 'Controle de Vendas',  icon: IC.gem },
       { chave: 'cad_revendedoras', panel: 'admin',       label: 'Revendedoras',        icon: IC.userCheck },
-      { chave: 'cad_clientes',     panel: 'clientes',    label: 'Clientes',            icon: IC.users, em_breve: true },
+      { chave: 'cad_clientes',     panel: 'clientes',    label: 'Clientes',            icon: IC.users },
       { chave: 'vendas_lancar',    panel: 'lancador',    label: 'Lançar Mostruário',   icon: IC.columns },
       { chave: 'vendas_troca',     panel: 'trocas',      label: 'Troca de Mostruário', icon: IC.repeat },
       // chave 'cad_garantias' mantida: perfis existentes seguem valendo
@@ -62,8 +62,8 @@ export const MENU = [
   { grupo: 'grp_financeiro', label: 'Financeiro', icon: IC.fin, filhos: [
       // chave 'financeiro' mantida (item solto virou "Lançamentos" dentro do grupo)
       { chave: 'financeiro',           panel: 'financeiro',             label: 'Lançamentos',            icon: IC.fin },
-      { chave: 'cad_formas_pagamento', panel: 'formas-pagamento',       label: 'Formas de Pagamento',    icon: IC.card, em_breve: true },
-      { chave: 'cad_categorias_fin',   panel: 'categorias-financeiras', label: 'Categorias Financeiras', icon: IC.tag, em_breve: true },
+      { chave: 'cad_formas_pagamento', panel: 'formas-pagamento',       label: 'Formas de Pagamento',    icon: IC.card },
+      { chave: 'cad_categorias_fin',   panel: 'categorias-financeiras', label: 'Categorias Financeiras', icon: IC.tag },
   ]},
   { grupo: 'grp_marketing', label: 'Marketing', icon: IC.mega, filhos: [
       { chave: 'cad_raspadinha',       panel: 'config-raspadinha', label: 'Raspadinha', icon: IC.tag, admin_only: true },
