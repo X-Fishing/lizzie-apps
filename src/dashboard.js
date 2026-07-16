@@ -192,13 +192,14 @@ export async function loadDashboardStaff() {
   const dAnt = new Date(agora.getFullYear(), agora.getMonth() - 1, 1);
   const ymAnt = `${dAnt.getFullYear()}-${String(dAnt.getMonth() + 1).padStart(2, '0')}`;
 
-  let vendidoMes = 0, recebidoMes = 0, vendidoAnt = 0, aReceber = 0;
+  let vendidoMes = 0, recebidoMes = 0, vendidoAnt = 0, aReceber = 0, vendasMesCount = 0;
   vendas.forEach(v => {
     const m = ym(v.data_venda);
-    if (m === ymAtual) { vendidoMes += num(v.valor_total); recebidoMes += num(v.valor_pago); }
+    if (m === ymAtual) { vendidoMes += num(v.valor_total); recebidoMes += num(v.valor_pago); vendasMesCount++; }
     if (m === ymAnt) vendidoAnt += num(v.valor_total);
     aReceber += Math.max(0, num(v.valor_total) - num(v.valor_pago));
   });
+  const ticketMedio = vendasMesCount > 0 ? vendidoMes / vendasMesCount : 0;
   const variacao = vendidoAnt > 0 ? ((vendidoMes - vendidoAnt) / vendidoAnt * 100) : (vendidoMes > 0 ? 100 : 0);
 
   const MES = ['JAN','FEV','MAR','ABR','MAI','JUN','JUL','AGO','SET','OUT','NOV','DEZ'];
@@ -226,22 +227,36 @@ export async function loadDashboardStaff() {
   const mesLabel = agora.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
   const pct = vendidoMes > 0 ? Math.round(recebidoMes / vendidoMes * 100) : 0;
 
+  const IC_MONEY = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><line x1="12" x2="12" y1="2" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+  const IC_BAG   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>';
+  const IC_TICKET = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>';
+  const IC_CLOCK = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>';
+
   panel.innerHTML = `
-    <div class="section-header"><div>
-      <div class="section-title">Dashboard</div>
-      <div class="section-subtitle">${mesLabel} · ${revsAtivas} revendedora${revsAtivas !== 1 ? 's' : ''} ativa${revsAtivas !== 1 ? 's' : ''}${temTeste ? ' · <span style="font-size:11px">totais não incluem contas de teste</span>' : ''}</div>
+    <div class="page-head"><div>
+      <h2>Dashboard</h2>
+      <div class="sub">${mesLabel} · ${revsAtivas} revendedora${revsAtivas !== 1 ? 's' : ''} ativa${revsAtivas !== 1 ? 's' : ''}${temTeste ? ' · totais não incluem contas de teste' : ''}</div>
     </div></div>
-    <div class="dash-grid">
-      <div class="dash-card">
-        <h3>Vendas do mês</h3><div class="dash-sub">Realizado em ${mesLabel}</div>
-        <div class="dash-kpi">${fmtBRL(vendidoMes)}</div>
-        <div style="font-size:12px;margin-top:6px;color:${variacao >= 0 ? 'var(--success)' : 'var(--danger)'}">
-          ${variacao >= 0 ? '▲' : '▼'} ${Math.abs(variacao).toFixed(0)}% vs mês anterior (${fmtBRL(vendidoAnt)})</div>
-        <div style="margin-top:16px">
-          <div class="dash-row"><span>Recebido no mês</span><b style="color:var(--success)">${fmtBRL(recebidoMes)}</b></div>
-          <div class="dash-row"><span>A receber (pendente)</span><b style="color:var(--danger)">${fmtBRL(aReceber)}</b></div>
-        </div>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Faturamento do mês</span><span class="kpi-ic">${IC_MONEY}</span></div>
+        <div class="kpi-val">${fmtBRL(vendidoMes)}</div>
+        <div class="kpi-delta ${variacao >= 0 ? 'up' : 'down'}">${variacao >= 0 ? '▲' : '▼'} ${Math.abs(variacao).toFixed(0)}% vs mês anterior</div>
       </div>
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Vendas no mês</span><span class="kpi-ic">${IC_BAG}</span></div>
+        <div class="kpi-val">${vendasMesCount}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">Ticket médio</span><span class="kpi-ic">${IC_TICKET}</span></div>
+        <div class="kpi-val">${fmtBRL(ticketMedio)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-top"><span class="kpi-label">A receber</span><span class="kpi-ic">${IC_CLOCK}</span></div>
+        <div class="kpi-val" style="color:var(--danger)">${fmtBRL(aReceber)}</div>
+      </div>
+    </div>
+    <div class="dash-grid">
       <div class="dash-card">
         <h3>Vendas — últimos 6 meses</h3><div class="dash-sub">Total vendido por mês</div>
         <div class="dash-bars">

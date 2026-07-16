@@ -65,25 +65,20 @@ export async function loadPerfis() {
 }
 
 function renderFuncionarios() {
+  const ativos = FUNCS.filter(f => f.ativo).length;
   panel().innerHTML = `
-    <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-      <div>
-        <div class="section-title">Funcionários</div>
-        <div class="section-subtitle">Cadastro de funcionários e níveis de acesso</div>
-      </div>
-      <button class="btn-primary btn-sm" onclick="funcNovo()">${IC_PLUS} Novo funcionário</button>
+    <div class="page-head">
+      <div><h2>Funcionários</h2><div class="sub">${FUNCS.length} funcionário${FUNCS.length !== 1 ? 's' : ''} · ${ativos} ativo${ativos !== 1 ? 's' : ''}</div></div>
+      <div class="acts"><button class="btn-primary btn-sm" onclick="funcNovo()">${IC_PLUS} Novo funcionário</button></div>
     </div>
     ${renderFuncs()}`;
 }
 
 function renderPerfisPanel() {
   panelPerfis().innerHTML = `
-    <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-      <div>
-        <div class="section-title">Perfis &amp; Permissões</div>
-        <div class="section-subtitle">Cargos e o que cada um enxerga no menu</div>
-      </div>
-      <button class="btn-primary btn-sm" onclick="perfilNovo()">${IC_PLUS} Novo perfil</button>
+    <div class="page-head">
+      <div><h2>Perfis &amp; Permissões</h2><div class="sub">Cargos e o que cada um enxerga no menu</div></div>
+      <div class="acts"><button class="btn-primary btn-sm" onclick="perfilNovo()">${IC_PLUS} Novo perfil</button></div>
     </div>
     ${renderPerfis()}`;
 }

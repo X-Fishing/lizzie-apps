@@ -25,7 +25,7 @@ const CFG = {
     fmt: { banho_padrao: v => (Number(v) || 0) + ' mil.' },
   },
   colecoes: {
-    panel: 'colecoes', titulo: 'Coleções', singular: 'coleção',
+    panel: 'colecoes', titulo: 'Coleções', singular: 'coleção', novoLabel: 'Nova coleção',
     order: 'nome',
     campos: [
       { key: 'nome', label: 'Nome', type: 'text', required: true },
@@ -33,6 +33,16 @@ const CFG = {
       { key: 'ativo', label: 'Ativo', type: 'bool', default: true },
     ],
     colunas: ['nome', 'ano'],
+    render: linhas => linhas.length
+      ? `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">${linhas.map(c => `
+          <div class="card" style="${c.ativo === false ? 'opacity:.55;' : ''}display:flex;justify-content:space-between;align-items:flex-start;gap:10px">
+            <div>
+              <div style="font-family:'Cormorant Garamond',serif;font-size:20px;color:var(--plum)">${esc(c.nome)}</div>
+              <div style="font-size:12px;color:var(--muted);margin-top:2px">${c.ano ? esc(c.ano) : 'Sem ano'}${c.ativo === false ? ' · inativo' : ''}</div>
+            </div>
+            <div style="white-space:nowrap">${cadAcoesHtml('colecoes', c.id)}</div>
+          </div>`).join('')}</div>`
+      : `<div class="empty-state" style="padding:24px 0"><div class="empty-icon">${IC_EMPTY}</div><p>Nenhuma coleção ainda</p></div>`,
   },
   fornecedores: {
     panel: 'fornecedores', titulo: 'Fornecedores', singular: 'fornecedor',
