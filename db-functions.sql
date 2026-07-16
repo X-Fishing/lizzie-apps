@@ -14,15 +14,21 @@
 --       sem read-modify-write a partir de cache do navegador).
 -- SECURITY INVOKER: roda com as permissões do usuário logado, respeitando
 -- as policies de RLS (revendedora só mexe nas próprias linhas).
+-- 0023: ganhou p_tel/p_nasc/p_combinada (DEFAULT null → retrocompatível).
+-- A assinatura mudou; drop antes p/ não virar overload ambíguo no PostgREST.
+drop function if exists public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb);
 create or replace function public.registrar_venda(
-  p_cliente text,
-  p_data    date,
-  p_forma   text,
-  p_total   numeric,
-  p_pago    numeric,
-  p_status  text,
-  p_obs     text,
-  p_itens   jsonb
+  p_cliente   text,
+  p_data      date,
+  p_forma     text,
+  p_total     numeric,
+  p_pago      numeric,
+  p_status    text,
+  p_obs       text,
+  p_itens     jsonb,
+  p_tel       text default null,
+  p_nasc      date default null,
+  p_combinada date default null
 )
 returns uuid
 language plpgsql
@@ -42,10 +48,12 @@ begin
 
   insert into vendas (
     revendedora_id, nome_cliente, data_venda, forma_pagamento,
-    valor_total, valor_pago, status, observacao
+    valor_total, valor_pago, status, observacao,
+    telefone_cliente, nascimento_cliente, data_combinada
   ) values (
     auth.uid(), p_cliente, p_data, p_forma,
-    p_total, p_pago, p_status, p_obs
+    p_total, p_pago, p_status, p_obs,
+    p_tel, p_nasc, p_combinada
   )
   returning id into v_venda_id;
 
@@ -76,8 +84,8 @@ begin
 end;
 $$;
 
-revoke all on function public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb) from public;
-grant execute on function public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb) to authenticated;
+revoke all on function public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb,text,date,date) from public;
+grant execute on function public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb,text,date,date) to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════
 -- handle_new_user: cria o profile automaticamente quando um usuario se

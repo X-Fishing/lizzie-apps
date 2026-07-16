@@ -2,6 +2,7 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
+const soDigitos = s => (s || '').replace(/\D/g, '');
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 export async function loadConsignados() {
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
@@ -1326,8 +1327,11 @@ export function abrirFinalizarVenda() {
     `<div class="cart-total-row"><span>Total</span><span>R$ ${total.toFixed(2)}</span></div>`;
 
   document.getElementById('f-cliente').value = '';
+  document.getElementById('f-tel').value = '';
+  document.getElementById('f-nasc').value = '';
   document.getElementById('f-data').value = hojeBR();
   document.getElementById('f-forma').value = 'Pix';
+  document.getElementById('f-combinada').value = '';
   document.getElementById('f-obs').value = '';
   ajustarValorPago();
   openModal('modal-finalizar');
@@ -1338,17 +1342,25 @@ export function ajustarValorPago() {
   const forma = document.getElementById('f-forma').value;
   const aVista = ['Dinheiro', 'Pix', 'Cartão débito', 'Cartão crédito'].includes(forma);
   document.getElementById('f-pago').value = aVista ? moneyToInput(total) : '';
+  // Data combinada só faz sentido no fiado.
+  document.getElementById('f-combinada-wrap').style.display = forma === 'Fiado' ? 'block' : 'none';
 }
 
 export async function confirmarVendaCarrinho(btn) {
   const cliente = document.getElementById('f-cliente').value.trim();
+  const tel = soDigitos(document.getElementById('f-tel').value);
+  const nasc = brToISO(document.getElementById('f-nasc').value);
   const data = brToISO(document.getElementById('f-data').value);
   const forma = document.getElementById('f-forma').value;
   const pago = parseMoneyBR(document.getElementById('f-pago').value);
   const obs = document.getElementById('f-obs').value.trim();
+  const combinada = forma === 'Fiado' ? brToISO(document.getElementById('f-combinada').value) : null;
 
   if (!cliente) { toast('Informe o nome da cliente'); return; }
+  if (tel.length < 10) { toast('Informe o WhatsApp da cliente com DDD'); return; }
+  if (!nasc) { toast('Informe o aniversário da cliente (dd/mm/aaaa)'); return; }
   if (!data) { toast('Data inválida (use dd/mm/aaaa)'); return; }
+  if (forma === 'Fiado' && !combinada) { toast('Informe a data combinada de pagamento'); return; }
   if (!state.carrinhoVenda.length) { toast('Carrinho vazio'); return; }
 
   const total = state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
@@ -1371,6 +1383,9 @@ export async function confirmarVendaCarrinho(btn) {
         p_pago: pago,
         p_status: status,
         p_obs: obs || null,
+        p_tel: tel,
+        p_nasc: nasc,
+        p_combinada: combinada,
         p_itens: state.carrinhoVenda.map(it => ({
           consignado_id: it.consignado_id,
           descricao: it.descricao,
