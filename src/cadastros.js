@@ -23,6 +23,16 @@ const CFG = {
     ],
     colunas: ['nome', 'banho_padrao'],
     fmt: { banho_padrao: v => (Number(v) || 0) + ' mil.' },
+    render: linhas => linhas.length
+      ? `<div class="card" style="padding:0;overflow:hidden;max-width:760px">${linhas.map((c, i) => `
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 18px;${i ? 'border-top:1px solid var(--border);' : ''}${c.ativo === false ? 'opacity:.55;' : ''}">
+            <div>
+              <div style="font-weight:500;color:var(--plum);font-size:14px">${esc(c.nome)}${c.ativo === false ? ' <span class="badge badge-aberta" style="font-size:10px">inativa</span>' : ''}</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Banho padrão: ${Number(c.banho_padrao) || 0} milésimos</div>
+            </div>
+            <div style="white-space:nowrap">${cadAcoesHtml('categorias', c.id)}</div>
+          </div>`).join('')}</div>`
+      : `<div class="empty-state" style="padding:24px 0"><div class="empty-icon">${IC_EMPTY}</div><p>Nenhuma categoria ainda</p></div>`,
   },
   colecoes: {
     panel: 'colecoes', titulo: 'Coleções', singular: 'coleção', novoLabel: 'Nova coleção',
