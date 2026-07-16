@@ -73,8 +73,15 @@ function render() {
   const dataTrocaSel = document.getElementById('lan-data-troca')?.value || '';
   const total = carrinho.reduce((s, i) => s + i.qtd, 0);
   const valor = carrinho.reduce((s, i) => s + i.qtd * (i.preco_venda || 0), 0);
-  const rows = carrinho.length ? carrinho.map((i, idx) => `
-    <tr class="ciclo-row"${idx === carrinho.length - 1 ? ' style="background:rgba(201,116,138,0.06)"' : ''}>
+  // Códigos repetidos no carrinho: destaca a linha inteira em rosa (blush) p/
+  // pegar duplicata na hora do lançamento.
+  const refCount = {};
+  carrinho.forEach(i => { const r = (i.referencia || '').trim(); if (r) refCount[r] = (refCount[r] || 0) + 1; });
+  const rows = carrinho.length ? carrinho.map((i, idx) => {
+    const dupe = i.referencia && refCount[(i.referencia || '').trim()] > 1;
+    const bg = dupe ? 'background:var(--blush)' : (idx === carrinho.length - 1 ? 'background:rgba(201,116,138,0.06)' : '');
+    return `
+    <tr class="ciclo-row"${bg ? ` style="${bg}"` : ''}${dupe ? ' title="Código repetido no carrinho"' : ''}>
       <td class="ciclo-td"><div style="display:flex;align-items:center;gap:10px">
         <span class="ciclo-emoji">${i.foto_url ? `<img src="${esc(i.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
         <div class="ciclo-desc">${esc(i.descricao)}</div>
@@ -85,7 +92,8 @@ function render() {
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(i.preco_venda || 0)}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(i.qtd * (i.preco_venda || 0))}</span></td>
       <td class="ciclo-td" style="text-align:right"><button class="btn-icon" style="color:var(--danger)" onclick="lancadorRemover(${idx})">${IC_TRASH}</button></td>
-    </tr>`).join('') :
+    </tr>`;
+  }).join('') :
     `<tr><td colspan="6"><div class="empty-state" style="padding:24px 0"><div class="empty-icon">${IC_GEM}</div><p>Bipe a primeira peça para começar</p></div></td></tr>`;
 
   const podeEnviar = carrinho.length && maletaDestino;
