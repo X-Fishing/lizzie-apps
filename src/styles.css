@@ -12,6 +12,10 @@
   --warning: #e8a838;
   --danger: #e05555;
   --info: #5b9bd5;
+  /* Tokens de forma/sombra (antes hardcoded espalhado) */
+  --shadow-card: 0 2px 10px rgba(0,0,0,0.04);
+  --shadow-hover: 0 6px 20px rgba(124,58,93,0.12);
+  --grad-rose: linear-gradient(135deg, #c9748a, #b5526a);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(--cream); color: var(--text); }
@@ -147,6 +151,11 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
   border-radius: 20px; padding: 4px 12px; font-size: 11px;
   color: var(--rose); font-weight: 500; letter-spacing: 0.5px;
 }
+/* Breadcrumb da topbar (só no shell de PC/staff — ver media query staff-desktop) */
+.topbar-crumb { display: none; align-items: center; gap: 8px; font-size: 13px; margin-left: 22px; margin-right: auto; }
+.topbar-crumb .crumb-grp { color: rgba(255,255,255,0.55); }
+.topbar-crumb .crumb-sep { color: rgba(255,255,255,0.3); }
+.topbar-crumb .crumb-cur { color: var(--gold); font-weight: 500; }
 .btn-icon {
   background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.5);
   font-size: 18px; padding: 4px; transition: color 0.3s;
@@ -746,6 +755,35 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   border: 1px solid rgba(212,168,75,0.4); border-radius: 10px; padding: 2px 8px; margin-left: 8px;
   vertical-align: middle; }
 
+/* ════════════════════════════════════════════════════════════════════
+   KIT DE COMPONENTES (Fase 0 do redesign) — classes NOVAS, usadas pelas
+   telas nas próximas fases. Aditivas: não alteram componentes existentes.
+   ════════════════════════════════════════════════════════════════════ */
+/* Cabeçalho de página: título serif + subtítulo + ações à direita */
+.page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.page-head h2 { font-family: 'Cormorant Garamond', serif; font-weight: 500; font-size: 26px; color: var(--plum); line-height: 1.1; }
+.page-head .sub { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.page-head .acts { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* KPI card com ícone e delta ▲▼ */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 18px; }
+.kpi-card { background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 16px 18px; box-shadow: var(--shadow-card); }
+.kpi-card .kpi-top { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.kpi-card .kpi-label { font-size: 11.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.kpi-card .kpi-ic { width: 34px; height: 34px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--blush); color: var(--rose); flex: none; }
+.kpi-card .kpi-ic svg { width: 18px; height: 18px; }
+.kpi-card .kpi-val { font-family: 'Cormorant Garamond', serif; font-size: 30px; color: var(--plum); line-height: 1.1; margin-top: 8px; }
+.kpi-card .kpi-delta { font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; margin-top: 3px; }
+.kpi-card .kpi-delta.up { color: var(--success); }
+.kpi-card .kpi-delta.down { color: var(--danger); }
+
+/* Linha de chips de filtro (escopo .chips — não conflita com .chip solto) */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; }
+.chips .chip { padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border); background: #fff;
+  font-size: 12.5px; color: var(--muted); cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
+.chips .chip:hover { border-color: var(--rose); color: var(--rose); }
+.chips .chip.active { background: var(--grad-rose); color: #fff; border-color: transparent; }
+
 /* ── DASHBOARD PC (staff, tela larga): barra lateral dedicada estilo Bling/Zenply.
    Só aparece com .staff-desktop (setada no loadUser p/ staff) E >=900px. Sem isso,
    tudo no-op -> mobile e revendedora 100% intactos (continuam na nav inferior). */
@@ -760,11 +798,20 @@ textarea.form-control { resize: vertical; min-height: 80px; }
   }
   #app.staff-desktop .topbar { margin-left: 232px; }
   #app.staff-desktop .content { max-width: 1280px; margin-left: 252px; padding: 26px 32px 48px; }
-  /* Sidebar retrátil: recolhida, o conteúdo ganha a largura toda */
-  #app.staff-desktop.snav-fechada .staff-nav { display: none; }
-  #app.staff-desktop.snav-fechada .topbar { margin-left: 0; }
-  #app.staff-desktop.snav-fechada .content { margin-left: 0; }
-  #app.staff-desktop.snav-fechada #snav-reabrir { display: flex; }
+  #app.staff-desktop .topbar-crumb { display: flex; }
+  /* Recolhida = TRILHO de 60px (só ícones), não some mais */
+  #app.staff-desktop.snav-fechada .staff-nav { width: 60px; padding: 14px 8px; }
+  #app.staff-desktop.snav-fechada .topbar { margin-left: 60px; }
+  #app.staff-desktop.snav-fechada .content { margin-left: 72px; }
+  #app.staff-desktop.snav-fechada #snav-reabrir { display: none; }
+  /* Trilho: esconde textos, centraliza ícones, some cabeçalhos de grupo */
+  #app.snav-fechada .snav-brand { font-size: 0; padding: 2px 0 10px; justify-content: center; }
+  #app.snav-fechada #snav-toggle { font-size: 14px; transform: rotate(180deg); }
+  #app.snav-fechada .snav-group-label { display: none; }
+  #app.snav-fechada .snav-sub { margin: 0; padding: 0; border-left: none; gap: 2px; }
+  #app.snav-fechada .snav-item { justify-content: center; padding: 10px 0; font-size: 0; gap: 0; }
+  #app.snav-fechada .snav-item .snav-ic { font-size: 17px; }
+  #app.snav-fechada .snav-item .badge-soon { display: none; }
 }
 #snav-toggle {
   width: 26px; height: 26px; border-radius: 8px; border: 1px solid var(--border);

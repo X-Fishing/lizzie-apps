@@ -4,7 +4,7 @@
 // o item; as ações internas ficam liberadas para quem tem acesso.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { sbQ } from './utils.js';
+import { sbQ, esc } from './utils.js';
 import { ehAdmin, ehStaff } from './auth.js';
 
 // ── ícones (mesma família Lucide já usada no app) ──────────────────
@@ -29,6 +29,7 @@ const IC = {
   cart:      '<svg class="ico" viewBox="0 0 24 24"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>',
   package:   '<svg class="ico" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
   gift:      '<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>',
+  star:      '<svg class="ico" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
 };
 
 // ── Registry (fonte única do menu lateral) ─────────────────────────
@@ -65,8 +66,9 @@ export const MENU = [
       { chave: 'cad_categorias_fin',   panel: 'categorias-financeiras', label: 'Categorias Financeiras', icon: IC.tag, em_breve: true },
   ]},
   { grupo: 'grp_marketing', label: 'Marketing', icon: IC.mega, filhos: [
-      { chave: 'cad_raspadinha',  panel: 'config-raspadinha', label: 'Raspadinha', icon: IC.tag, admin_only: true },
-      { chave: 'marketing_bonus', panel: 'bonus',             label: 'Bônus',      icon: IC.gift, em_breve: true },
+      { chave: 'cad_raspadinha',       panel: 'config-raspadinha', label: 'Raspadinha', icon: IC.tag, admin_only: true },
+      { chave: 'marketing_fidelidade', panel: 'fidelidade',        label: 'Fidelidade', icon: IC.star, em_breve: true },
+      { chave: 'marketing_bonus',      panel: 'bonus',             label: 'Bônus',      icon: IC.gift, em_breve: true },
   ]},
   { secao: 'Configurações', grupo: 'grp_cadastros', filhos: [
       { chave: 'cad_funcionarios',    panel: 'funcionarios',    label: 'Funcionários',        icon: IC.crachaFunc, admin_only: true },
@@ -147,13 +149,33 @@ function hrefDePanel(panel) {
 }
 // Itens são <a href="#/..."> — o hash dispara o router (voltar do navegador
 // funciona, e ganha middle-click / abrir em nova aba de graça).
+// title = tooltip (útil quando a sidebar está no trilho de 60px, só ícones).
 function btnItem(item) {
   if (item.em_breve) {
-    return `<span class="snav-item" data-panel="${item.panel}" style="opacity:.55;cursor:default">
+    return `<span class="snav-item" data-panel="${item.panel}" title="${esc(item.label)}" style="opacity:.55;cursor:default">
       <span class="snav-ic">${item.icon}</span>${item.label}<span class="badge-soon">Em breve</span></span>`;
   }
-  return `<a class="snav-item" data-panel="${item.panel}" href="${hrefDePanel(item.panel)}">
+  return `<a class="snav-item" data-panel="${item.panel}" title="${esc(item.label)}" href="${hrefDePanel(item.panel)}">
     <span class="snav-ic">${item.icon}</span>${item.label}</a>`;
+}
+
+// Breadcrumb da topbar (staff): "Grupo / Tela" a partir do painel ativo.
+const CRUMB_EXTRA = { pagamentos: 'Pagamentos', historico: 'Histórico' };
+export function atualizarBreadcrumb(panel) {
+  const el = document.getElementById('topbar-crumb');
+  if (!el) return;
+  let grupo = '', label = '';
+  for (const m of MENU) {
+    if (m.filhos) {
+      const f = m.filhos.find(i => i.panel === panel);
+      if (f) { grupo = m.secao || m.label; label = f.label; break; }
+    } else if (m.panel === panel) { label = m.label; break; }
+  }
+  if (!label) label = CRUMB_EXTRA[panel] || '';
+  el.innerHTML = !label ? ''
+    : (grupo
+      ? `<span class="crumb-grp">${esc(grupo)}</span><span class="crumb-sep">/</span><span class="crumb-cur">${esc(label)}</span>`
+      : `<span class="crumb-cur">${esc(label)}</span>`);
 }
 
 export function renderSidebar() {
