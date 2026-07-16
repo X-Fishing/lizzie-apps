@@ -206,17 +206,6 @@ function grupoAnel(nome) {
   return m ? { base: `Anel ${m[2].trim()}`, tamanho: m[1] } : null;
 }
 
-// Célula de custo (só admin, editável inline). Grupos/variações usam a "vazia"
-// (o custo vive no produto/aro, não no cabeçalho).
-function custoCellHTML(p) {
-  if (!ehAdmin()) return '';
-  const v = Number(p.custo_compra) > 0 ? fmtBRL(p.custo_compra) : '—';
-  return `<td class="ciclo-td" style="text-align:right;white-space:nowrap;cursor:pointer" title="Clique para editar o custo" onclick="event.stopPropagation();produtoCustoEditar('${p.id}',this)">${v}</td>`;
-}
-function custoCellVazia() {
-  return ehAdmin() ? '<td class="ciclo-td" style="text-align:right;color:var(--muted)">—</td>' : '';
-}
-
 // Linha padrão de produto (sub=true = membro de grupo, com recuo)
 function linhaProdutoHTML(p, sub = false) {
   return `
@@ -231,7 +220,6 @@ function linhaProdutoHTML(p, sub = false) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${p.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(p.preco_venda)}</span></td>
-      ${custoCellHTML(p)}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
@@ -250,7 +238,6 @@ function linhaVariacaoHTML(p, v) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${v.sku ? esc(v.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${v.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(v.preco_venda ?? p.preco_venda)}</span></td>
-      ${custoCellVazia()}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         <button class="btn-icon" title="Editar (abre o produto)" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
       </td>
@@ -276,7 +263,6 @@ function linhaVarProdHTML(p, vars, aberto) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
-      ${custoCellVazia()}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
         <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
@@ -306,7 +292,6 @@ function linhaGrupoHTML(g, aberto) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">—</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
-      ${custoCellVazia()}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap;font-size:11px;color:var(--muted)">${aberto ? 'fechar' : 'ver aros'}</td>
     </tr>`;
 }
@@ -315,7 +300,6 @@ function linhaGrupoHTML(g, aberto) {
 // da toolbar: re-renderizar o painel inteiro a cada tecla destruía o input de
 // busca e derrubava o foco do teclado.
 function tabelaHTML() {
-  const admin = ehAdmin();
   const f = filtroProdutos.trim().toLowerCase();
   let lista = produtosCache;
   if (filtroColecao) lista = lista.filter(p => String(p.colecao_id) === String(filtroColecao));
@@ -373,7 +357,7 @@ function tabelaHTML() {
       .map(m => linhaProdutoHTML(m.p, true)).join('');
     return html;
   }).join('') :
-    `<tr><td colspan="${admin ? 6 : 5}"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor || filtroCaract) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
+    `<tr><td colspan="5"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor || filtroCaract) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
 
   const pager = totalFiltrado > POR_PAGINA ? `
     <div style="display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px">
@@ -388,7 +372,6 @@ function tabelaHTML() {
       <th class="pag-th">SKU</th>
       <th class="pag-th" style="text-align:center">Estoque</th>
       <th class="pag-th">Preço</th>
-      ${admin ? '<th class="pag-th" style="text-align:right">Custo</th>' : ''}
       <th class="pag-th" style="text-align:right">Ações</th>
     </tr></thead><tbody>${linhas}</tbody></table></div>
     ${pager}`;
@@ -453,36 +436,6 @@ export function produtoFiltrarFornecedor(v) { filtroFornecedor = v; paginaAtual 
 export function produtoFiltrarCaracteristica(v) { filtroCaract = v; paginaAtual = 1; renderTabela(); }
 
 // ── Custo editável inline na grid (só admin) ──
-let custoCancelado = false;
-export function produtoCustoEditar(id, td) {
-  if (!ehAdmin()) return;
-  const p = produtosCache.find(x => String(x.id) === String(id));
-  if (!p) return;
-  const atual = Number(p.custo_compra) > 0 ? moneyToInput(p.custo_compra) : '';
-  custoCancelado = false;
-  td.onclick = null;
-  td.innerHTML = `<input type="text" inputmode="numeric" value="${atual}" placeholder="0,00"
-    style="width:90px;padding:4px 6px;font-size:12.5px;text-align:right;border:1px solid var(--rose);border-radius:6px"
-    oninput="maskMoneyProduto(this)" onkeydown="produtoCustoTecla(event,this)" onblur="produtoCustoSalvar('${id}',this)">`;
-  const inp = td.querySelector('input');
-  inp.focus(); inp.select();
-}
-export function produtoCustoTecla(ev, input) {
-  if (ev.key === 'Enter') input.blur();
-  else if (ev.key === 'Escape') { custoCancelado = true; input.blur(); }
-}
-export async function produtoCustoSalvar(id, input) {
-  if (custoCancelado) { custoCancelado = false; renderTabela(); return; }
-  const p = produtosCache.find(x => String(x.id) === String(id));
-  if (!p) { renderTabela(); return; }
-  const novo = parseMoneyBR(input.value) || 0;
-  if (novo === Number(p.custo_compra || 0)) { renderTabela(); return; }   // sem mudança
-  const { error } = await sbQ(sb.from('produtos').update({ custo_compra: novo }).eq('id', id));
-  if (error) { toast('Erro ao salvar o custo'); renderTabela(); return; }
-  p.custo_compra = novo;
-  toast('Custo atualizado');
-  renderTabela();
-}
 export function produtoPagina(delta) { paginaAtual += delta; renderTabela(); }
 export function produtoToggleGrupo(chave) {
   const base = decodeURIComponent(chave);
