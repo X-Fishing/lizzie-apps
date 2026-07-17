@@ -1337,15 +1337,28 @@ export async function produtoImportarFotoBling() {
   if (btn) { btn.disabled = true; }
   toast('Buscando foto no Bling...');
   try {
-    const resp = await fetch(`${BLING_PRODUTO_FOTO_FN}?sku=${encodeURIComponent(sku)}`, { headers: BLING_FN_HEADERS });
-    const j = await resp.json();
-    if (!resp.ok || !j.publicUrl) { toast(j.error || 'Não foi possível importar a foto'); return; }
+    let resp;
+    try {
+      resp = await fetch(`${BLING_PRODUTO_FOTO_FN}?sku=${encodeURIComponent(sku)}`, { headers: BLING_FN_HEADERS });
+    } catch (netErr) {
+      // fetch só rejeita em falha de rede/CORS — quase sempre função não deployada.
+      console.error('produtoImportarFotoBling rede', netErr);
+      toast('Falha de rede ao chamar a função (o deploy de bling-produto-foto foi feito?)');
+      return;
+    }
+    const raw = await resp.text();
+    let j = {};
+    try { j = raw ? JSON.parse(raw) : {}; } catch { /* resposta não-JSON */ }
+    if (!resp.ok) { toast(j.error || `Erro ${resp.status}: ${(raw || 'sem detalhe').slice(0, 160)}`); return; }
+    if (!j.publicUrl) { toast(j.error || 'A função respondeu sem imagem.'); return; }
     if (formImagens.some(im => im.url === j.publicUrl)) { toast('Essa foto já está no produto.'); return; }
     formImagens.unshift({ url: j.publicUrl, file: null, preview: j.publicUrl }); // vira a principal
     renderImagens();
     toast('Foto importada! Clique em Salvar para confirmar.');
-  } catch (e) { console.error(e); toast('Erro ao importar foto'); }
-  finally { if (btn) btn.disabled = false; }
+  } catch (e) {
+    console.error('produtoImportarFotoBling', e);
+    toast('Erro ao importar foto: ' + (e.message || e));
+  } finally { if (btn) btn.disabled = false; }
 }
 
 export function produtoImgPrincipal(i) {
