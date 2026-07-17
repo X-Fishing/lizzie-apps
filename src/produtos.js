@@ -8,6 +8,9 @@ import { carregarPrecificacao, calcularPrecificacao } from './precificacao.js';
 
 // ── Importação do Bling (Edge Function bling-produtos) ──
 const BLING_PRODUTOS_FN = `${SUPABASE_URL}/functions/v1/bling-produtos`;
+const BLING_PRODUTO_FOTO_FN = `${SUPABASE_URL}/functions/v1/bling-produto-foto`;
+// headers do proxy Bling (mesmo padrão de bling.js: a função faz a própria auth)
+const BLING_FN_HEADERS = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const BLING_HDRS = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -1172,6 +1175,8 @@ async function abrirForm(p) {
     ${secHeader('Imagens', 'até 5 · a 1ª é a principal')}
     <div id="p-imagens-grid"></div>
     <input type="file" id="p-imagens-input" accept="image/jpeg,image/png,image/webp" multiple style="display:none" onchange="produtoImgAdd(this)">
+    <button type="button" id="p-btn-foto-bling" class="btn-secondary btn-sm" style="margin-top:10px" onclick="produtoImportarFotoBling()">${IC_CAM} Importar foto do Bling (pelo SKU)</button>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px">Usa o Código (SKU) para achar a peça no Bling e traz a imagem principal (entra como a 1ª).</div>
 
     ${secHeader('Coleção e estoque')}
     <div class="form-grid">
@@ -1320,6 +1325,27 @@ export function produtoImgAdd(input) {
 export function produtoImgRemover(i) {
   formImagens.splice(i, 1); // se era a principal, a próxima assume (índice 0)
   renderImagens();
+}
+
+// Importa a imagem principal do produto no Bling casando pelo SKU. A foto entra
+// como principal (1ª) na galeria; o Salvar grava a URL normalmente (item já tem url).
+export async function produtoImportarFotoBling() {
+  const sku = document.getElementById('p-sku').value.trim();
+  if (!sku) { toast('Preencha o Código (SKU) primeiro'); return; }
+  if (formImagens.length >= MAX_IMAGENS) { toast(`Máximo de ${MAX_IMAGENS} imagens — remova uma antes.`); return; }
+  const btn = document.getElementById('p-btn-foto-bling');
+  if (btn) { btn.disabled = true; }
+  toast('Buscando foto no Bling...');
+  try {
+    const resp = await fetch(`${BLING_PRODUTO_FOTO_FN}?sku=${encodeURIComponent(sku)}`, { headers: BLING_FN_HEADERS });
+    const j = await resp.json();
+    if (!resp.ok || !j.publicUrl) { toast(j.error || 'Não foi possível importar a foto'); return; }
+    if (formImagens.some(im => im.url === j.publicUrl)) { toast('Essa foto já está no produto.'); return; }
+    formImagens.unshift({ url: j.publicUrl, file: null, preview: j.publicUrl }); // vira a principal
+    renderImagens();
+    toast('Foto importada! Clique em Salvar para confirmar.');
+  } catch (e) { console.error(e); toast('Erro ao importar foto'); }
+  finally { if (btn) btn.disabled = false; }
 }
 
 export function produtoImgPrincipal(i) {
