@@ -81,6 +81,25 @@
   <button class="btn-secondary" style="color:#fff;border-color:rgba(255,255,255,0.2)" onclick="sb.auth.signOut().then(()=>location.reload())">Sair</button>
 </div>
 
+<!-- ESCOLHA DE PERFIL (só no celular, para quem é funcionário E revendedora) -->
+<div id="role-choice-screen" style="display:none;position:fixed;inset:0;z-index:1002;background:linear-gradient(145deg,#1a0a2e 0%,#2d1248 50%,#1a0a2e 100%);flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px">
+  <div style="text-align:center">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:26px;color:var(--gold);margin-bottom:4px">Olá, <span id="role-choice-nome">você</span></div>
+    <p style="color:rgba(255,255,255,0.6);font-size:14px;margin:0">Como você quer entrar agora?</p>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:320px">
+    <button class="btn-gold" style="padding:16px" onclick="escolherModo('funcionario')">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-4px;margin-right:6px"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Entrar como Funcionária
+    </button>
+    <button class="btn-secondary" style="padding:16px;color:#fff;border-color:rgba(255,255,255,0.25)" onclick="escolherModo('revendedora')">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-4px;margin-right:6px"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg>
+      Entrar como Revendedora
+    </button>
+  </div>
+  <button type="button" onclick="sb.auth.signOut().then(()=>location.reload())" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:13px;cursor:pointer;padding:4px;font-family:inherit">Sair</button>
+</div>
+
 <!-- DEFINIR NOVA SENHA (vindo do link de recuperação no e-mail) -->
 <div id="recovery-screen" style="display:none;position:fixed;inset:0;z-index:1001;background:linear-gradient(145deg,#1a0a2e 0%,#2d1248 50%,#1a0a2e 100%);flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:24px">
   <div class="rec-icon" style="filter:drop-shadow(0 0 20px rgba(212,168,75,0.5))"><svg class="ico" viewBox="0 0 24 24" style="width:48px;height:48px"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg></div>
