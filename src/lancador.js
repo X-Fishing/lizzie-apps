@@ -52,8 +52,7 @@ export async function lancadorSelecionarRev(revId) {
       .order('created_at'));
     if (error) { if (await handleSupabaseError(error, 'Erro ao carregar maletas')) return; }
     maletasAbertas = data || [];
-    // 1 sozinha em aberto: já assume como destino "continuar" (o usuário ainda pode trocar p/ nova).
-    if (maletasAbertas.length === 1) maletaDestino = { ...maletasAbertas[0] };
+    // NÃO auto-seleciona: o usuário sempre escolhe explicitamente continuar ou criar nova.
   }
   render();
 }
@@ -158,32 +157,32 @@ function maletaPanelHtml(revSel) {
   const qtdAberta = maletasAbertas.length;
   const limite = qtdAberta >= 2;
 
-  // Destino já escolhido: mostra resumo + opção de trocar.
-  if (maletaDestino) {
-    const txt = maletaDestino.nova
-      ? `Nova maleta (será criada como <strong>${temAtiva ? 'Aguardando' : 'Ativa'}</strong>)`
-      : `Continuar <strong>${STATUS_LABEL[maletaDestino.status] || maletaDestino.status}</strong>${maletaDestino.numero ? ` · maleta #${maletaDestino.numero}` : ''}`;
-    return `<div class="card" style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-      <div style="font-size:13px;color:var(--plum)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-3px"><path d="M20 6 9 17l-5-5"/></svg> Destino: ${txt}</div>
-      <button class="btn-secondary btn-sm" onclick="lancadorTrocarDestino()">Trocar</button>
-    </div>`;
-  }
+  // Estilo de destaque para a opção selecionada (sempre visível — nada é assumido sozinho).
+  const sel = 'border-color:var(--rose);background:var(--rose);color:#fff';
 
-  const resumo = qtdAberta
-    ? `Esta revendedora tem <strong>${qtdAberta}</strong> maleta${qtdAberta > 1 ? 's' : ''} em aberto.`
-    : 'Esta revendedora não tem maletas em aberto.';
+  const botoesContinuar = maletasAbertas.map(m => {
+    const ativo = maletaDestino && !maletaDestino.nova && String(maletaDestino.id) === String(m.id);
+    const estilo = ativo ? sel : 'border-color:var(--gold);color:var(--gold)';
+    return `<button class="btn-secondary btn-sm" style="${estilo}" onclick="lancadorDestinoExistente('${m.id}')">
+      Continuar ${STATUS_LABEL[m.status] || m.status}${m.numero ? ` #${m.numero}` : ''}</button>`;
+  }).join('');
 
-  const botoesContinuar = maletasAbertas.map(m =>
-    `<button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="lancadorDestinoExistente('${m.id}')">
-      Continuar ${STATUS_LABEL[m.status] || m.status}${m.numero ? ` #${m.numero}` : ''}</button>`).join('');
-
+  const novaLabel = `+ Nova maleta${qtdAberta && !temAtiva ? ' (será Ativa)' : qtdAberta ? ' (será Aguardando)' : ''}`;
   const btnNova = limite
     ? `<button class="btn-secondary btn-sm" disabled title="Limite de 2 maletas em aberto atingido">Nova maleta (limite atingido)</button>`
-    : `<button class="btn-secondary btn-sm" style="border-color:var(--rose);color:var(--rose)" onclick="lancadorDestinoNova()">+ Nova maleta${qtdAberta && !temAtiva ? ' (será Ativa)' : qtdAberta ? ' (será Aguardando)' : ''}</button>`;
+    : `<button class="btn-secondary btn-sm" style="${maletaDestino?.nova ? sel : 'border-color:var(--rose);color:var(--rose)'}" onclick="lancadorDestinoNova()">${novaLabel}</button>`;
+
+  const rodape = maletaDestino
+    ? ''
+    : `<div style="font-size:12px;color:var(--muted);margin-top:10px">Escolha uma opção acima para liberar o envio.</div>`;
+  const avisoLimite = limite
+    ? ` <span style="color:var(--danger)">Limite de 2 atingido — finalize uma para abrir outra.</span>`
+    : '';
 
   return `<div class="card" style="margin-bottom:14px">
-    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">${resumo}${limite ? ' <span style="color:var(--danger)">Limite de 2 atingido — finalize uma para abrir outra.</span>' : ''}</div>
+    <div style="font-size:13px;color:var(--plum);font-weight:600;margin-bottom:10px">Onde lançar as peças?${avisoLimite}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">${botoesContinuar}${btnNova}</div>
+    ${rodape}
   </div>`;
 }
 
