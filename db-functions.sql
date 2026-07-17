@@ -152,9 +152,18 @@ declare
   v_qtd_app   integer;
   v_delta     integer;
   v_inseridos integer := 0;
+  v_maleta    uuid;
 begin
   if not public.is_gestor() then
     raise exception 'Sem permissao';
+  end if;
+
+  -- Resolve (ou cria) a maleta ATIVA da revendedora para vincular as peças novas.
+  select id into v_maleta from maletas
+    where revendedora_id = p_revendedora_id and status = 'ativa' limit 1;
+  if v_maleta is null then
+    insert into maletas (revendedora_id, status, numero)
+      values (p_revendedora_id, 'ativa', 1) returning id into v_maleta;
   end if;
 
   -- Agrupa por SKU (soma linhas repetidas do mesmo código no pedido).
@@ -179,10 +188,10 @@ begin
 
     if v_delta > 0 then
       insert into consignados
-        (revendedora_id, descricao, referencia, quantidade_enviada,
+        (revendedora_id, maleta_id, descricao, referencia, quantidade_enviada,
          quantidade_vendida, quantidade_devolvida, preco_venda, foto_url, status, pedido_numero)
       values
-        (p_revendedora_id, v_item.descricao, v_item.referencia, v_delta,
+        (p_revendedora_id, v_maleta, v_item.descricao, v_item.referencia, v_delta,
          0, 0, v_item.preco, null, 'ativo', p_pedido_numero);
       v_inseridos := v_inseridos + v_delta;
     end if;

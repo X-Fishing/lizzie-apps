@@ -1491,6 +1491,18 @@ export async function openNovoConsignado() {
   openModal('modal-consignado');
 }
 
+// Garante que a revendedora tenha uma maleta ATIVA e devolve o id.
+// Usa a existente; se não houver, cria. (Só gestor/staff insere — respeita RLS.)
+// Usado nos caminhos legados que criam consignados ativos fora do Lançador.
+export async function garantirMaletaAtiva(revId) {
+  if (!revId) return null;
+  const { data } = await sbQ(sb.from('maletas').select('id').eq('revendedora_id', revId).eq('status', 'ativa').limit(1));
+  if (data && data.length) return data[0].id;
+  const { data: nova, error } = await sb.from('maletas').insert({ revendedora_id: revId, status: 'ativa', numero: 1 }).select('id').single();
+  if (error) { console.error('garantirMaletaAtiva', error); return null; }
+  return nova?.id || null;
+}
+
 export async function salvarConsignado() {
   const desc = document.getElementById('c-desc').value.trim();
   const revId = document.getElementById('c-rev').value;
@@ -1509,8 +1521,10 @@ export async function salvarConsignado() {
     }
   }
 
+  const maletaId = await garantirMaletaAtiva(revId);
   const { error } = await sb.from('consignados').insert({
     revendedora_id: revId,
+    maleta_id: maletaId,
     descricao: desc,
     referencia: document.getElementById('c-ref').value.trim() || null,
     quantidade_enviada: qtd,

@@ -2,6 +2,7 @@
 import { sb, SUPABASE_URL, SUPABASE_KEY } from './supabase.js';
 import { state } from './state.js';
 import { esc, toast, sbQ, fetchPaginado, handleSupabaseError, openModal, closeModal, fmtBRL, confirmarAcao, formatDate, hojeBR, brToISO, isAuthError, qtdDisp } from './utils.js';
+import { garantirMaletaAtiva } from './consignados.js';
 export const BLING_FN       = `${SUPABASE_URL}/functions/v1/bling-pedidos`;
 
 export const BLING_ITENS_FN = `${SUPABASE_URL}/functions/v1/bling-pedido-itens`;
@@ -306,9 +307,11 @@ export async function importarItensBling(numero, btn) {
 
   btn.textContent = '⟳ Importando...'; btn.disabled = true;
 
+  const maletaId = await garantirMaletaAtiva(revId);
   const { error } = await sb.from('consignados').insert(
     itens.map(it => ({
       revendedora_id: revId,
+      maleta_id: maletaId,
       descricao: it.descricao,
       referencia: it.codigo || null,
       quantidade_enviada: Number(it.quantidade),
