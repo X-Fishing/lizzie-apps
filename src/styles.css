@@ -883,3 +883,50 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .dash-donut span { background:#fff; width:84px; height:84px; border-radius:50%; display:flex;
   align-items:center; justify-content:center; font-family:'Cormorant Garamond',serif;
   font-size:22px; color:var(--plum); }
+
+/* ═══ Contas a Pagar — grid editável estilo planilha ═══ */
+.cap-topo { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px;
+  background:#fff; border:1px solid var(--border); border-radius:14px; padding:14px 18px; margin-bottom:14px; }
+.cap-mes-nav { display:flex; align-items:center; gap:12px; font-family:'Cormorant Garamond',serif;
+  font-size:20px; color:var(--plum); font-weight:600; white-space:nowrap; }
+.cap-resumo { display:flex; gap:22px; flex-wrap:wrap; }
+.cap-resumo-item { display:flex; flex-direction:column; line-height:1.2; }
+.cap-resumo-item span { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); }
+.cap-resumo-item b { font-family:'Cormorant Garamond',serif; font-size:22px; color:var(--plum); }
+.cap-grid-table td.ciclo-td { padding:6px 8px; vertical-align:middle; }
+.cap-inp { width:100%; border:1px solid transparent; background:transparent; border-radius:6px;
+  padding:6px 8px; font-family:inherit; font-size:13px; color:var(--plum); }
+.cap-inp:hover { border-color:var(--border); }
+.cap-inp:focus { border-color:var(--rose); background:#fff; outline:none; }
+.cap-inp.cap-valor { text-align:right; font-family:'Cormorant Garamond',serif; font-size:15px; }
+.cap-inp.cap-atrasada { color:var(--danger); font-weight:600; }
+select.cap-inp { cursor:pointer; }
+.cap-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--rose); vertical-align:middle; margin-left:2px; }
+.cap-cancelada .cap-inp { opacity:.55; }
+.cap-chevron { background:none; border:none; cursor:pointer; color:var(--muted); padding:2px; display:inline-flex; transition:transform .15s; }
+.cap-chevron.aberto { transform:rotate(90deg); }
+.cap-switch { position:relative; display:inline-block; width:38px; height:22px; }
+.cap-switch input { opacity:0; width:0; height:0; }
+.cap-switch span { position:absolute; inset:0; background:var(--border); border-radius:22px; cursor:pointer; transition:.2s; }
+.cap-switch span::before { content:''; position:absolute; height:16px; width:16px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.2s; }
+.cap-switch input:checked + span { background:var(--success); }
+.cap-switch input:checked + span::before { transform:translateX(16px); }
+.cap-switch input:disabled + span { opacity:.5; cursor:default; }
+.cap-add-row td { text-align:center; color:var(--rose); font-weight:600; cursor:pointer; padding:12px !important; }
+.cap-add-row:hover td { background:var(--blush); }
+.cap-det td { background:#faf7f2; }
+.cap-det-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:12px; padding:6px 4px; }
+.cap-flash { animation:capFlash 1s ease; }
+@keyframes capFlash { 0% { background:rgba(76,175,130,.25); } 100% { background:transparent; } }
+.cap-menu { position:fixed; z-index:1000; min-width:200px; background:#fff; border:1px solid var(--border);
+  border-radius:10px; box-shadow:0 8px 30px rgba(0,0,0,.16); padding:6px; font-size:13px; }
+.cap-menu-item { display:flex; align-items:center; gap:8px; width:100%; background:none; border:none;
+  text-align:left; padding:9px 10px; border-radius:7px; cursor:pointer; color:var(--plum); font-size:13px; }
+.cap-menu-item:hover { background:var(--blush); }
+.cap-menu-arrow { margin-left:auto; color:var(--muted); }
+.cap-submenu { display:none; padding:2px 0 2px 26px; }
+.cap-submenu.aberto { display:block; }
+.cap-menu-sub-item { display:block; width:100%; background:none; border:none; text-align:left;
+  padding:7px 10px; border-radius:6px; cursor:pointer; color:var(--plum); font-size:12.5px; }
+.cap-menu-sub-item:hover { background:var(--blush); }
+@media (max-width:640px) { .cap-topo { flex-direction:column; align-items:stretch; } }
