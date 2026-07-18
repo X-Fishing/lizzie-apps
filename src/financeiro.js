@@ -66,6 +66,14 @@ export function montarPixCopiaECola({ chave, nome, cidade, valor, txid }) {
 // ═══════════════════════════════════════════════════════════════════
 let recCtx = null; // { fech, saldo, jaRecebido, teste, pixCola }
 
+// Chamado ao FECHAR o modal de recebimento pelo X/Esc: avisa se ainda há
+// saldo a receber (recebimento obrigatório — não some sem registrar).
+export function avisarRecebimentoPendente() {
+  if (recCtx && !recCtx.teste && Number(recCtx.saldo) > 0.001) {
+    toast('Recebimento pendente — registre pelo Financeiro ou no histórico do ciclo.');
+  }
+}
+
 export async function abrirRecebimento(fechamentoId) {
   const { data: f, error } = await sbQ(sb.from('fechamentos_mostruario').select('*').eq('id', fechamentoId).single());
   if (error || !f) {
