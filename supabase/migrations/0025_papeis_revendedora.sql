@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════
--- 0019 — Separar "nível de acesso" (role) de "é revendedora" (flag)
+-- 0025 — Separar "nível de acesso" (role) de "é revendedora" (flag)
 -- Duas dimensões independentes: profiles.role continua sendo o acesso;
 -- profiles.is_revendedora diz se a pessoa aparece na lista de revendedoras
 -- (tem consignados/garantias/contrato). Uma funcionária pode revender.

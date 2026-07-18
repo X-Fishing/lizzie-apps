@@ -286,100 +286,102 @@ export function renderTrocas() {
     if (info.dataPrevista && isoNoMesAtual(info.dataPrevista)) noMes++;
     if (info.status === 'sem-vinculo') semVinculo++;
   }
-  stats.innerHTML = `
-    <div class="stat-card"><div class="stat-num" style="color:var(--danger)">${vencidas}</div><div class="stat-label"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--danger);margin-right:5px;vertical-align:middle"></span>Vencidas</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--warning)">${prox7}</div><div class="stat-label"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#e8932f;margin-right:5px;vertical-align:middle"></span>Próx. 7 dias</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--success)">${noMes}</div><div class="stat-label"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--success);margin-right:5px;vertical-align:middle"></span>No mês</div></div>
-    <div class="stat-card"><div class="stat-num" style="color:var(--muted)">${semVinculo}</div><div class="stat-label"><span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--muted);margin-right:5px;vertical-align:middle"></span>Sem vínculo</div></div>
-  `;
+  const kpi = (lbl, val, cor) => `<div class="kpi-card" style="border-left:3px solid ${cor}"><div class="kpi-top"><span class="kpi-label">${lbl}</span></div><div class="kpi-val" style="color:${cor}">${val}</div></div>`;
+  stats.innerHTML =
+    kpi('Vencidas', vencidas, 'var(--danger)') +
+    kpi('Próximos 7 dias', prox7, '#e8932f') +
+    kpi('Este mês', noMes, 'var(--success)') +
+    kpi('Sem data / vínculo', semVinculo, 'var(--muted)');
 
-  // Chips
-  filtros.innerHTML = TROCAS_FILTROS.map(f => {
-    const ativo = state.trocasFiltroAtivo === f.id;
-    return `<button type="button" class="chip-filter${ativo?' active':''}" onclick="setTrocaFiltro('${f.id}')">${f.label}</button>`;
-  }).join('');
+  // Busca renderizada UMA vez (fora do renderTrocasLista) — senão o input era
+  // recriado a cada tecla e o foco se perdia.
+  filtros.innerHTML = `<input type="text" class="form-control" placeholder="Buscar revendedora..." value="${esc(state.trocaBusca || '')}" oninput="trocaBuscar(this.value)">`;
 
-  // Lista filtrada e ordenada por urgência
-  const filtradas = state.aprovadasCache.filter(r => !trocaResolvida(r) && trocaMatchFiltro(r, state.trocasFiltroAtivo));
-  filtradas.sort(compararPorTroca);
+  renderTrocasLista();
+}
 
-  if (!filtradas.length) {
-    lista.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div><p>Nenhuma revendedora neste filtro.</p></div>';
+// Só a lista (agrupada por urgência). A busca chama SÓ isto, preservando o foco.
+function renderTrocasLista() {
+  const lista = document.getElementById('trocas-lista');
+  if (!lista) return;
+  const t = (state.trocaBusca || '').trim().toLowerCase();
+  let itens = state.aprovadasCache.filter(r => !trocaResolvida(r));
+  if (t) itens = itens.filter(r => (r.nome || '').toLowerCase().includes(t) || (r.telefone || '').includes(t));
+
+  const g = { venc: [], p7: [], mes: [], frente: [], sem: [] };
+  for (const r of itens) {
+    const info = infoTrocaRev(r);
+    if (info.status === 'vencida') g.venc.push(r);
+    else if (info.status === 'proximo') g.p7.push(r);
+    else if (info.status === 'normal') (isoNoMesAtual(info.dataPrevista) ? g.mes : g.frente).push(r);
+    else g.sem.push(r);
+  }
+  const secoes = [
+    { itens: g.venc, label: 'Vencidas', cor: 'var(--danger)' },
+    { itens: g.p7, label: 'Próximos 7 dias', cor: '#e8932f' },
+    { itens: g.mes, label: 'Este mês', cor: 'var(--success)' },
+    { itens: g.frente, label: 'Mais à frente', cor: 'var(--plum)' },
+    { itens: g.sem, label: 'Sem data / vínculo', cor: 'var(--muted)' },
+  ].filter(s => s.itens.length);
+
+  if (!secoes.length) {
+    lista.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div><p>Nenhuma revendedora encontrada.</p></div>';
     return;
   }
-  lista.innerHTML = filtradas.map(renderTrocaRow).join('');
+  lista.innerHTML = secoes.map(s => {
+    s.itens.sort(compararPorTroca);
+    return `<div style="margin:18px 0 10px;display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;color:var(--plum)">
+        <span style="width:9px;height:9px;border-radius:50%;background:${s.cor};display:inline-block"></span>${s.label}
+        <span style="color:var(--muted);font-weight:400;font-size:12px">${s.itens.length} revendedora${s.itens.length !== 1 ? 's' : ''}</span></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px">${s.itens.map(r => renderTrocaRow(r, s.cor)).join('')}</div>`;
+  }).join('');
 }
+
+export function trocaBuscar(v) { state.trocaBusca = v; renderTrocasLista(); }
 
 export function setTrocaFiltro(id) {
   state.trocasFiltroAtivo = id;
   renderTrocas();
 }
 
-export function renderTrocaRow(r) {
+export function renderTrocaRow(r, cor = 'var(--muted)') {
   const info = infoTrocaRev(r);
   const inicial = (r.nome || '?').charAt(0).toUpperCase();
   const tel = (r.telefone || '').trim();
-  const telLimpo = tel.replace(/\D/g, '');
 
-  let cor = 'var(--muted)';
-  let dataTxt = '—';
-  let diasTxt = '';
-  if (info.status === 'vencida') {
-    cor = 'var(--danger)';
-    dataTxt = formatDate(info.dataPrevista);
-    diasTxt = `vencida há ${-info.diasRestantes} dia${-info.diasRestantes!==1?'s':''}`;
-  } else if (info.status === 'proximo') {
-    cor = 'var(--warning)';
-    dataTxt = formatDate(info.dataPrevista);
-    diasTxt = `em ${info.diasRestantes} dia${info.diasRestantes!==1?'s':''}`;
-  } else if (info.status === 'normal') {
-    cor = 'var(--plum)';
-    dataTxt = formatDate(info.dataPrevista);
-    diasTxt = `em ${info.diasRestantes} dias`;
-  } else if (info.status === 'sem-aberto') {
-    dataTxt = 'Sem maleta em aberto';
-  } else if (info.status === 'sem-data') {
-    dataTxt = 'Sem data';
-  } else if (info.status === 'sem-pedido') {
-    dataTxt = 'Sem pedidos 6m';
-  } else if (info.status === 'sem-vinculo') {
-    dataTxt = 'Sem vínculo Bling';
-  }
+  let dcor = 'var(--muted)', dataTxt = '—', diasTxt = '';
+  if (info.status === 'vencida') { dcor = 'var(--danger)'; dataTxt = formatDate(info.dataPrevista); diasTxt = `venceu há ${-info.diasRestantes}d`; }
+  else if (info.status === 'proximo') { dcor = 'var(--warning)'; dataTxt = formatDate(info.dataPrevista); diasTxt = `em ${info.diasRestantes}d`; }
+  else if (info.status === 'normal') { dcor = 'var(--plum)'; dataTxt = formatDate(info.dataPrevista); diasTxt = `em ${info.diasRestantes}d`; }
+  else if (info.status === 'sem-aberto') dataTxt = 'Sem maleta';
+  else if (info.status === 'sem-data') dataTxt = 'Sem data';
+  else if (info.status === 'sem-pedido') dataTxt = 'Sem pedidos 6m';
+  else if (info.status === 'sem-vinculo') dataTxt = 'Sem vínculo';
 
-  const ultima = info.ultimaTroca
-    ? `Última: ${formatDate(info.ultimaTroca)}`
-    : 'Sem troca anterior';
-
+  const ultima = info.ultimaTroca ? `Última: ${formatDate(info.ultimaTroca)}` : 'Sem troca anterior';
   const aviso = info.abertos > 1
-    ? `<div style="font-size:11px;color:var(--warning);font-weight:600;margin-top:4px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> ${info.abertos} pedidos em aberto</div>`
+    ? `<div style="font-size:11px;color:var(--warning);font-weight:600;margin-top:8px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> ${info.abertos} pedidos em aberto</div>`
     : '';
 
-  const telLink = telLimpo
-    ? `<a href="${whatsappLink(tel, mensagemTroca(r.nome, info.dataPrevista))}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" onclick="event.stopPropagation()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> ${esc(tel)}</a>`
-    : '<span><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg> sem telefone</span>';
+  const waUrl = whatsappLink(tel, mensagemTroca(r.nome, info.dataPrevista));
+  const avisar = waUrl
+    ? `<a href="${waUrl}" target="_blank" rel="noopener" class="btn" style="flex:1;background:#25d366;color:#fff;text-decoration:none;justify-content:center;gap:6px" onclick="event.stopPropagation()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Avisar</a>`
+    : `<span class="btn" style="flex:1;justify-content:center;opacity:.5">Sem telefone</span>`;
+  const feita = `<button class="btn btn-outline" style="justify-content:center;gap:6px" onclick="event.stopPropagation();resolverTroca('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Feita</button>`;
 
-  const waMsg = mensagemTroca(r.nome, info.dataPrevista);
-  const waUrl = whatsappLink(tel, waMsg);
-  const botaoWa = waUrl
-    ? `<a href="${waUrl}" target="_blank" rel="noopener" class="troca-wa" title="Avisar pelo WhatsApp" aria-label="Avisar pelo WhatsApp" onclick="event.stopPropagation()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></a>`
-    : `<span class="troca-wa troca-wa-off" title="Sem telefone cadastrado" aria-label="Sem telefone"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>`;
-
-  const botaoResolver = `<button class="troca-done" title="Finalizar troca (sai da lista)" aria-label="Finalizar troca" onclick="event.stopPropagation();resolverTroca('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></button>`;
-
-  return `<div class="card troca-row" onclick="verRevendedora('${r.id}')" style="cursor:pointer">
-    <div class="troca-info">
+  return `<div class="card" onclick="verRevendedora('${r.id}')" style="cursor:pointer;border-left:3px solid ${cor}">
+    <div style="display:flex;gap:12px;align-items:flex-start">
       <div class="rev-avatar">${inicial}</div>
-      <div class="troca-meta">
-        <div class="troca-meta-nome">${esc(r.nome)}</div>
-        <div class="troca-meta-sub">${telLink}<span>·</span><span>${ultima}</span></div>
-        ${aviso}
+      <div style="flex:1;min-width:0">
+        <div class="rev-nome">${esc(r.nome)}</div>
+        <div class="rev-cidade">${tel ? esc(tel) : 'sem telefone'} · ${ultima}</div>
       </div>
-      <div class="troca-data">
-        <div class="troca-data-val" style="color:${cor}">${dataTxt}</div>
-        ${diasTxt ? `<div class="troca-data-sub">${diasTxt}</div>` : ''}
+      <div style="text-align:right;white-space:nowrap">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:${dcor}">${dataTxt}</div>
+        ${diasTxt ? `<div style="font-size:10.5px;color:${dcor};text-transform:uppercase;letter-spacing:.3px">${diasTxt}</div>` : ''}
       </div>
-      ${botaoWa}
-      ${botaoResolver}
     </div>
+    ${aviso}
+    <div style="display:flex;gap:8px;margin-top:12px">${avisar}${feita}</div>
   </div>`;
 }

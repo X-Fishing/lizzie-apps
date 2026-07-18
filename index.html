@@ -81,6 +81,25 @@
   <button class="btn-secondary" style="color:#fff;border-color:rgba(255,255,255,0.2)" onclick="sb.auth.signOut().then(()=>location.reload())">Sair</button>
 </div>
 
+<!-- ESCOLHA DE PERFIL (só no celular, para quem é funcionário E revendedora) -->
+<div id="role-choice-screen" style="display:none;position:fixed;inset:0;z-index:1002;background:linear-gradient(145deg,#1a0a2e 0%,#2d1248 50%,#1a0a2e 100%);flex-direction:column;align-items:center;justify-content:center;gap:20px;padding:24px">
+  <div style="text-align:center">
+    <div style="font-family:'Cormorant Garamond',serif;font-size:26px;color:var(--gold);margin-bottom:4px">Olá, <span id="role-choice-nome">você</span></div>
+    <p style="color:rgba(255,255,255,0.6);font-size:14px;margin:0">Como você quer entrar agora?</p>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:320px">
+    <button class="btn-gold" style="padding:16px" onclick="escolherModo('funcionario')">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-4px;margin-right:6px"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Entrar como Funcionária
+    </button>
+    <button class="btn-secondary" style="padding:16px;color:#fff;border-color:rgba(255,255,255,0.25)" onclick="escolherModo('revendedora')">
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-4px;margin-right:6px"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg>
+      Entrar como Revendedora
+    </button>
+  </div>
+  <button type="button" onclick="sb.auth.signOut().then(()=>location.reload())" style="background:none;border:none;color:rgba(255,255,255,0.4);font-size:13px;cursor:pointer;padding:4px;font-family:inherit">Sair</button>
+</div>
+
 <!-- DEFINIR NOVA SENHA (vindo do link de recuperação no e-mail) -->
 <div id="recovery-screen" style="display:none;position:fixed;inset:0;z-index:1001;background:linear-gradient(145deg,#1a0a2e 0%,#2d1248 50%,#1a0a2e 100%);flex-direction:column;align-items:center;justify-content:center;gap:24px;padding:24px">
   <div class="rec-icon" style="filter:drop-shadow(0 0 20px rgba(212,168,75,0.5))"><svg class="ico" viewBox="0 0 24 24" style="width:48px;height:48px"><path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/></svg></div>
@@ -100,6 +119,7 @@
   <!-- TOP BAR -->
   <div class="topbar">
     <div class="topbar-logo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg> Lizzie</div>
+    <div class="topbar-crumb" id="topbar-crumb"></div>
     <div class="topbar-right">
       <div class="user-badge" id="user-badge">—</div>
       <button class="btn-icon" onclick="sb.auth.signOut().then(()=>location.reload())" title="Sair"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></button>
@@ -132,12 +152,12 @@
 
     <!-- GARANTIAS -->
     <div id="panel-garantias" style="display:none">
-      <div class="section-header">
+      <div class="page-head">
         <div>
-          <div class="section-title">Garantias</div>
-          <div class="section-subtitle" id="gsubTitle">Todas as garantias</div>
+          <h2>Garantias</h2>
+          <div class="sub" id="gsubTitle">Assistência e reparos</div>
         </div>
-        <button class="btn-primary btn-sm" onclick="openNovaGarantia()">+ Nova</button>
+        <div class="acts"><button class="btn-primary btn-sm" onclick="openNovaGarantia()">+ Nova garantia</button></div>
       </div>
       <div class="search-bar">
         <input class="search-input" id="g-search" placeholder="Buscar..." oninput="filtrarGarantias()">
@@ -154,12 +174,12 @@
 
     <!-- CICLO -->
     <div id="panel-consignados" style="display:none">
-      <div class="section-header">
+      <div class="page-head">
         <div>
-          <div class="section-title">Catálogo</div>
-          <div class="section-subtitle">Peças disponíveis para venda</div>
+          <h2>Catálogo</h2>
+          <div class="sub">Peças disponíveis para venda</div>
         </div>
-        <div class="btn-group" style="justify-content:flex-end">
+        <div class="acts" style="justify-content:flex-end">
           <button class="btn btn-outline" id="btn-bling-sync" onclick="openBlingSync()" style="display:none"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Baixar Relação de Peças</button>
           <button class="btn btn-outline" id="btn-pdf-mostruario" onclick="baixarPdfMostruario()" style="display:none"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg> Baixar PDF</button>
           <button class="btn btn-primary" id="btn-novo-consig" onclick="openNovoConsignado()" style="display:none">+ Novo</button>
@@ -213,14 +233,14 @@
 
     <!-- TROCAS DE MALETA (admin) -->
     <div id="panel-trocas" style="display:none">
-      <div class="section-header">
+      <div class="page-head">
         <div>
-          <div class="section-title">Trocas de Maleta</div>
-          <div class="section-subtitle">Controle por revendedora</div>
+          <h2>Troca de Mostruário</h2>
+          <div class="sub">Agenda de trocas por revendedora</div>
         </div>
       </div>
-      <div id="trocas-stats" class="stats-grid"></div>
-      <div id="trocas-filtros" class="chip-row"></div>
+      <div id="trocas-stats" class="kpi-grid"></div>
+      <div id="trocas-filtros" style="margin-bottom:14px"></div>
       <div id="trocas-lista"></div>
     </div>
 
@@ -243,6 +263,7 @@
     <div id="panel-clientes" style="display:none"></div>
     <div id="panel-marketing" style="display:none"></div>
     <div id="panel-bonus" style="display:none"></div>
+    <div id="panel-fidelidade" style="display:none"></div>
     <div id="panel-funcionarios" style="display:none"></div>
     <div id="panel-perfis" style="display:none"></div>
     <div id="panel-formas-pagamento" style="display:none"></div>
@@ -322,9 +343,15 @@
       <label class="form-label">Nome da cliente *</label>
       <input type="text" id="g-cliente" class="form-control" placeholder="Nome completo">
     </div>
-    <div class="form-group">
-      <label class="form-label">Telefone da cliente</label>
-      <input type="tel" id="g-tel" class="form-control" placeholder="(00) 00000-0000">
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">WhatsApp da cliente</label>
+        <input type="tel" id="g-tel" class="form-control" placeholder="(00) 00000-0000" maxlength="16" inputmode="numeric" oninput="maskTelBR(this)">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Aniversário da cliente</label>
+        <input type="text" id="g-nasc" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)">
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Problema relatado *</label>
@@ -488,6 +515,16 @@
     </div>
     <div class="form-row">
       <div class="form-group">
+        <label class="form-label">WhatsApp da cliente *</label>
+        <input type="tel" id="f-tel" class="form-control" placeholder="(00) 00000-0000" maxlength="16" inputmode="numeric" oninput="maskTelBR(this)">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Aniversário da cliente *</label>
+        <input type="text" id="f-nasc" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
         <label class="form-label">Data da venda *</label>
         <input type="text" id="f-data" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)">
       </div>
@@ -506,6 +543,11 @@
           <option value="Fiado">Fiado</option>
         </select>
       </div>
+    </div>
+    <div class="form-group" id="f-combinada-wrap" style="display:none">
+      <label class="form-label">Data combinada de pagamento *</label>
+      <input type="text" id="f-combinada" class="form-control" placeholder="dd/mm" maxlength="5" inputmode="numeric" oninput="maskDiaMes(this)">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Só o dia e o mês. Aparece na cobrança por WhatsApp da tela de Pagamentos.</div>
     </div>
     <div class="form-group">
       <label class="form-label">Valor recebido agora (R$)</label>

@@ -8,6 +8,9 @@ import { carregarPrecificacao, calcularPrecificacao } from './precificacao.js';
 
 // ── Importação do Bling (Edge Function bling-produtos) ──
 const BLING_PRODUTOS_FN = `${SUPABASE_URL}/functions/v1/bling-produtos`;
+const BLING_PRODUTO_FOTO_FN = `${SUPABASE_URL}/functions/v1/bling-produto-foto`;
+// headers do proxy Bling (mesmo padrão de bling.js: a função faz a própria auth)
+const BLING_FN_HEADERS = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const BLING_HDRS = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -206,17 +209,6 @@ function grupoAnel(nome) {
   return m ? { base: `Anel ${m[2].trim()}`, tamanho: m[1] } : null;
 }
 
-// Célula de custo (só admin, editável inline). Grupos/variações usam a "vazia"
-// (o custo vive no produto/aro, não no cabeçalho).
-function custoCellHTML(p) {
-  if (!ehAdmin()) return '';
-  const v = Number(p.custo_compra) > 0 ? fmtBRL(p.custo_compra) : '—';
-  return `<td class="ciclo-td" style="text-align:right;white-space:nowrap;cursor:pointer" title="Clique para editar o custo" onclick="event.stopPropagation();produtoCustoEditar('${p.id}',this)">${v}</td>`;
-}
-function custoCellVazia() {
-  return ehAdmin() ? '<td class="ciclo-td" style="text-align:right;color:var(--muted)">—</td>' : '';
-}
-
 // Linha padrão de produto (sub=true = membro de grupo, com recuo)
 function linhaProdutoHTML(p, sub = false) {
   return `
@@ -231,7 +223,6 @@ function linhaProdutoHTML(p, sub = false) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${p.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(p.preco_venda)}</span></td>
-      ${custoCellHTML(p)}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
@@ -250,7 +241,6 @@ function linhaVariacaoHTML(p, v) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${v.sku ? esc(v.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${v.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(v.preco_venda ?? p.preco_venda)}</span></td>
-      ${custoCellVazia()}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         <button class="btn-icon" title="Editar (abre o produto)" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
       </td>
@@ -276,7 +266,6 @@ function linhaVarProdHTML(p, vars, aberto) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
-      ${custoCellVazia()}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
         <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
@@ -306,7 +295,6 @@ function linhaGrupoHTML(g, aberto) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">—</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
-      ${custoCellVazia()}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap;font-size:11px;color:var(--muted)">${aberto ? 'fechar' : 'ver aros'}</td>
     </tr>`;
 }
@@ -315,7 +303,6 @@ function linhaGrupoHTML(g, aberto) {
 // da toolbar: re-renderizar o painel inteiro a cada tecla destruía o input de
 // busca e derrubava o foco do teclado.
 function tabelaHTML() {
-  const admin = ehAdmin();
   const f = filtroProdutos.trim().toLowerCase();
   let lista = produtosCache;
   if (filtroColecao) lista = lista.filter(p => String(p.colecao_id) === String(filtroColecao));
@@ -373,7 +360,7 @@ function tabelaHTML() {
       .map(m => linhaProdutoHTML(m.p, true)).join('');
     return html;
   }).join('') :
-    `<tr><td colspan="${admin ? 6 : 5}"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor || filtroCaract) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
+    `<tr><td colspan="5"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor || filtroCaract) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
 
   const pager = totalFiltrado > POR_PAGINA ? `
     <div style="display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px">
@@ -388,7 +375,6 @@ function tabelaHTML() {
       <th class="pag-th">SKU</th>
       <th class="pag-th" style="text-align:center">Estoque</th>
       <th class="pag-th">Preço</th>
-      ${admin ? '<th class="pag-th" style="text-align:right">Custo</th>' : ''}
       <th class="pag-th" style="text-align:right">Ações</th>
     </tr></thead><tbody>${linhas}</tbody></table></div>
     ${pager}`;
@@ -402,16 +388,26 @@ function renderTabela() {
 }
 
 function renderLista() {
+  // Stats do topo (só render; usa o cache já carregado).
+  const totProd = produtosCache.length;
+  const totPecas = produtosCache.reduce((s, p) => s + (Number(p.estoque_qtd) || 0), 0);
+  const totValor = produtosCache.reduce((s, p) => s + (Number(p.preco_venda) || 0) * (Number(p.estoque_qtd) || 0), 0);
+  const semFoto = produtosCache.filter(p => !p.foto_url).length;
   panel().innerHTML = `
-    <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-      <div><div class="section-title">Produtos</div>
-      <div class="section-subtitle">${produtosCache.length} produto${produtosCache.length !== 1 ? 's' : ''} no catálogo</div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div class="page-head">
+      <div><h2>Produtos</h2><div class="sub">${totProd} produto${totProd !== 1 ? 's' : ''} no catálogo</div></div>
+      <div class="acts">
         <button class="btn-secondary btn-sm" onclick="produtoImportarBling()">${IC_BARCODE} Importar do Bling</button>
         <button class="btn-secondary btn-sm" onclick="produtoImportFotos()">${IC_CAM} Importar fotos em lote</button>
         ${ehGestor() ? `<button class="btn-secondary btn-sm" onclick="produtoPlanilha()">${IC_SHEET} Planilha</button>` : ''}
         <button class="btn-primary btn-sm" onclick="produtoNovo()">${IC_PLUS} Novo produto</button>
       </div>
+    </div>
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Produtos</span><span class="kpi-ic">${IC_GEM}</span></div><div class="kpi-val">${totProd}</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Peças em estoque</span><span class="kpi-ic">${IC_BARCODE}</span></div><div class="kpi-val">${totPecas}</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Valor em estoque</span><span class="kpi-ic">${IC_SHEET}</span></div><div class="kpi-val">${fmtBRL(totValor)}</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Sem foto</span><span class="kpi-ic">${IC_CAM}</span></div><div class="kpi-val"${semFoto ? ' style="color:var(--warning)"' : ''}>${semFoto}</div></div>
     </div>
     <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap">
       <input type="text" class="form-control" style="flex:1;min-width:200px" placeholder="Buscar por nome, SKU, código, cód. fornecedor ou coleção..."
@@ -443,36 +439,6 @@ export function produtoFiltrarFornecedor(v) { filtroFornecedor = v; paginaAtual 
 export function produtoFiltrarCaracteristica(v) { filtroCaract = v; paginaAtual = 1; renderTabela(); }
 
 // ── Custo editável inline na grid (só admin) ──
-let custoCancelado = false;
-export function produtoCustoEditar(id, td) {
-  if (!ehAdmin()) return;
-  const p = produtosCache.find(x => String(x.id) === String(id));
-  if (!p) return;
-  const atual = Number(p.custo_compra) > 0 ? moneyToInput(p.custo_compra) : '';
-  custoCancelado = false;
-  td.onclick = null;
-  td.innerHTML = `<input type="text" inputmode="numeric" value="${atual}" placeholder="0,00"
-    style="width:90px;padding:4px 6px;font-size:12.5px;text-align:right;border:1px solid var(--rose);border-radius:6px"
-    oninput="maskMoneyProduto(this)" onkeydown="produtoCustoTecla(event,this)" onblur="produtoCustoSalvar('${id}',this)">`;
-  const inp = td.querySelector('input');
-  inp.focus(); inp.select();
-}
-export function produtoCustoTecla(ev, input) {
-  if (ev.key === 'Enter') input.blur();
-  else if (ev.key === 'Escape') { custoCancelado = true; input.blur(); }
-}
-export async function produtoCustoSalvar(id, input) {
-  if (custoCancelado) { custoCancelado = false; renderTabela(); return; }
-  const p = produtosCache.find(x => String(x.id) === String(id));
-  if (!p) { renderTabela(); return; }
-  const novo = parseMoneyBR(input.value) || 0;
-  if (novo === Number(p.custo_compra || 0)) { renderTabela(); return; }   // sem mudança
-  const { error } = await sbQ(sb.from('produtos').update({ custo_compra: novo }).eq('id', id));
-  if (error) { toast('Erro ao salvar o custo'); renderTabela(); return; }
-  p.custo_compra = novo;
-  toast('Custo atualizado');
-  renderTabela();
-}
 export function produtoPagina(delta) { paginaAtual += delta; renderTabela(); }
 export function produtoToggleGrupo(chave) {
   const base = decodeURIComponent(chave);
@@ -1209,6 +1175,8 @@ async function abrirForm(p) {
     ${secHeader('Imagens', 'até 5 · a 1ª é a principal')}
     <div id="p-imagens-grid"></div>
     <input type="file" id="p-imagens-input" accept="image/jpeg,image/png,image/webp" multiple style="display:none" onchange="produtoImgAdd(this)">
+    <button type="button" id="p-btn-foto-bling" class="btn-secondary btn-sm" style="margin-top:10px" onclick="produtoImportarFotoBling()">${IC_CAM} Importar foto do Bling (pelo SKU)</button>
+    <div style="font-size:11px;color:var(--muted);margin-top:4px">Usa o Código (SKU) para achar a peça no Bling e traz a imagem principal (entra como a 1ª).</div>
 
     ${secHeader('Coleção e estoque')}
     <div class="form-grid">
@@ -1357,6 +1325,40 @@ export function produtoImgAdd(input) {
 export function produtoImgRemover(i) {
   formImagens.splice(i, 1); // se era a principal, a próxima assume (índice 0)
   renderImagens();
+}
+
+// Importa a imagem principal do produto no Bling casando pelo SKU. A foto entra
+// como principal (1ª) na galeria; o Salvar grava a URL normalmente (item já tem url).
+export async function produtoImportarFotoBling() {
+  const sku = document.getElementById('p-sku').value.trim();
+  if (!sku) { toast('Preencha o Código (SKU) primeiro'); return; }
+  if (formImagens.length >= MAX_IMAGENS) { toast(`Máximo de ${MAX_IMAGENS} imagens — remova uma antes.`); return; }
+  const btn = document.getElementById('p-btn-foto-bling');
+  if (btn) { btn.disabled = true; }
+  toast('Buscando foto no Bling...');
+  try {
+    let resp;
+    try {
+      resp = await fetch(`${BLING_PRODUTO_FOTO_FN}?sku=${encodeURIComponent(sku)}`, { headers: BLING_FN_HEADERS });
+    } catch (netErr) {
+      // fetch só rejeita em falha de rede/CORS — quase sempre função não deployada.
+      console.error('produtoImportarFotoBling rede', netErr);
+      toast('Falha de rede ao chamar a função (o deploy de bling-produto-foto foi feito?)');
+      return;
+    }
+    const raw = await resp.text();
+    let j = {};
+    try { j = raw ? JSON.parse(raw) : {}; } catch { /* resposta não-JSON */ }
+    if (!resp.ok) { toast(j.error || `Erro ${resp.status}: ${(raw || 'sem detalhe').slice(0, 160)}`); return; }
+    if (!j.publicUrl) { toast(j.error || 'A função respondeu sem imagem.'); return; }
+    if (formImagens.some(im => im.url === j.publicUrl)) { toast('Essa foto já está no produto.'); return; }
+    formImagens.unshift({ url: j.publicUrl, file: null, preview: j.publicUrl }); // vira a principal
+    renderImagens();
+    toast('Foto importada! Clique em Salvar para confirmar.');
+  } catch (e) {
+    console.error('produtoImportarFotoBling', e);
+    toast('Erro ao importar foto: ' + (e.message || e));
+  } finally { if (btn) btn.disabled = false; }
 }
 
 export function produtoImgPrincipal(i) {

@@ -1,7 +1,8 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
+const soDigitos = s => (s || '').replace(/\D/g, '');
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 export async function loadConsignados() {
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
@@ -369,6 +370,65 @@ export function statsRevendedora(list) {
   return { ativos, temAtivos: ativos.length > 0, totalEnv, totalVend, totalRecv };
 }
 
+// Estado da tela de cards (client-side, não persiste no banco).
+let cicloAdmBusca = '';
+let cicloAdmOrdem = 'vendas';   // 'vendas' | 'conversao' | 'nome'
+const cicloIniciais = n => (n || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase() || '?';
+
+// Monta a lista de revendedoras já enriquecida (stats + conversão), aplicando
+// busca e ordenação atuais. Reusada no render inicial e no re-render do grid.
+function cicloAdmDados() {
+  const groups = agruparPorRevendedora();
+  const linhas = Object.entries(groups).map(([revId, list]) => {
+    const nome = state.revNameMap[revId] || 'Revendedora desconhecida';
+    const s = statsRevendedora(list);
+    const conv = s.totalEnv ? s.totalVend / s.totalEnv : 0;
+    return { revId, nome, list, ...s, conv };
+  });
+  const topRevId = linhas.filter(l => !ehRevTeste(l.revId) && l.totalRecv > 0)
+    .sort((a, b) => b.totalRecv - a.totalRecv)[0]?.revId || null;
+  const termo = cicloAdmBusca.trim().toLowerCase();
+  const filtradas = termo ? linhas.filter(l => l.nome.toLowerCase().includes(termo)) : linhas;
+  filtradas.sort((a, b) => {
+    if (cicloAdmOrdem === 'nome') return a.nome.toLowerCase() < b.nome.toLowerCase() ? -1 : 1;
+    if (cicloAdmOrdem === 'conversao') return b.conv - a.conv;
+    return b.totalRecv - a.totalRecv;   // 'vendas'
+  });
+  return { linhas: filtradas, topRevId };
+}
+
+// Só os cards — para re-render sem recriar a busca (não perde o foco).
+function cicloAdmCardsHtml() {
+  const { linhas, topRevId } = cicloAdmDados();
+  if (!linhas.length) return '<div class="empty-state" style="padding:30px 0"><p style="font-size:13px;color:var(--muted)">Nenhuma revendedora encontrada.</p></div>';
+  return linhas.map(l => {
+    const convPct = Math.round(l.conv * 100);
+    const faixa = l.temAtivos ? 'var(--grad-rose)' : 'var(--border)';
+    return `<div class="rev-card${l.temAtivos ? '' : ' inativo'}" style="position:relative;overflow:hidden;padding-top:16px" onclick="abrirCicloRev('${l.revId}')">
+      <div style="position:absolute;top:0;left:0;right:0;height:4px;background:${faixa}"></div>
+      ${l.revId === topRevId ? '<span class="badge" style="position:absolute;top:12px;right:12px;background:var(--gold);color:#fff;font-size:10px">TOP</span>' : ''}
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <span style="width:38px;height:38px;border-radius:50%;background:var(--blush);color:var(--rose);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${cicloIniciais(l.nome)}</span>
+        <div style="min-width:0">
+          <div class="rev-card-nome" style="margin:0">${esc(l.nome)}${ehRevTeste(l.revId) ? ' <span class="badge-soon" style="background:var(--warning);color:#fff">TESTE</span>' : ''}</div>
+          <div class="rev-card-status${l.temAtivos ? '' : ' inativo'}" style="margin:0">${l.temAtivos ? `● ${l.ativos.length} ativa${l.ativos.length!==1?'s':''}` : '○ Sem catálogo ativo'}</div>
+        </div>
+      </div>
+      ${pedidoLabelHtml(l.list, 11)}
+      <div class="rev-card-valor-label">Vendido até agora</div>
+      <div class="rev-card-valor">${fmtBRL(l.totalRecv)}</div>
+      <div style="margin-top:10px">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);margin-bottom:4px">
+          <span>${l.totalVend}/${l.totalEnv} peça${l.totalEnv!==1?'s':''} vendida${l.totalVend!==1?'s':''}</span><span>${convPct}%</span>
+        </div>
+        <div style="height:6px;border-radius:4px;background:var(--blush);overflow:hidden">
+          <div style="height:100%;width:${Math.min(100, convPct)}%;background:linear-gradient(90deg,var(--rose),var(--gold))"></div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 export function renderCicloAdmin() {
   const groups = agruparPorRevendedora();
 
@@ -376,44 +436,43 @@ export function renderCicloAdmin() {
     return renderCicloAdminDetalhe(state.cicloRevSelecionada, groups[state.cicloRevSelecionada]);
   }
 
-  const ordered = Object.entries(groups).sort((a, b) => {
-    const na = (state.revNameMap[a[0]] || 'zzz').toLowerCase();
-    const nb = (state.revNameMap[b[0]] || 'zzz').toLowerCase();
-    return na < nb ? -1 : na > nb ? 1 : 0;
-  });
-
-  const cards = ordered.map(([revId, list]) => {
-    const nome = state.revNameMap[revId] || 'Revendedora desconhecida';
-    const { temAtivos, ativos, totalEnv, totalVend, totalRecv } = statsRevendedora(list);
-    return `<div class="rev-card${temAtivos ? '' : ' inativo'}" onclick="abrirCicloRev('${revId}')">
-      <div class="rev-card-nome">${esc(nome)}${ehRevTeste(revId) ? ' <span class="badge-soon" style="background:var(--warning);color:#fff">TESTE</span>' : ''}</div>
-      ${pedidoLabelHtml(list, 11)}
-      <div class="rev-card-status${temAtivos ? '' : ' inativo'}">${temAtivos ? `● ${ativos.length} ativa${ativos.length!==1?'s':''}` : '○ Sem catálogo ativo'}</div>
-      <div class="rev-card-valor-label">Vendido até agora</div>
-      <div class="rev-card-valor">${fmtBRL(totalRecv)}</div>
-      <div class="rev-card-stats">
-        <div><b>${ativos.length}</b> peça${ativos.length!==1?'s':''}</div>
-        <div>·</div>
-        <div><b>${totalVend}</b>/${totalEnv} vendida${totalVend!==1?'s':''}</div>
-      </div>
-    </div>`;
-  }).join('');
-
   // Totais agregados IGNORAM revendedoras TESTE (os cards delas continuam visíveis).
   const ativosGlobal = soAtivos(state.allConsignados).filter(c => !ehRevTeste(c.revendedora_id));
   const grandTotal = ativosGlobal.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
   const totalPecasVend = ativosGlobal.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+  const totalEnvGlobal = ativosGlobal.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
   const totalRevsAtivas = Object.entries(groups).filter(([revId, l]) => !ehRevTeste(revId) && l.some(c => c.status === 'ativo')).length;
+  const convMedia = totalEnvGlobal ? Math.round((totalPecasVend / totalEnvGlobal) * 100) : 0;
+  const ticket = totalPecasVend ? grandTotal / totalPecasVend : 0;
+  const chip = (val, label) => `<button class="chip${cicloAdmOrdem === val ? ' active' : ''}" onclick="cicloOrdenar('${val}')">${label}</button>`;
 
   return `<button class="btn-secondary" style="width:100%;margin-bottom:14px;border-color:var(--rose);color:var(--rose)" onclick="openBuscaPeca()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar peça — com quem está</button>
-    <div class="rev-grid">${cards}</div>
-    <div class="rev-total-geral">
-      <div>
-        <div class="rev-total-geral-label">Total geral vendido</div>
-        <div class="rev-total-geral-sub">${totalRevsAtivas} revendedora${totalRevsAtivas!==1?'s':''} ativa${totalRevsAtivas!==1?'s':''} · ${totalPecasVend} peça${totalPecasVend!==1?'s':''} vendida${totalPecasVend!==1?'s':''}</div>
-      </div>
-      <div class="rev-total-geral-valor">${fmtBRL(grandTotal)}</div>
-    </div>`;
+    <div style="background:linear-gradient(135deg,#1a0a2e,#5a2a44);border-radius:16px;padding:20px;color:#fff;margin-bottom:14px">
+      <div style="font-size:12px;opacity:.8;text-transform:uppercase;letter-spacing:.5px">Total vendido no ciclo</div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:40px;line-height:1.1;margin-top:4px">${fmtBRL(grandTotal)}</div>
+      <div style="font-size:12px;opacity:.8;margin-top:4px">${totalRevsAtivas} revendedora${totalRevsAtivas!==1?'s':''} ativa${totalRevsAtivas!==1?'s':''}</div>
+    </div>
+    <div class="kpi-grid" style="margin-bottom:14px">
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Peças vendidas</span></div><div class="kpi-val">${totalPecasVend}</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Conversão média</span></div><div class="kpi-val">${convMedia}%</div></div>
+      <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Ticket médio/peça</span></div><div class="kpi-val">${fmtBRL(ticket)}</div></div>
+    </div>
+    <input type="text" class="form-control" placeholder="Buscar revendedora..." value="${esc(cicloAdmBusca)}" oninput="cicloBuscar(this.value)" style="margin-bottom:10px">
+    <div class="chips" style="margin-bottom:14px">
+      ${chip('vendas', 'Mais vendas')}${chip('conversao', 'Conversão')}${chip('nome', 'Nome')}
+    </div>
+    <div class="rev-grid" id="ciclo-adm-grid">${cicloAdmCardsHtml()}</div>`;
+}
+
+// Re-render só do grid (não recria a busca → mantém o foco).
+export function cicloBuscar(v) {
+  cicloAdmBusca = v;
+  const grid = document.getElementById('ciclo-adm-grid');
+  if (grid) grid.innerHTML = cicloAdmCardsHtml();
+}
+export function cicloOrdenar(ordem) {
+  cicloAdmOrdem = ordem;
+  renderCicloGrid();   // re-render completo p/ atualizar o chip ativo
 }
 
 export function renderCicloAdminDetalhe(revId, list) {
@@ -1326,8 +1385,11 @@ export function abrirFinalizarVenda() {
     `<div class="cart-total-row"><span>Total</span><span>R$ ${total.toFixed(2)}</span></div>`;
 
   document.getElementById('f-cliente').value = '';
+  document.getElementById('f-tel').value = '';
+  document.getElementById('f-nasc').value = '';
   document.getElementById('f-data').value = hojeBR();
   document.getElementById('f-forma').value = 'Pix';
+  document.getElementById('f-combinada').value = '';
   document.getElementById('f-obs').value = '';
   ajustarValorPago();
   openModal('modal-finalizar');
@@ -1338,17 +1400,25 @@ export function ajustarValorPago() {
   const forma = document.getElementById('f-forma').value;
   const aVista = ['Dinheiro', 'Pix', 'Cartão débito', 'Cartão crédito'].includes(forma);
   document.getElementById('f-pago').value = aVista ? moneyToInput(total) : '';
+  // Data combinada só faz sentido no fiado.
+  document.getElementById('f-combinada-wrap').style.display = forma === 'Fiado' ? 'block' : 'none';
 }
 
 export async function confirmarVendaCarrinho(btn) {
   const cliente = document.getElementById('f-cliente').value.trim();
+  const tel = soDigitos(document.getElementById('f-tel').value);
+  const nasc = brToISO(document.getElementById('f-nasc').value);
   const data = brToISO(document.getElementById('f-data').value);
   const forma = document.getElementById('f-forma').value;
   const pago = parseMoneyBR(document.getElementById('f-pago').value);
   const obs = document.getElementById('f-obs').value.trim();
+  const combinada = forma === 'Fiado' ? diaMesParaISO(document.getElementById('f-combinada').value) : null;
 
   if (!cliente) { toast('Informe o nome da cliente'); return; }
+  if (tel.length < 10) { toast('Informe o WhatsApp da cliente com DDD'); return; }
+  if (!nasc) { toast('Informe o aniversário da cliente (dd/mm/aaaa)'); return; }
   if (!data) { toast('Data inválida (use dd/mm/aaaa)'); return; }
+  if (forma === 'Fiado' && !combinada) { toast('Informe a data combinada de pagamento'); return; }
   if (!state.carrinhoVenda.length) { toast('Carrinho vazio'); return; }
 
   const total = state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
@@ -1371,6 +1441,9 @@ export async function confirmarVendaCarrinho(btn) {
         p_pago: pago,
         p_status: status,
         p_obs: obs || null,
+        p_tel: tel,
+        p_nasc: nasc,
+        p_combinada: combinada,
         p_itens: state.carrinhoVenda.map(it => ({
           consignado_id: it.consignado_id,
           descricao: it.descricao,
@@ -1418,6 +1491,18 @@ export async function openNovoConsignado() {
   openModal('modal-consignado');
 }
 
+// Garante que a revendedora tenha uma maleta ATIVA e devolve o id.
+// Usa a existente; se não houver, cria. (Só gestor/staff insere — respeita RLS.)
+// Usado nos caminhos legados que criam consignados ativos fora do Lançador.
+export async function garantirMaletaAtiva(revId) {
+  if (!revId) return null;
+  const { data } = await sbQ(sb.from('maletas').select('id').eq('revendedora_id', revId).eq('status', 'ativa').limit(1));
+  if (data && data.length) return data[0].id;
+  const { data: nova, error } = await sb.from('maletas').insert({ revendedora_id: revId, status: 'ativa', numero: 1 }).select('id').single();
+  if (error) { console.error('garantirMaletaAtiva', error); return null; }
+  return nova?.id || null;
+}
+
 export async function salvarConsignado() {
   const desc = document.getElementById('c-desc').value.trim();
   const revId = document.getElementById('c-rev').value;
@@ -1436,8 +1521,10 @@ export async function salvarConsignado() {
     }
   }
 
+  const maletaId = await garantirMaletaAtiva(revId);
   const { error } = await sb.from('consignados').insert({
     revendedora_id: revId,
+    maleta_id: maletaId,
     descricao: desc,
     referencia: document.getElementById('c-ref').value.trim() || null,
     quantidade_enviada: qtd,

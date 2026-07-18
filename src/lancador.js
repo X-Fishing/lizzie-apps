@@ -52,8 +52,7 @@ export async function lancadorSelecionarRev(revId) {
       .order('created_at'));
     if (error) { if (await handleSupabaseError(error, 'Erro ao carregar maletas')) return; }
     maletasAbertas = data || [];
-    // 1 sozinha em aberto: já assume como destino "continuar" (o usuário ainda pode trocar p/ nova).
-    if (maletasAbertas.length === 1) maletaDestino = { ...maletasAbertas[0] };
+    // NÃO auto-seleciona: o usuário sempre escolhe explicitamente continuar ou criar nova.
   }
   render();
 }
@@ -73,8 +72,15 @@ function render() {
   const dataTrocaSel = document.getElementById('lan-data-troca')?.value || '';
   const total = carrinho.reduce((s, i) => s + i.qtd, 0);
   const valor = carrinho.reduce((s, i) => s + i.qtd * (i.preco_venda || 0), 0);
-  const rows = carrinho.length ? carrinho.map((i, idx) => `
-    <tr class="ciclo-row"${idx === carrinho.length - 1 ? ' style="background:rgba(201,116,138,0.06)"' : ''}>
+  // Códigos repetidos no carrinho: destaca a linha inteira em rosa (blush) p/
+  // pegar duplicata na hora do lançamento.
+  const refCount = {};
+  carrinho.forEach(i => { const r = (i.referencia || '').trim(); if (r) refCount[r] = (refCount[r] || 0) + 1; });
+  const rows = carrinho.length ? carrinho.map((i, idx) => {
+    const dupe = i.referencia && refCount[(i.referencia || '').trim()] > 1;
+    const bg = dupe ? 'background:var(--blush)' : (idx === carrinho.length - 1 ? 'background:rgba(201,116,138,0.06)' : '');
+    return `
+    <tr class="ciclo-row"${bg ? ` style="${bg}"` : ''}${dupe ? ' title="Código repetido no carrinho"' : ''}>
       <td class="ciclo-td"><div style="display:flex;align-items:center;gap:10px">
         <span class="ciclo-emoji">${i.foto_url ? `<img src="${esc(i.foto_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px">` : IC_GEM}</span>
         <div class="ciclo-desc">${esc(i.descricao)}</div>
@@ -85,47 +91,60 @@ function render() {
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(i.preco_venda || 0)}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(i.qtd * (i.preco_venda || 0))}</span></td>
       <td class="ciclo-td" style="text-align:right"><button class="btn-icon" style="color:var(--danger)" onclick="lancadorRemover(${idx})">${IC_TRASH}</button></td>
-    </tr>`).join('') :
+    </tr>`;
+  }).join('') :
     `<tr><td colspan="6"><div class="empty-state" style="padding:24px 0"><div class="empty-icon">${IC_GEM}</div><p>Bipe a primeira peça para começar</p></div></td></tr>`;
 
   const podeEnviar = carrinho.length && maletaDestino;
 
+  const badge = n => `<span style="width:28px;height:28px;border-radius:50%;background:var(--grad-rose);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;font-family:'DM Sans',sans-serif;flex-shrink:0">${n}</span>`;
+  const wizHead = (n, titulo, sub) => `<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">${badge(n)}<div><div style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:16px;color:var(--plum)">${titulo}</div><div style="font-size:12px;color:var(--muted)">${sub}</div></div></div>`;
+  const step2Bloq = revSel ? '' : 'opacity:.45;pointer-events:none';
+
   panel().innerHTML = `
-    <div class="section-header"><div>
-      <div class="section-title">Lançar Maleta</div>
-      <div class="section-subtitle">Bipe as peças para montar a maleta da revendedora</div>
+    <div class="page-head"><div>
+      <h2>Lançar Maleta</h2>
+      <div class="sub">Bipe as peças para montar a maleta da revendedora</div>
     </div></div>
 
-    <div class="form-grid">
-      <div class="form-group" style="grid-column:1/-1"><label class="form-label">Revendedora *</label>
-        <select id="lan-rev" class="form-control" onchange="lancadorSelecionarRev(this.value)">
-          <option value="">Selecione a revendedora...</option>
-          ${revsAprovadas.map(r => `<option value="${r.id}" ${String(r.id) === revSel ? 'selected' : ''}>${esc(r.nome)}</option>`).join('')}
-        </select></div>
-      <div class="form-group" style="grid-column:1/-1"><label class="form-label">Data de troca</label>
-        <input type="date" id="lan-data-troca" class="form-control" value="${dataTrocaSel}">
-        <div style="font-size:11px;color:var(--muted);margin-top:4px">Aparece na tela de Trocas. Pode deixar em branco e definir depois.</div></div>
+    <div class="card">
+      ${wizHead(1, 'Para quem é a maleta', 'Escolha a revendedora e, se quiser, a data de troca')}
+      <div class="form-grid">
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Revendedora *</label>
+          <select id="lan-rev" class="form-control" onchange="lancadorSelecionarRev(this.value)">
+            <option value="">Selecione a revendedora...</option>
+            ${revsAprovadas.map(r => `<option value="${r.id}" ${String(r.id) === revSel ? 'selected' : ''}>${esc(r.nome)}</option>`).join('')}
+          </select></div>
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Data de troca</label>
+          <input type="date" id="lan-data-troca" class="form-control" value="${dataTrocaSel}">
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Aparece na tela de Trocas. Pode deixar em branco e definir depois.</div></div>
+      </div>
+      ${maletaPanelHtml(revSel)}
     </div>
 
-    ${maletaPanelHtml(revSel)}
+    <div class="card" style="${step2Bloq}">
+      ${wizHead(2, 'Bipe as peças', 'Leia o código de barras ou digite a referência e tecle Enter')}
 
-    <div class="pag-wrap"><table class="pag-table"><thead><tr>
-      <th class="pag-th">Descrição</th><th class="pag-th">Código</th>
-      <th class="pag-th" style="text-align:center">Quantidade</th>
-      <th class="pag-th">Preço un</th><th class="pag-th">Preço total</th><th class="pag-th"></th>
-    </tr></thead><tbody>${rows}</tbody></table></div>
+      <div style="display:flex;gap:8px;margin-bottom:14px">
+        <input type="text" id="lan-scan" class="form-control" placeholder="Bipe ou digite o código e tecle Enter · F3 busca por nome/preço" autocomplete="off"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();lancadorBipar(this.value);this.value='';}">
+        <button class="btn-secondary" title="Bipar com a câmera" onclick="lancadorCamera()">${IC_CAM}</button>
+      </div>
 
-    <div style="display:flex;gap:8px;margin:10px 0 18px">
-      <input type="text" id="lan-scan" class="form-control" placeholder="Bipe ou digite o código e tecle Enter · F3 busca por nome/preço" autocomplete="off"
-        onkeydown="if(event.key==='Enter'){event.preventDefault();lancadorBipar(this.value);this.value='';}">
-      <button class="btn-secondary" title="Bipar com a câmera" onclick="lancadorCamera()">${IC_CAM}</button>
+      <div class="pag-wrap"><table class="pag-table"><thead><tr>
+        <th class="pag-th">Descrição</th><th class="pag-th">Código</th>
+        <th class="pag-th" style="text-align:center">Quantidade</th>
+        <th class="pag-th">Preço un</th><th class="pag-th">Preço total</th><th class="pag-th"></th>
+      </tr></thead><tbody>${rows}</tbody></table></div>
     </div>
 
-    <div class="cart-total-row"><span>${total} peça${total !== 1 ? 's' : ''}</span><span>${fmtBRL(valor)}</span></div>
-
-    <button class="btn-primary" style="width:100%;margin-top:12px" ${podeEnviar ? '' : 'disabled'} onclick="lancadorEnviar()">
-      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
-      Enviar ${total} peça${total !== 1 ? 's' : ''} para a maleta</button>`;
+    <div style="position:fixed;left:50%;transform:translateX(-50%);bottom:74px;width:calc(100% - 24px);max-width:576px;z-index:95;background:#fff;border:1px solid var(--border);border-radius:14px;padding:12px 16px;box-shadow:0 6px 24px rgba(0,0,0,0.12);display:flex;align-items:center;justify-content:space-between;gap:12px">
+      <span style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--plum)">${total} peça${total !== 1 ? 's' : ''} · ${fmtBRL(valor)}</span>
+      <button class="btn-primary" ${podeEnviar ? '' : 'disabled'} onclick="lancadorEnviar()">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
+        Enviar ${total} peça${total !== 1 ? 's' : ''}</button>
+    </div>
+    <div style="height:80px"></div>`;
 
   const scan = document.getElementById('lan-scan');
   if (scan) scan.focus({ preventScroll: true });
@@ -138,32 +157,32 @@ function maletaPanelHtml(revSel) {
   const qtdAberta = maletasAbertas.length;
   const limite = qtdAberta >= 2;
 
-  // Destino já escolhido: mostra resumo + opção de trocar.
-  if (maletaDestino) {
-    const txt = maletaDestino.nova
-      ? `Nova maleta (será criada como <strong>${temAtiva ? 'Aguardando' : 'Ativa'}</strong>)`
-      : `Continuar <strong>${STATUS_LABEL[maletaDestino.status] || maletaDestino.status}</strong>${maletaDestino.numero ? ` · maleta #${maletaDestino.numero}` : ''}`;
-    return `<div class="card" style="margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-      <div style="font-size:13px;color:var(--plum)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="vertical-align:-3px"><path d="M20 6 9 17l-5-5"/></svg> Destino: ${txt}</div>
-      <button class="btn-secondary btn-sm" onclick="lancadorTrocarDestino()">Trocar</button>
-    </div>`;
-  }
+  // Estilo de destaque para a opção selecionada (sempre visível — nada é assumido sozinho).
+  const sel = 'border-color:var(--rose);background:var(--rose);color:#fff';
 
-  const resumo = qtdAberta
-    ? `Esta revendedora tem <strong>${qtdAberta}</strong> maleta${qtdAberta > 1 ? 's' : ''} em aberto.`
-    : 'Esta revendedora não tem maletas em aberto.';
+  const botoesContinuar = maletasAbertas.map(m => {
+    const ativo = maletaDestino && !maletaDestino.nova && String(maletaDestino.id) === String(m.id);
+    const estilo = ativo ? sel : 'border-color:var(--gold);color:var(--gold)';
+    return `<button class="btn-secondary btn-sm" style="${estilo}" onclick="lancadorDestinoExistente('${m.id}')">
+      Continuar ${STATUS_LABEL[m.status] || m.status}${m.numero ? ` #${m.numero}` : ''}</button>`;
+  }).join('');
 
-  const botoesContinuar = maletasAbertas.map(m =>
-    `<button class="btn-secondary btn-sm" style="border-color:var(--gold);color:var(--gold)" onclick="lancadorDestinoExistente('${m.id}')">
-      Continuar ${STATUS_LABEL[m.status] || m.status}${m.numero ? ` #${m.numero}` : ''}</button>`).join('');
-
+  const novaLabel = `+ Nova maleta${qtdAberta && !temAtiva ? ' (será Ativa)' : qtdAberta ? ' (será Aguardando)' : ''}`;
   const btnNova = limite
     ? `<button class="btn-secondary btn-sm" disabled title="Limite de 2 maletas em aberto atingido">Nova maleta (limite atingido)</button>`
-    : `<button class="btn-secondary btn-sm" style="border-color:var(--rose);color:var(--rose)" onclick="lancadorDestinoNova()">+ Nova maleta${qtdAberta && !temAtiva ? ' (será Ativa)' : qtdAberta ? ' (será Aguardando)' : ''}</button>`;
+    : `<button class="btn-secondary btn-sm" style="${maletaDestino?.nova ? sel : 'border-color:var(--rose);color:var(--rose)'}" onclick="lancadorDestinoNova()">${novaLabel}</button>`;
+
+  const rodape = maletaDestino
+    ? ''
+    : `<div style="font-size:12px;color:var(--muted);margin-top:10px">Escolha uma opção acima para liberar o envio.</div>`;
+  const avisoLimite = limite
+    ? ` <span style="color:var(--danger)">Limite de 2 atingido — finalize uma para abrir outra.</span>`
+    : '';
 
   return `<div class="card" style="margin-bottom:14px">
-    <div style="font-size:13px;color:var(--muted);margin-bottom:10px">${resumo}${limite ? ' <span style="color:var(--danger)">Limite de 2 atingido — finalize uma para abrir outra.</span>' : ''}</div>
+    <div style="font-size:13px;color:var(--plum);font-weight:600;margin-bottom:10px">Onde lançar as peças?${avisoLimite}</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">${botoesContinuar}${btnNova}</div>
+    ${rodape}
   </div>`;
 }
 

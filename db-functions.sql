@@ -14,15 +14,21 @@
 --       sem read-modify-write a partir de cache do navegador).
 -- SECURITY INVOKER: roda com as permissões do usuário logado, respeitando
 -- as policies de RLS (revendedora só mexe nas próprias linhas).
+-- 0023: ganhou p_tel/p_nasc/p_combinada (DEFAULT null → retrocompatível).
+-- A assinatura mudou; drop antes p/ não virar overload ambíguo no PostgREST.
+drop function if exists public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb);
 create or replace function public.registrar_venda(
-  p_cliente text,
-  p_data    date,
-  p_forma   text,
-  p_total   numeric,
-  p_pago    numeric,
-  p_status  text,
-  p_obs     text,
-  p_itens   jsonb
+  p_cliente   text,
+  p_data      date,
+  p_forma     text,
+  p_total     numeric,
+  p_pago      numeric,
+  p_status    text,
+  p_obs       text,
+  p_itens     jsonb,
+  p_tel       text default null,
+  p_nasc      date default null,
+  p_combinada date default null
 )
 returns uuid
 language plpgsql
@@ -42,10 +48,12 @@ begin
 
   insert into vendas (
     revendedora_id, nome_cliente, data_venda, forma_pagamento,
-    valor_total, valor_pago, status, observacao
+    valor_total, valor_pago, status, observacao,
+    telefone_cliente, nascimento_cliente, data_combinada
   ) values (
     auth.uid(), p_cliente, p_data, p_forma,
-    p_total, p_pago, p_status, p_obs
+    p_total, p_pago, p_status, p_obs,
+    p_tel, p_nasc, p_combinada
   )
   returning id into v_venda_id;
 
@@ -76,8 +84,8 @@ begin
 end;
 $$;
 
-revoke all on function public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb) from public;
-grant execute on function public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb) to authenticated;
+revoke all on function public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb,text,date,date) from public;
+grant execute on function public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb,text,date,date) to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════
 -- handle_new_user: cria o profile automaticamente quando um usuario se
@@ -144,9 +152,18 @@ declare
   v_qtd_app   integer;
   v_delta     integer;
   v_inseridos integer := 0;
+  v_maleta    uuid;
 begin
   if not public.is_gestor() then
     raise exception 'Sem permissao';
+  end if;
+
+  -- Resolve (ou cria) a maleta ATIVA da revendedora para vincular as peças novas.
+  select id into v_maleta from maletas
+    where revendedora_id = p_revendedora_id and status = 'ativa' limit 1;
+  if v_maleta is null then
+    insert into maletas (revendedora_id, status, numero)
+      values (p_revendedora_id, 'ativa', 1) returning id into v_maleta;
   end if;
 
   -- Agrupa por SKU (soma linhas repetidas do mesmo código no pedido).
@@ -171,10 +188,10 @@ begin
 
     if v_delta > 0 then
       insert into consignados
-        (revendedora_id, descricao, referencia, quantidade_enviada,
+        (revendedora_id, maleta_id, descricao, referencia, quantidade_enviada,
          quantidade_vendida, quantidade_devolvida, preco_venda, foto_url, status, pedido_numero)
       values
-        (p_revendedora_id, v_item.descricao, v_item.referencia, v_delta,
+        (p_revendedora_id, v_maleta, v_item.descricao, v_item.referencia, v_delta,
          0, 0, v_item.preco, null, 'ativo', p_pedido_numero);
       v_inseridos := v_inseridos + v_delta;
     end if;

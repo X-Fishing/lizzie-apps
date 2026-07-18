@@ -105,7 +105,9 @@ export function renderGarantiasStaff(list) {
       else if (d <= 7) { diasTxt = `${d}d`; cor = 'var(--warning)'; }
       else { diasTxt = `${d}d`; cor = 'var(--text)'; }
     }
+    const fotoCell = `<td class="ciclo-td" style="padding:8px 0 8px 12px;width:50px"><div style="width:38px;height:38px;border-radius:8px;overflow:hidden;background:var(--blush);display:flex;align-items:center;justify-content:center">${g.foto_url ? `<img src="${esc(g.foto_url)}" style="width:100%;height:100%;object-fit:cover" alt="">` : '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="opacity:.5"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></svg>'}</div></td>`;
     return `<tr class="ciclo-row" onclick="verGarantia('${g.id}')" style="cursor:pointer">
+      ${fotoCell}
       <td class="ciclo-td"><div class="ciclo-desc">${esc(g.nome_cliente)}</div><div class="ciclo-ref">${esc(g.descricao_item)}</div></td>
       <td class="ciclo-td">${esc(state.revNameMap[g.revendedora_id] || '—')}</td>
       <td class="ciclo-td" style="white-space:nowrap">${gDot(si.cor)}${si.label}</td>
@@ -138,6 +140,7 @@ export function renderGarantiasStaff(list) {
     <div class="ciclo-wrap">
       <table class="ciclo-table">
         <thead><tr>
+          <th class="ciclo-th-nosort" style="width:50px"></th>
           ${th('nome_cliente', 'Cliente / Item')}
           ${th('revendedora', 'Revendedora')}
           ${th('status', 'Status')}
@@ -145,7 +148,7 @@ export function renderGarantiasStaff(list) {
           ${th('prazo_maximo', 'Prazo')}
           ${th('dias', 'Dias')}
         </tr></thead>
-        <tbody>${sorted.length ? sorted.map(linha).join('') : '<tr><td class="ciclo-td" colspan="6" style="text-align:center;color:var(--muted);padding:20px">Nenhuma garantia neste filtro</td></tr>'}</tbody>
+        <tbody>${sorted.length ? sorted.map(linha).join('') : '<tr><td class="ciclo-td" colspan="7" style="text-align:center;color:var(--muted);padding:20px">Nenhuma garantia neste filtro</td></tr>'}</tbody>
       </table>
     </div>`;
 }
@@ -221,6 +224,18 @@ export async function verGarantia(id) {
 
   let fotoHtml = g.foto_url ? `<img src="${g.foto_url}" class="detail-foto">` : '';
 
+  // Pipeline horizontal de status (fiel ao design) — preenchido até o atual.
+  const ORDEM_ST = ['aberta', 'em_conserto', 'pronta', 'entregue'];
+  const stIdx = ORDEM_ST.indexOf(g.status);
+  const pipeline = `<div style="display:flex;gap:6px;margin:14px 0 6px">${ORDEM_ST.map((k, i) => {
+    const on = i <= stIdx;
+    const si = GSTATUS[k] || { label: k, cor: 'var(--muted)' };
+    return `<div style="flex:1;text-align:center">
+      <div style="height:5px;border-radius:3px;background:${on ? si.cor : 'var(--border)'}"></div>
+      <div style="font-size:10px;margin-top:5px;color:${i === stIdx ? 'var(--plum)' : 'var(--muted)'};font-weight:${i === stIdx ? '700' : '400'}">${si.label}</div>
+    </div>`;
+  }).join('')}</div>`;
+
   let adminActions = '';
   if (isAdmin || state.currentProfile.role === 'revendedora') {
     adminActions = `
@@ -233,10 +248,10 @@ export async function verGarantia(id) {
   document.getElementById('detalhe-g-content').innerHTML = `
     ${fotoHtml}
     <div class="modal-title">${esc(g.descricao_item)}</div>
+    ${pipeline}
     <div class="detail-grid">
       <div class="detail-row"><div class="detail-key">Cliente</div><div class="detail-val">${esc(g.nome_cliente)}${g.telefone_cliente ? ' · ' + esc(g.telefone_cliente) : ''}</div></div>
       <div class="detail-row"><div class="detail-key">Problema</div><div class="detail-val">${esc(g.problema_relatado)}</div></div>
-      <div class="detail-row"><div class="detail-key">Status</div><div class="detail-val">${statusMap[g.status]}</div></div>
       <div class="detail-row"><div class="detail-key">Entrada</div><div class="detail-val">${formatDate(g.data_entrada)}</div></div>
       <div class="detail-row"><div class="detail-key">Prazo máx.</div><div class="detail-val">${formatDate(g.prazo_maximo)}</div></div>
       <div class="detail-row"><div class="detail-key">Destino</div><div class="detail-val">${destMap[g.destino] || esc(g.destino)}${g.destino_detalhe ? ' — ' + esc(g.destino_detalhe) : ''}</div></div>
@@ -254,7 +269,7 @@ export function openNovaGarantia() {
   document.getElementById('g-edit-id').value = '';
   document.getElementById('modal-gTitle').textContent = 'Nova Garantia';
   document.getElementById('g-status-group').style.display = 'none';
-  ['g-desc','g-cliente','g-tel','g-problema','g-obs'].forEach(id => document.getElementById(id).value = '');
+  ['g-desc','g-cliente','g-tel','g-nasc','g-problema','g-obs'].forEach(id => document.getElementById(id).value = '');
   document.getElementById('g-foto-preview').style.display = 'none';
   document.getElementById('g-foto-placeholder').style.display = 'block';
   document.getElementById('g-foto-input').value = '';
@@ -271,6 +286,7 @@ export async function editarGarantia(id) {
   document.getElementById('g-desc').value = g.descricao_item;
   document.getElementById('g-cliente').value = g.nome_cliente;
   document.getElementById('g-tel').value = g.telefone_cliente || '';
+  document.getElementById('g-nasc').value = isoToBR(g.nascimento_cliente) || '';
   document.getElementById('g-problema').value = g.problema_relatado;
   document.getElementById('g-entrada').value = isoToBR(g.data_entrada);
   document.getElementById('g-prazo').value = isoToBR(g.prazo_maximo);
@@ -296,10 +312,18 @@ export async function salvarGarantia(btn) {
   const desc = document.getElementById('g-desc').value.trim();
   const cliente = document.getElementById('g-cliente').value.trim();
   const problema = document.getElementById('g-problema').value.trim();
+  const telCliente = document.getElementById('g-tel').value.trim();
+  const nascCliente = brToISO(document.getElementById('g-nasc').value);
   if (!desc || !cliente || !problema) {
     toast('Preencha os campos obrigatórios');
     btn.disabled = false;
     return;
+  }
+  // Revendedora: WhatsApp + aniversário obrigatórios (envio da garantia por
+  // WhatsApp). Staff continua opcional — garantias de balcão/antigas sem o dado.
+  if (!ehStaff()) {
+    if (telCliente.replace(/\D/g, '').length < 10) { toast('Informe o WhatsApp da cliente com DDD'); btn.disabled = false; return; }
+    if (!nascCliente) { toast('Informe o aniversário da cliente (dd/mm/aaaa)'); btn.disabled = false; return; }
   }
 
   const editId = document.getElementById('g-edit-id').value;
@@ -321,7 +345,8 @@ export async function salvarGarantia(btn) {
   const payload = {
     descricao_item: desc,
     nome_cliente: cliente,
-    telefone_cliente: document.getElementById('g-tel').value.trim() || null,
+    telefone_cliente: telCliente || null,
+    nascimento_cliente: nascCliente || null,
     problema_relatado: problema,
     data_entrada: brToISO(document.getElementById('g-entrada').value),
     prazo_maximo: brToISO(document.getElementById('g-prazo').value),

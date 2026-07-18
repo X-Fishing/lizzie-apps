@@ -50,13 +50,54 @@ export async function loadUser(user) {
     return;
   }
 
+  // Perfil DUPLO no CELULAR: funcionária que também é revendedora escolhe em qual
+  // entrar. No PC entra sempre como funcionária. A escolha é perguntada a cada login
+  // (não é gravada). Só faz sentido para quem já é staff (revendedora pura nunca vira staff).
+  if (ehStaff() && ehCelular() && await tambemRevendedora(user.id, profile)) {
+    document.getElementById('role-choice-nome').textContent = (profile.nome || '').split(' ')[0] || 'você';
+    document.getElementById('splash').style.display = 'none';
+    document.getElementById('pending-screen').style.display = 'none';
+    document.getElementById('role-choice-screen').style.display = 'flex';
+    return; // segue em escolherModo()
+  }
+
+  montarAppUI();
+}
+
+// Detecta se a funcionária também é revendedora (tem dados de revendedora sob o próprio id).
+async function tambemRevendedora(uid, profile) {
+  if (profile?.is_revendedora === true) return true;
+  const { count } = await sbQ(sb.from('consignados')
+    .select('id', { count: 'exact', head: true }).eq('revendedora_id', uid));
+  return (count || 0) > 0;
+}
+
+// Celular = abaixo do breakpoint do dashboard PC (>=900px é desktop staff).
+function ehCelular() {
+  return window.matchMedia('(max-width: 899px)').matches;
+}
+
+// Escolha do perfil na tela do celular. 'revendedora' sobrescreve o papel SÓ na
+// memória da sessão (nunca grava no banco) — assim o app inteiro renderiza como
+// revendedora sem tocar no gating. Recarregar volta a perguntar.
+export function escolherModo(modo) {
+  document.getElementById('role-choice-screen').style.display = 'none';
+  if (modo === 'revendedora') {
+    state.currentProfile = { ...state.currentProfile, role: 'revendedora' };
+  }
+  montarAppUI();
+}
+
+// Monta a UI do app conforme state.currentProfile.role (papel efetivo da sessão).
+function montarAppUI() {
+  const profile = state.currentProfile;
   document.getElementById('splash').style.display = 'none';
   document.getElementById('pending-screen').style.display = 'none';
+  document.getElementById('role-choice-screen').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   document.getElementById('app').style.flexDirection = 'column';
 
   const ehRevendedora = profile.role === 'revendedora';
-  const icone = '';
   const nomeBadge = ehRevendedora ? profile.nome.split(' ')[0] : (ROLE_LABELS[profile.role] || profile.nome.split(' ')[0]);
   document.getElementById('user-badge').textContent = nomeBadge;
 
@@ -72,13 +113,14 @@ export async function loadUser(user) {
   document.getElementById('app').classList.toggle('staff-desktop', ehStaff());
 
   // Permissões por perfil ANTES de montar a sidebar (uma vez por login).
-  if (ehStaff()) await carregarPermissoes();
-  renderSidebar();
-
-  // Liga o roteador por hash e resolve a URL atual: se veio de um link
-  // direto/F5 (#/produtos), abre aquela tela (com guard de papel); se não,
-  // cai no painel inicial permitido. Faz o "voltar" do navegador funcionar.
-  iniciarRoteamento();
+  const permissoes = ehStaff() ? carregarPermissoes() : Promise.resolve();
+  permissoes.then(() => {
+    renderSidebar();
+    // Liga o roteador por hash e resolve a URL atual: se veio de um link
+    // direto/F5 (#/produtos), abre aquela tela (com guard de papel); se não,
+    // cai no painel inicial permitido. Faz o "voltar" do navegador funcionar.
+    iniciarRoteamento();
+  });
 
   // Primeiro acesso de revendedora sem telefone: pede o WhatsApp (trocas).
   if (ehRevendedora && !(profile.telefone && profile.telefone.trim())) {

@@ -65,25 +65,20 @@ export async function loadPerfis() {
 }
 
 function renderFuncionarios() {
+  const ativos = FUNCS.filter(f => f.ativo).length;
   panel().innerHTML = `
-    <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-      <div>
-        <div class="section-title">Funcionários</div>
-        <div class="section-subtitle">Cadastro de funcionários e níveis de acesso</div>
-      </div>
-      <button class="btn-primary btn-sm" onclick="funcNovo()">${IC_PLUS} Novo funcionário</button>
+    <div class="page-head">
+      <div><h2>Funcionários</h2><div class="sub">${FUNCS.length} funcionário${FUNCS.length !== 1 ? 's' : ''} · ${ativos} ativo${ativos !== 1 ? 's' : ''}</div></div>
+      <div class="acts"><button class="btn-primary btn-sm" onclick="funcNovo()">${IC_PLUS} Novo funcionário</button></div>
     </div>
     ${renderFuncs()}`;
 }
 
 function renderPerfisPanel() {
   panelPerfis().innerHTML = `
-    <div class="section-header" style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
-      <div>
-        <div class="section-title">Perfis &amp; Permissões</div>
-        <div class="section-subtitle">Cargos e o que cada um enxerga no menu</div>
-      </div>
-      <button class="btn-primary btn-sm" onclick="perfilNovo()">${IC_PLUS} Novo perfil</button>
+    <div class="page-head">
+      <div><h2>Perfis &amp; Permissões</h2><div class="sub">Cargos e o que cada um enxerga no menu</div></div>
+      <div class="acts"><button class="btn-primary btn-sm" onclick="perfilNovo()">${IC_PLUS} Novo perfil</button></div>
     </div>
     ${renderPerfis()}`;
 }
@@ -92,9 +87,13 @@ function renderPerfisPanel() {
 function renderFuncs() {
   const opcoesPerfil = f => `<option value="">— sem perfil —</option>` +
     PERFIS.map(p => `<option value="${p.id}" ${f.perfil_id === p.id ? 'selected' : ''}>${esc(p.nome)}</option>`).join('');
+  const iniciais = n => (n || '?').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
   const rows = FUNCS.length ? FUNCS.map(f => `
     <tr class="ciclo-row" style="${f.ativo ? '' : 'opacity:.55'}">
-      <td class="ciclo-td"><span class="ciclo-desc">${esc(f.nome)}</span>${f.auth_user_id ? '' : ' <span class="badge badge-aberta" style="font-size:10px" title="Vincula no 1º login com este e-mail">não vinculado</span>'}</td>
+      <td class="ciclo-td"><div style="display:flex;align-items:center;gap:12px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--blush);color:var(--rose);display:flex;align-items:center;justify-content:center;font-weight:600;font-size:12px;flex:none">${iniciais(f.nome)}</div>
+        <div><span class="ciclo-desc">${esc(f.nome)}</span>${f.auth_user_id ? '' : ' <span class="badge badge-aberta" style="font-size:10px" title="Vincula no 1º login com este e-mail">não vinculado</span>'}</div>
+      </div></td>
       <td class="ciclo-td">${esc(f.email || '—')}</td>
       <td class="ciclo-td"><select class="form-control" style="padding:5px 8px;font-size:12.5px;width:auto" ${f.is_admin ? 'disabled title="Admin tem acesso total"' : ''}
         onchange="funcUpdate('${f.id}','perfil_id',this.value||null)">${opcoesPerfil(f)}</select></td>
@@ -128,7 +127,7 @@ function abrirFormFunc(f) {
       <input type="checkbox" id="func-f-admin" ${r.is_admin ? 'checked' : ''} style="width:auto"> Admin (acesso total)</label>
     <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
       <input type="checkbox" id="func-f-ativo" ${(r.ativo ?? true) ? 'checked' : ''} style="width:auto"> Ativo</label>`;
-  document.getElementById('cad-modal-salvar').setAttribute('onclick', `funcSalvar(${f ? `'${r.id}'` : 'null'})`);
+  { const s = document.getElementById('cad-modal-salvar'); s.style.display = ''; s.setAttribute('onclick', `funcSalvar(${f ? `'${r.id}'` : 'null'})`); }
   openModal('modal-cadastro');
 }
 
@@ -268,7 +267,7 @@ function abrirFormPerfil(p) {
       <input type="text" id="perfil-f-desc" class="form-control" value="${esc(r.descricao || '')}"></div>
     <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer">
       <input type="checkbox" id="perfil-f-ativo" ${(r.ativo ?? true) ? 'checked' : ''} style="width:auto"> Ativo</label>`;
-  document.getElementById('cad-modal-salvar').setAttribute('onclick', `perfilSalvar(${p ? `'${r.id}'` : 'null'})`);
+  { const s = document.getElementById('cad-modal-salvar'); s.style.display = ''; s.setAttribute('onclick', `perfilSalvar(${p ? `'${r.id}'` : 'null'})`); }
   openModal('modal-cadastro');
 }
 

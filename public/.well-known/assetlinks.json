@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "app.netlify.app_lizzie.twa",
+    "sha256_cert_fingerprints": ["87:68:53:C6:F2:AF:F6:65:47:A0:53:7C:96:39:79:32:6D:CD:6E:13:33:D1:C0:E9:AD:37:20:C0:40:8F:A0:C4"]
+  }
+}]

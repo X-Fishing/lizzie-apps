@@ -62,9 +62,9 @@ export async function loadPrecificacao() {
   const { params, banhos } = cfg;
 
   panel.innerHTML = `
-    <div class="section-header"><div>
-      <div class="section-title">Precificação</div>
-      <div class="section-subtitle">Parâmetros do cálculo de custo e preço sugerido</div>
+    <div class="page-head"><div>
+      <h2>Precificação</h2>
+      <div class="sub">Parâmetros do cálculo de custo e preço sugerido</div>
     </div></div>
 
     <div class="dash-card" style="margin-bottom:16px">
@@ -145,39 +145,49 @@ export async function loadCalculadora() {
   if (!cfg) { painelSemConfig('panel-calculadora'); return; }
   await carregarCadastrosParaSelect(); // fornecedores (com desconto)
 
+  const linhaBreak = (lbl, id) => `<div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:rgba(255,255,255,0.6)">${lbl}</span><span id="${id}">—</span></div>`;
   panel.innerHTML = `
-    <div class="section-header"><div>
-      <div class="section-title">Calculadora de custo</div>
-      <div class="section-subtitle">Simulador rápido de 1 peça — para lançar remessas use Vendas → Entrada de Mercadoria</div>
+    <div class="page-head"><div>
+      <h2>Calculadora de Preço</h2>
+      <div class="sub">Simule o preço final de uma peça a partir do peso e custos</div>
     </div></div>
-    <div class="dash-card" style="max-width:640px">
-      <div class="form-grid">
-        <div class="form-group"><label class="form-label">Fornecedor</label>
-          <select id="calc-forn" class="form-control" onchange="calcularSimulacao()">
-            <option value="">— sem fornecedor (0%) —</option>
-            ${(cadastroCache.fornecedores || []).filter(f => f.ativo !== false).map(f =>
-              `<option value="${f.desconto || 0}">${esc(f.nome)}${Number(f.desconto) ? ` (${Number(f.desconto)}% desc.)` : ''}</option>`).join('')}
-          </select></div>
-        <div class="form-group"><label class="form-label">Tipo de banho</label>
-          <select id="calc-banho-tipo" class="form-control" onchange="calcularSimulacao()">
-            ${cfg.banhos.filter(b => b.ativo).map(b => `<option value="${esc(b.codigo)}" data-cotacao="${b.cotacao}">${esc(b.nome)}</option>`).join('')}
-          </select></div>
-        <div class="form-group" id="calc-wrap-banho"><label class="form-label">Banho (milésimos — só ouro)</label>
-          <input type="number" step="0.01" id="calc-banho" class="form-control" value="0" oninput="calcularSimulacao()"></div>
-        <div class="form-group"><label class="form-label">Peso (g)</label>
-          <input type="number" step="0.01" id="calc-peso" class="form-control" value="0" oninput="calcularSimulacao()"></div>
-        <div class="form-group"><label class="form-label">Peça bruta (R$)</label>
-          <input type="text" id="calc-bruto" class="form-control" inputmode="numeric" placeholder="0,00" oninput="maskMoneyBR(this);calcularSimulacao()"></div>
-        <div class="form-group"><label class="form-label">Verniz</label>
-          <input type="number" step="0.01" id="calc-verniz" class="form-control" value="0" oninput="calcularSimulacao()"></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start" class="calc-cols">
+      <div class="dash-card">
+        <div style="font-family:'Cormorant Garamond',serif;font-size:17px;color:var(--plum);margin-bottom:16px">Dados da peça</div>
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">Fornecedor</label>
+            <select id="calc-forn" class="form-control" onchange="calcularSimulacao()">
+              <option value="">— sem fornecedor (0%) —</option>
+              ${(cadastroCache.fornecedores || []).filter(f => f.ativo !== false).map(f =>
+                `<option value="${f.desconto || 0}">${esc(f.nome)}${Number(f.desconto) ? ` (${Number(f.desconto)}% desc.)` : ''}</option>`).join('')}
+            </select></div>
+          <div class="form-group"><label class="form-label">Tipo de banho</label>
+            <select id="calc-banho-tipo" class="form-control" onchange="calcularSimulacao()">
+              ${cfg.banhos.filter(b => b.ativo).map(b => `<option value="${esc(b.codigo)}" data-cotacao="${b.cotacao}">${esc(b.nome)}</option>`).join('')}
+            </select></div>
+          <div class="form-group" id="calc-wrap-banho"><label class="form-label">Banho (milésimos — só ouro)</label>
+            <input type="number" step="0.01" id="calc-banho" class="form-control" value="0" oninput="calcularSimulacao()"></div>
+          <div class="form-group"><label class="form-label">Peso (g)</label>
+            <input type="number" step="0.01" id="calc-peso" class="form-control" value="0" oninput="calcularSimulacao()"></div>
+          <div class="form-group"><label class="form-label">Peça bruta (R$)</label>
+            <input type="text" id="calc-bruto" class="form-control" inputmode="numeric" placeholder="0,00" oninput="maskMoneyBR(this);calcularSimulacao()"></div>
+          <div class="form-group"><label class="form-label">Verniz (milésimos)</label>
+            <input type="number" step="0.01" id="calc-verniz" class="form-control" value="0" oninput="calcularSimulacao()"></div>
+        </div>
       </div>
-      <div id="calc-resultado" style="margin-top:8px;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--blush);display:flex;gap:22px;flex-wrap:wrap">
-        <span>Custo<br><b id="calc-r-custo" style="font-size:17px;color:var(--plum)">${fmtBRL(0)}</b></span>
-        <span>Custo c/ verniz<br><b id="calc-r-verniz" style="font-size:17px;color:var(--plum)">${fmtBRL(0)}</b></span>
-        <span>Preço sugerido<br><b id="calc-r-sugerido" style="font-size:17px;color:var(--rose)">${fmtBRL(0)}</b></span>
-      </div>
-      <div style="font-size:11.5px;color:var(--muted);margin-top:8px">
-        Margem ×${cfg.params.margem} + rateio ${fmtBRL(cfg.params.rateio)} · mão de obra ${cfg.params.mao_de_obra} (ouro)
+
+      <div style="background:linear-gradient(160deg,#1a0a2e,#2d1f45);border-radius:16px;padding:26px;color:#fff;position:sticky;top:90px">
+        <div style="font-size:11px;color:rgba(255,255,255,0.55);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Preço sugerido de venda</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:48px;line-height:1" id="calc-r-sugerido">${fmtBRL(0)}</div>
+        <div style="height:1px;background:rgba(255,255,255,0.12);margin:20px 0"></div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          ${linhaBreak('Custo do metal + mão de obra', 'calc-r-metal')}
+          ${linhaBreak('Peça bruta (− desconto)', 'calc-r-bruto')}
+          <div style="display:flex;justify-content:space-between;font-size:13px;border-top:1px solid rgba(255,255,255,0.12);padding-top:10px;margin-top:2px"><span style="color:rgba(255,255,255,0.6)">Custo base</span><span style="font-weight:600" id="calc-r-custo">${fmtBRL(0)}</span></div>
+          ${linhaBreak('+ Verniz', 'calc-r-vernizadd')}
+          <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:rgba(255,255,255,0.6)">Custo com verniz</span><span id="calc-r-verniz">${fmtBRL(0)}</span></div>
+        </div>
+        <div style="margin-top:20px;background:rgba(212,168,75,0.15);border:1px solid rgba(212,168,75,0.4);border-radius:12px;padding:12px 14px;font-size:12px;color:#d4a84b">Margem ×${cfg.params.margem} + rateio ${fmtBRL(cfg.params.rateio)}${cfg.params.mao_de_obra ? ` · mão de obra ${cfg.params.mao_de_obra} (ouro)` : ''}</div>
       </div>
     </div>`;
   calcularSimulacao();
@@ -236,9 +246,9 @@ export async function loadEntradaMercadoria() {
   loteRows.forEach(r => { if (r.banhoManual && !(Number(r.banho) > 0)) r.banhoManual = false; });
 
   panel.innerHTML = `
-    <div class="section-header"><div>
-      <div class="section-title">Entrada de Mercadoria</div>
-      <div class="section-subtitle">Lance a remessa inteira como na planilha — cálculo ao vivo, produtos criados de uma vez</div>
+    <div class="page-head"><div>
+      <h2>Entrada de Mercadoria</h2>
+      <div class="sub">Lance a remessa inteira como na planilha — cálculo ao vivo, produtos criados de uma vez</div>
     </div></div>
     <div class="dash-card" style="margin-bottom:14px">
       <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
@@ -625,16 +635,24 @@ export function calcularSimulacao() {
   const tipo = selTipo.value;
   const cotacao = parseFloat(selTipo.selectedOptions[0]?.dataset.cotacao) || 0;
   document.getElementById('calc-wrap-banho').style.display = tipo === 'o' ? '' : 'none';
-  const r = calcularPrecificacao({
-    tipoBanho: tipo, cotacao,
-    banho: parseFloat(document.getElementById('calc-banho').value) || 0,
-    peso: parseFloat(document.getElementById('calc-peso').value) || 0,
-    precoBruto: parseMoneyBR(document.getElementById('calc-bruto').value),
-    verniz: parseFloat(document.getElementById('calc-verniz').value) || 0,
-    descontoPct: parseFloat(document.getElementById('calc-forn').value) || 0,
-    params: cfg.params,
-  });
-  document.getElementById('calc-r-custo').textContent = fmtBRL(r.custo);
-  document.getElementById('calc-r-verniz').textContent = fmtBRL(r.custoVerniz);
-  document.getElementById('calc-r-sugerido').textContent = fmtBRL(r.precoSugerido);
+  const banho = parseFloat(document.getElementById('calc-banho').value) || 0;
+  const peso = parseFloat(document.getElementById('calc-peso').value) || 0;
+  const precoBruto = parseMoneyBR(document.getElementById('calc-bruto').value);
+  const verniz = parseFloat(document.getElementById('calc-verniz').value) || 0;
+  const descontoPct = parseFloat(document.getElementById('calc-forn').value) || 0;
+  const r = calcularPrecificacao({ tipoBanho: tipo, cotacao, banho, peso, precoBruto, verniz, descontoPct, params: cfg.params });
+
+  // Breakdown do painel escuro (só exibição — decompõe os MESMOS termos do motor).
+  const brutoLiq = precoBruto * (1 - descontoPct / 100);
+  const metalLabor = tipo === 'o'
+    ? (Number(cfg.params.mao_de_obra) + banho) * (cotacao / 1000) * peso
+    : (cotacao / 1000) * peso;
+  const vernizAdd = verniz > 0 ? peso * (verniz / 1000) : 0;
+  const setTxt = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+  setTxt('calc-r-custo', fmtBRL(r.custo));
+  setTxt('calc-r-verniz', fmtBRL(r.custoVerniz));
+  setTxt('calc-r-sugerido', fmtBRL(r.precoSugerido));
+  setTxt('calc-r-metal', fmtBRL(metalLabor));
+  setTxt('calc-r-bruto', (descontoPct ? '− desc. → ' : '') + fmtBRL(brutoLiq));
+  setTxt('calc-r-vernizadd', fmtBRL(vernizAdd));
 }

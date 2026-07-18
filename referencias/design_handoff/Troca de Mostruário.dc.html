@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-thumb { background: rgba(201,116,138,0.35); border-radius: 8px; }
+  a { color: #c9748a; }
+  a:hover { color: #1a0a2e; }
+</style>
+</helmet>
+
+<div style="display:flex; min-height:100vh; background:#faf7f2; font-family:'DM Sans',sans-serif; color:#2d1f35;">
+
+  <!-- SIDEBAR -->
+  <div style="width:{{ sidebarWidth }}; flex-shrink:0; background:#fff; border-right:1px solid rgba(201,116,138,0.2); box-shadow:2px 0 16px rgba(0,0,0,0.05); position:fixed; top:0; left:0; bottom:0; padding:14px 10px; overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column; gap:1px; transition:width 0.2s;">
+    <div style="display:flex; align-items:center; justify-content:space-between; padding:4px 10px 18px 12px;">
+      <sc-if value="{{ sidebarAberta }}" hint-placeholder-val="{{ true }}"><div style="font-family:'Cormorant Garamond',serif; font-size:20px; letter-spacing:3px; color:#1a0a2e; text-transform:uppercase; white-space:nowrap;">Lizzie</div></sc-if>
+      <button onclick="{{ toggleSidebar }}" style="width:24px; height:24px; border-radius:8px; border:1px solid rgba(201,116,138,0.2); background:#fff; color:#8a7590; font-size:11px; cursor:pointer; flex-shrink:0; display:flex; align-items:center; justify-content:center;">{{ sidebarToggleIcon }}</button>
+    </div>
+
+    <div style="display:flex; align-items:center; gap:11px; padding:10px 14px; border-radius:10px; font-size:13px; color:#2d1f35; cursor:pointer; white-space:nowrap; overflow:hidden;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoGrid }}</span><sc-if value="{{ sidebarAberta }}" hint-placeholder-val="{{ true }}"><span>Dashboard</span></sc-if>
+    </div>
+
+    <sc-if value="{{ sidebarAberta }}" hint-placeholder-val="{{ true }}">
+    <div style="font-size:13px; font-weight:600; color:#1a0a2e; padding:11px 14px; margin-top:2px; display:flex; align-items:center; gap:10px; white-space:nowrap;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoBag }}</span>Vendas
+    </div>
+    <div style="margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid rgba(201,116,138,0.2); display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoGem }}</span>Controle de Vendas</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoUserCheck }}</span>Revendedoras</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoUsers }}</span>Clientes</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoColumns }}</span>Lançar Mostruário</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; border-radius:8px; background:rgba(201,116,138,0.10); color:#c9748a; font-weight:600;"><span style="width:15px; display:inline-flex;">{{ icoRepeat }}</span>Troca de Mostruário</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoShield }}</span>Garantias</div>
+    </div>
+
+    <div style="font-size:13px; font-weight:600; color:#1a0a2e; padding:11px 14px; margin-top:8px; display:flex; align-items:center; gap:10px; white-space:nowrap;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoPackage }}</span>Estoque
+    </div>
+    <div style="margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid rgba(201,116,138,0.2); display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoFabrica }}</span>Fornecedores</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoGem }}</span>Produtos</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoTag }}</span>Categorias</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoLayers }}</span>Coleções</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoCart }}</span>Entrada de Mercadoria</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoPercent }}</span>Precificação</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoCalc }}</span>Calculadora</div>
+    </div>
+
+    <div style="font-size:13px; font-weight:600; color:#1a0a2e; padding:11px 14px; margin-top:8px; display:flex; align-items:center; gap:10px; white-space:nowrap;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoFin }}</span>Financeiro
+    </div>
+    <div style="margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid rgba(201,116,138,0.2); display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoFin }}</span>Lançamentos</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#c2c2c2;"><span style="width:15px; display:inline-flex;">{{ icoCard }}</span>Formas de Pagamento<span style="margin-left:auto; font-size:9px; font-weight:600; color:#d4a84b; background:rgba(212,168,75,0.12); border:1px solid rgba(212,168,75,0.4); border-radius:8px; padding:1px 6px; white-space:nowrap;">EM BREVE</span></div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#c2c2c2;"><span style="width:15px; display:inline-flex;">{{ icoTag }}</span>Categorias Financeiras<span style="margin-left:auto; font-size:9px; font-weight:600; color:#d4a84b; background:rgba(212,168,75,0.12); border:1px solid rgba(212,168,75,0.4); border-radius:8px; padding:1px 6px; white-space:nowrap;">EM BREVE</span></div>
+    </div>
+
+    <div style="font-size:13px; font-weight:600; color:#1a0a2e; padding:11px 14px; margin-top:8px; display:flex; align-items:center; gap:10px; white-space:nowrap;">
+      <span style="width:18px; flex-shrink:0; display:inline-flex;">{{ icoMega }}</span>Marketing
+    </div>
+    <div style="margin:1px 0 6px 20px; padding-left:11px; border-left:1.5px solid rgba(201,116,138,0.2); display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoTag }}</span>Raspadinha</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#8a7590;"><span style="width:15px; display:inline-flex;">{{ icoGift }}</span>Fidelidade<span style="margin-left:auto; font-size:9px; font-weight:600; color:#d4a84b; background:rgba(212,168,75,0.12); border:1px solid rgba(212,168,75,0.4); border-radius:8px; padding:1px 6px; white-space:nowrap;">EM BREVE</span></div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:12px; padding:7px 12px; color:#c2c2c2;"><span style="width:15px; display:inline-flex;">{{ icoGift }}</span>Bônus<span style="margin-left:auto; font-size:9px; font-weight:600; color:#d4a84b; background:rgba(212,168,75,0.12); border:1px solid rgba(212,168,75,0.4); border-radius:8px; padding:1px 6px; white-space:nowrap;">EM BREVE</span></div>
+    </div>
+
+    <div style="font-size:11px; font-weight:600; color:#8a7590; text-transform:uppercase; letter-spacing:0.5px; padding:14px 14px 6px;">Configurações</div>
+    <div style="display:flex; flex-direction:column; gap:1px;">
+      <div style="display:flex; align-items:center; gap:9px; font-size:13px; padding:9px 14px; color:#2d1f35;"><span style="width:18px; display:inline-flex;">{{ icoCrachaFunc }}</span>Funcionários</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:13px; padding:9px 14px; color:#2d1f35;"><span style="width:18px; display:inline-flex;">{{ icoShield }}</span>Perfis &amp; Permissões</div>
+      <div style="display:flex; align-items:center; gap:9px; font-size:13px; padding:9px 14px; color:#2d1f35;"><span style="width:18px; display:inline-flex;">{{ icoPercent }}</span>Faixas de Comissão</div>
+    </div>
+    </sc-if>
+  </div>
+
+  <!-- MAIN -->
+  <div style="margin-left:{{ sidebarWidth }}; flex:1; display:flex; flex-direction:column; min-width:0; transition:margin-left 0.2s;">
+
+    <!-- TOPBAR -->
+    <div style="background:#1a0a2e; padding:14px 28px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:100; box-shadow:0 2px 20px rgba(0,0,0,0.3);">
+      <div style="font-size:13px; color:rgba(255,255,255,0.5);">Vendas / <span style="color:#d4a84b;">Troca de Mostruário</span></div>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <div style="background:rgba(201,116,138,0.2); border:1px solid #c9748a; border-radius:20px; padding:4px 12px; font-size:11px; color:#c9748a; font-weight:500;">STAFF</div>
+      </div>
+    </div>
+
+    <div style="max-width:1280px; width:100%; padding:26px 32px 48px;">
+
+      <!-- HEADER -->
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:20px; gap:16px; flex-wrap:wrap;">
+        <div>
+          <div style="font-size:19px; font-weight:600; color:#1a0a2e;">Troca de Mostruário</div>
+          <div style="font-size:12px; color:#8a7590; margin-top:2px;">Agenda de trocas · hoje {{ hojeFmt }}</div>
+        </div>
+      </div>
+
+      <!-- STATS -->
+      <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:22px;">
+        <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-radius:14px; padding:16px; border-left:4px solid #e05555;">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:32px; color:#e05555; line-height:1;">{{ nVencidas }}</div>
+          <div style="font-size:11px; color:#8a7590; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Vencidas</div>
+        </div>
+        <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-radius:14px; padding:16px; border-left:4px solid #e8932f;">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:32px; color:#e8932f; line-height:1;">{{ nSemana }}</div>
+          <div style="font-size:11px; color:#8a7590; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Próximos 7 dias</div>
+        </div>
+        <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-radius:14px; padding:16px; border-left:4px solid #4caf82;">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:32px; color:#4caf82; line-height:1;">{{ nMes }}</div>
+          <div style="font-size:11px; color:#8a7590; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Este mês</div>
+        </div>
+        <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-radius:14px; padding:16px; border-left:4px solid #8a7590;">
+          <div style="font-family:'Cormorant Garamond',serif; font-size:32px; color:#8a7590; line-height:1;">{{ nSemData }}</div>
+          <div style="font-size:11px; color:#8a7590; margin-top:4px; text-transform:uppercase; letter-spacing:0.5px;">Sem data / vínculo</div>
+        </div>
+      </div>
+
+      <!-- SEARCH -->
+      <div style="margin-bottom:8px;">
+        <input value="{{ busca }}" oninput="{{ onBusca }}" placeholder="Buscar revendedora..." style="width:100%; padding:11px 14px; border-radius:12px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; font-size:14px; outline:none; font-family:'DM Sans',sans-serif;"/>
+      </div>
+
+      <!-- GRUPOS -->
+      <sc-if value="{{ temResultados }}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{ grupos }}" as="g" hint-placeholder-count="3">
+          <div style="margin-top:24px;">
+            <div style="display:flex; align-items:center; gap:10px; margin-bottom:12px;">
+              <span style="width:10px; height:10px; border-radius:50%; background:{{ g.cor }};"></span>
+              <div style="font-size:14px; font-weight:600; color:#1a0a2e;">{{ g.titulo }}</div>
+              <div style="font-size:12px; color:#8a7590;">{{ g.count }}</div>
+            </div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:12px;">
+              <sc-for list="{{ g.cards }}" as="c" hint-placeholder-count="3">
+                <div style="background:#fff; border:1px solid rgba(201,116,138,0.2); border-left:4px solid {{ c.cor }}; border-radius:14px; padding:16px; box-shadow:0 2px 10px rgba(0,0,0,0.04);">
+                  <div style="display:flex; align-items:flex-start; gap:12px;">
+                    <div style="width:42px; height:42px; border-radius:50%; background:linear-gradient(135deg,#c9748a,#1a0a2e); display:flex; align-items:center; justify-content:center; font-size:17px; color:#fff; font-family:'Cormorant Garamond',serif; flex-shrink:0;">{{ c.inicial }}</div>
+                    <div style="flex:1; min-width:0;">
+                      <div style="font-weight:600; font-size:15px; color:#1a0a2e; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ c.nome }}</div>
+                      <div style="font-size:11px; color:#8a7590; margin-top:1px;">{{ c.telefone }}</div>
+                    </div>
+                    <div style="text-align:right; flex-shrink:0;">
+                      <div style="font-family:'Cormorant Garamond',serif; font-size:18px; color:{{ c.cor }}; line-height:1;">{{ c.dataTxt }}</div>
+                      <div style="font-size:10px; color:{{ c.cor }}; font-weight:600; text-transform:uppercase; letter-spacing:0.3px; margin-top:2px;">{{ c.diasTxt }}</div>
+                    </div>
+                  </div>
+
+                  <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:12px; padding-top:12px; border-top:1px solid rgba(201,116,138,0.15);">
+                    <div style="font-size:11px; color:#8a7590;">{{ c.ultima }}</div>
+                    <sc-if value="{{ c.multiAberto }}" hint-placeholder-val="{{ false }}"><div style="font-size:10px; color:#e8932f; font-weight:600;">⚠ {{ c.abertos }} pedidos em aberto</div></sc-if>
+                  </div>
+
+                  <div style="display:flex; gap:8px; margin-top:12px;">
+                    <a href="{{ c.waLink }}" target="_blank" rel="noopener" style="flex:1; height:38px; border-radius:10px; background:#25d366; color:#fff; font-size:13px; font-weight:500; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; gap:7px; font-family:'DM Sans',sans-serif;"><span style="display:inline-flex;">{{ icoWa }}</span>Avisar</a>
+                    <button onclick="{{ c.onFeita }}" title="Marcar troca como feita" style="height:38px; padding:0 14px; border-radius:10px; border:1.5px solid rgba(201,116,138,0.2); background:#fff; color:#8a7590; font-size:13px; font-weight:500; cursor:pointer; font-family:'DM Sans',sans-serif; display:inline-flex; align-items:center; gap:6px;"><span style="display:inline-flex;">{{ icoCheck }}</span>Feita</button>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </sc-if>
+      <sc-if value="{{ semResultados }}" hint-placeholder-val="{{ false }}">
+        <div style="text-align:center; padding:60px 24px; color:#8a7590; background:#fff; border-radius:16px; border:1px solid rgba(201,116,138,0.2); margin-top:16px;">
+          <div style="font-size:40px; margin-bottom:14px;">🎉</div>
+          <div style="font-family:'Cormorant Garamond',serif; font-size:20px; color:#1a0a2e; margin-bottom:6px;">Nenhuma troca pendente</div>
+          <p style="font-size:13px;">Todas as trocas estão em dia — ou ajuste a busca.</p>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+
+const IC = {
+  grid:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>',
+  bag:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>',
+  gem:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg>',
+  columns:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg>',
+  repeat:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>',
+  fin:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>',
+  calc:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>',
+  mega:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>',
+  tag:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/></svg>',
+  layers:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/></svg>',
+  fabrica:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7 3 5"/><path d="M9 6V3h6v3"/><rect width="18" height="12" x="3" y="7" rx="2"/><path d="M3 13h18"/></svg>',
+  users:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  userCheck:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/></svg>',
+  shield:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></svg>',
+  crachaFunc:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M16 2v2"/><path d="M7 22v-2a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2"/><path d="M8 2v2"/><circle cx="12" cy="11" r="3"/><rect x="3" y="4" width="18" height="18" rx="2"/></svg>',
+  card:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>',
+  percent:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="19" x2="5" y1="5" y2="19"/><circle cx="6.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg>',
+  cart:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg>',
+  package:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
+  gift:'<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>',
+  wa:'<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12.04 2c-5.46 0-9.91 4.45-9.91 9.91 0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm5.8 14.16c-.24.68-1.42 1.31-1.96 1.35-.5.04-1.14.21-3.7-.79-3.11-1.23-5.11-4.42-5.27-4.63-.15-.21-1.26-1.68-1.26-3.2s.8-2.27 1.08-2.58c.28-.31.61-.39.82-.39.2 0 .41 0 .59.01.19.01.44-.07.69.53.24.6.82 2.06.89 2.21.07.15.12.32.02.53-.1.21-.15.34-.3.52-.15.18-.32.4-.45.54-.15.15-.31.31-.13.61.18.3.79 1.31 1.7 2.12 1.17 1.04 2.16 1.36 2.46 1.51.3.15.48.13.66-.08.18-.21.76-.89.96-1.19.2-.3.4-.25.68-.15.28.1 1.76.83 2.06.98.3.15.5.22.57.34.07.12.07.71-.17 1.39z"/></svg>',
+  check:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+};
+function icoEl(svg) { return React.createElement('span', { style: { display: 'inline-flex' }, dangerouslySetInnerHTML: { __html: svg } }); }
+const ICONS = Object.fromEntries(Object.entries(IC).map(([k, v]) => [k, icoEl(v)]));
+
+const HOJE = new Date('2026-07-15T00:00:00');
+
+const MOCK = [
+  { id:1, nome:'Ana Beatriz Souza', telefone:'(19) 99123-4501', dataTroca:'2026-07-10', ultima:'2026-06-05', abertos:1 },
+  { id:2, nome:'Bruna Ventura', telefone:'(19) 99876-2211', dataTroca:'2026-07-03', ultima:'2026-05-28', abertos:2 },
+  { id:3, nome:'Carla Menezes', telefone:'(19) 98212-9090', dataTroca:'2026-07-17', ultima:'2026-06-12', abertos:1 },
+  { id:4, nome:'Daniela Prado', telefone:'(19) 99001-7744', dataTroca:'2026-07-21', ultima:'2026-06-16', abertos:1 },
+  { id:5, nome:'Eduarda Rezende', telefone:'(19) 98555-3320', dataTroca:'2026-08-02', ultima:'2026-06-28', abertos:1 },
+  { id:6, nome:'Fernanda Lima', telefone:'(19) 99777-6600', dataTroca:'2026-08-09', ultima:'2026-07-05', abertos:1 },
+  { id:7, nome:'Gabriela Nunes', telefone:'(19) 99444-1200', dataTroca:null, ultima:'2026-05-20', abertos:1 },
+  { id:8, nome:'Helena Martins', telefone:'', dataTroca:null, ultima:null, abertos:0 },
+];
+
+const MESES = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+function fmtData(iso) { if (!iso) return '—'; const d = new Date(iso+'T00:00:00'); return d.getDate() + ' ' + MESES[d.getMonth()]; }
+function fmtDataLonga(iso) { const d = new Date(iso+'T00:00:00'); return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0'); }
+function diasAte(iso) { return Math.round((new Date(iso+'T00:00:00') - HOJE) / 86400000); }
+function inicial(nome) { return (nome||'?').charAt(0).toUpperCase(); }
+
+function mensagem(nome, iso) {
+  if (iso) return 'Bom dia amor, tudo bem??\n\nAqui é a Gabi, estou entrando em contato porque a troca da sua maleta está chegando, dia ' + fmtDataLonga(iso) + ' está tudo certo para você vir??';
+  return 'Bom dia amor, tudo bem??\n\nAqui é a Gabi, estou entrando em contato para combinarmos a troca da sua maleta, qual o melhor dia para você vir??';
+}
+function waLink(tel, msg) { const t = (tel||'').replace(/\D/g,''); if (!t) return '#'; const c = t.startsWith('55') ? t : '55'+t; return 'https://wa.me/' + c + '?text=' + encodeURIComponent(msg); }
+
+function statusDe(r) {
+  if (!r.telefone && !r.dataTroca && !r.ultima) return 'sem-vinculo';
+  if (!r.dataTroca) return 'sem-data';
+  const d = diasAte(r.dataTroca);
+  if (d < 0) return 'vencida';
+  if (d <= 7) return 'semana';
+  if (d <= 31) return 'mes';
+  return 'depois';
+}
+
+class Component extends DCLogic {
+  state = { sidebarAberta:true, busca:'', feitas:[] };
+  toggleSidebar = () => this.setState(s => ({ sidebarAberta: !s.sidebarAberta }));
+  onBusca = (e) => this.setState({ busca: e.target.value });
+  marcarFeita = (id) => this.setState(s => ({ feitas: [...s.feitas, id] }));
+
+  renderVals() {
+    const { sidebarAberta, busca, feitas } = this.state;
+    const buscaLower = busca.trim().toLowerCase();
+    const ativas = MOCK.filter(r => !feitas.includes(r.id) && (!buscaLower || r.nome.toLowerCase().includes(buscaLower)));
+
+    const cont = { vencida:0, semana:0, mes:0, semdata:0 };
+    MOCK.filter(r => !feitas.includes(r.id)).forEach(r => {
+      const st = statusDe(r);
+      if (st === 'vencida') cont.vencida++;
+      else if (st === 'semana') cont.semana++;
+      else if (st === 'mes') cont.mes++;
+      else if (st === 'sem-data' || st === 'sem-vinculo') cont.semdata++;
+    });
+
+    const COR = { vencida:'#e05555', semana:'#e8932f', mes:'#4caf82', depois:'#1a0a2e', 'sem-data':'#8a7590', 'sem-vinculo':'#8a7590' };
+    const mapCard = (r) => {
+      const st = statusDe(r);
+      const cor = COR[st];
+      let dataTxt = '—', diasTxt = '';
+      if (st === 'vencida') { const d = -diasAte(r.dataTroca); dataTxt = fmtData(r.dataTroca); diasTxt = 'venceu há ' + d + 'd'; }
+      else if (st === 'semana' || st === 'mes' || st === 'depois') { const d = diasAte(r.dataTroca); dataTxt = fmtData(r.dataTroca); diasTxt = d === 0 ? 'é hoje' : 'em ' + d + 'd'; }
+      else if (st === 'sem-data') { dataTxt = 'Sem data'; }
+      else if (st === 'sem-vinculo') { dataTxt = 'Sem vínculo'; }
+      return {
+        id: r.id, nome: r.nome, inicial: inicial(r.nome),
+        telefone: r.telefone || 'sem telefone',
+        cor, dataTxt, diasTxt,
+        ultima: r.ultima ? ('Última: ' + fmtData(r.ultima)) : 'Sem troca anterior',
+        multiAberto: r.abertos > 1, abertos: r.abertos,
+        waLink: waLink(r.telefone, mensagem(r.nome, r.dataTroca)),
+        onFeita: () => this.marcarFeita(r.id),
+      };
+    };
+
+    const gruposDef = [
+      { key:'vencida', titulo:'Vencidas', cor:'#e05555', filtro:(r)=>statusDe(r)==='vencida' },
+      { key:'semana', titulo:'Próximos 7 dias', cor:'#e8932f', filtro:(r)=>statusDe(r)==='semana' },
+      { key:'mes', titulo:'Este mês', cor:'#4caf82', filtro:(r)=>statusDe(r)==='mes' },
+      { key:'depois', titulo:'Mais adiante', cor:'#1a0a2e', filtro:(r)=>statusDe(r)==='depois' },
+      { key:'semdata', titulo:'Sem data ou vínculo', cor:'#8a7590', filtro:(r)=>['sem-data','sem-vinculo'].includes(statusDe(r)) },
+    ];
+    const ordem = (r) => {
+      const st = statusDe(r);
+      if (st === 'vencida' || st === 'semana' || st === 'mes' || st === 'depois') return diasAte(r.dataTroca);
+      return 999999;
+    };
+    const grupos = gruposDef.map(g => {
+      const cards = ativas.filter(g.filtro).sort((a,b) => ordem(a) - ordem(b)).map(mapCard);
+      return { titulo: g.titulo, cor: g.cor, count: cards.length + (cards.length === 1 ? ' revendedora' : ' revendedoras'), cards };
+    }).filter(g => g.cards.length > 0);
+
+    return {
+      icoGrid: ICONS.grid, icoBag: ICONS.bag, icoGem: ICONS.gem, icoUserCheck: ICONS.userCheck,
+      icoUsers: ICONS.users, icoColumns: ICONS.columns, icoRepeat: ICONS.repeat, icoShield: ICONS.shield,
+      icoPackage: ICONS.package, icoFabrica: ICONS.fabrica, icoTag: ICONS.tag, icoLayers: ICONS.layers,
+      icoCart: ICONS.cart, icoPercent: ICONS.percent, icoCalc: ICONS.calc, icoFin: ICONS.fin,
+      icoCard: ICONS.card, icoMega: ICONS.mega, icoGift: ICONS.gift, icoCrachaFunc: ICONS.crachaFunc,
+      icoWa: ICONS.wa, icoCheck: ICONS.check,
+      sidebarAberta,
+      sidebarWidth: sidebarAberta ? '232px' : '60px',
+      sidebarToggleIcon: sidebarAberta ? '‹' : '›',
+      toggleSidebar: this.toggleSidebar,
+      hojeFmt: '15/07/2026',
+      nVencidas: cont.vencida, nSemana: cont.semana, nMes: cont.mes, nSemData: cont.semdata,
+      busca, onBusca: this.onBusca,
+      grupos,
+      temResultados: grupos.length > 0,
+      semResultados: grupos.length === 0,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

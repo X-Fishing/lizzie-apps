@@ -46,6 +46,7 @@ export function filtrarPagamentos() {
       <td class="pag-td"><span class="pag-valor pag-valor-pago">R$ ${Number(v.valor_pago).toFixed(2)}</span></td>
       <td class="pag-td"><span class="pag-valor ${pendente>0?'pag-valor-pendente':''}">R$ ${pendente.toFixed(2)}</span></td>
       <td class="pag-td"><span class="badge ${statusBadge[v.status]}">${statusLabel[v.status]}</span></td>
+      <td class="pag-td" style="text-align:right">${pendente > 0 && v.telefone_cliente ? `<button class="btn-icon" title="Cobrar no WhatsApp" style="color:#128C7E" onclick="event.stopPropagation();zapCobrancaCliente('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg></button>` : ''}</td>
     </tr>`;
   }).join('');
 
@@ -57,6 +58,7 @@ export function filtrarPagamentos() {
       <th class="pag-th">Pago</th>
       <th class="pag-th">Pendente</th>
       <th class="pag-th">Status</th>
+      <th class="pag-th"></th>
     </tr></thead>
     <tbody>${rows}</tbody>
   </table></div>`;
@@ -107,8 +109,12 @@ export async function verVenda(id) {
       <div class="detail-row"><div class="detail-key">Total</div><div class="detail-val">R$ ${Number(v.valor_total).toFixed(2)}</div></div>
       <div class="detail-row"><div class="detail-key">Pago</div><div class="detail-val" style="color:var(--success)">R$ ${Number(v.valor_pago).toFixed(2)}</div></div>
       <div class="detail-row"><div class="detail-key">Pendente</div><div class="detail-val" style="color:var(--danger)">R$ ${restante.toFixed(2)}</div></div>
-      ${v.observacao ? `<div class="detail-row"><div class="detail-key">Obs.</div><div class="detail-val">${v.observacao}</div></div>` : ''}
+      ${v.telefone_cliente ? `<div class="detail-row"><div class="detail-key">WhatsApp</div><div class="detail-val">${esc(v.telefone_cliente)}</div></div>` : ''}
+      ${v.nascimento_cliente ? `<div class="detail-row"><div class="detail-key">Aniversário</div><div class="detail-val">${formatDate(v.nascimento_cliente)}</div></div>` : ''}
+      ${v.data_combinada ? `<div class="detail-row"><div class="detail-key">Data combinada</div><div class="detail-val"${(v.data_combinada < new Date().toISOString().slice(0,10) && restante > 0) ? ' style="color:var(--danger)"' : ''}>${(() => { const p = v.data_combinada.split('T')[0].split('-'); return `${p[2]}/${p[1]}`; })()}</div></div>` : ''}
+      ${v.observacao ? `<div class="detail-row"><div class="detail-key">Obs.</div><div class="detail-val">${esc(v.observacao)}</div></div>` : ''}
     </div>
+    ${restante > 0 && v.telefone_cliente ? `<button class="btn-secondary" style="width:100%;margin-bottom:10px;border-color:#25D366;color:#128C7E" onclick="zapCobrancaCliente('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Cobrar no WhatsApp</button>` : ''}
     <div class="divider"></div>
     <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Itens da compra</div>
     <div style="background:#faf7f2;padding:10px 12px;border-radius:10px;margin-bottom:14px">${itensHtml}</div>
@@ -185,4 +191,27 @@ export async function registrarPagamento(id) {
   toast('Pagamento registrado!');
   closeModal('modal-detalhe-venda');
   loadVendas();
+}
+
+// WhatsApp de cobrança do fiado — mensagem pronta com o valor pendente e a
+// data combinada (quando houver). Modelo do zapCobranca do financeiro.
+export function zapCobrancaCliente(vendaId) {
+  const v = state.allVendas.find(x => String(x.id) === String(vendaId));
+  if (!v) return;
+  let tel = String(v.telefone_cliente || '').replace(/\D/g, '');
+  if (!tel) { toast('Cliente sem WhatsApp cadastrado.'); return; }
+  if (!tel.startsWith('55') || tel.length <= 11) tel = '55' + tel;
+  const pendente = Number(v.valor_total) - Number(v.valor_pago);
+  if (pendente <= 0) { toast('Esta venda já está quitada.'); return; }
+  const primeiro = (v.nome_cliente || '').trim().split(' ')[0] || 'tudo bem';
+  const hoje = new Date().toISOString().slice(0, 10);
+  const dc = v.data_combinada;
+  const ddmm = iso => { const p = iso.split('T')[0].split('-'); return `${p[2]}/${p[1]}`; };
+  const dcFmt = dc ? ddmm(dc) : '';
+  const frase = !dc ? 'está em aberto'
+    : dc < hoje ? `estava combinado para ${dcFmt}`
+    : dc === hoje ? `combinamos para hoje (${dcFmt})`
+    : `combinamos para ${dcFmt}`;
+  const msg = `Oi ${primeiro}, tudo bem? 💗 Passando para lembrar com carinho do valor de ${fmtBRL(pendente)} da sua comprinha, que ${frase}. Qualquer dúvida estou à disposição! Obrigada 🌸`;
+  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
 }

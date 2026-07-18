@@ -6,7 +6,7 @@
 import { state } from './state.js';
 import { registrar, navegar, iniciar } from './router.js';
 
-export const PANEIS_STAFF = ['financeiro','contas-a-pagar','calculadora','clientes','bonus','funcionarios','perfis','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','faixas-comissao','config-raspadinha','precificacao','entrada-mercadoria','lancador'];
+export const PANEIS_STAFF = ['financeiro','contas-a-pagar','calculadora','clientes','bonus','fidelidade','funcionarios','perfis','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','faixas-comissao','config-raspadinha','precificacao','entrada-mercadoria','lancador'];
 
 // hash "bonito" p/ dashboard e revendedoras; demais = proprio nome do painel.
 function hashDePanel(name) {
@@ -40,6 +40,7 @@ function aplicarTela(name) {
     b.classList.toggle('active', b.dataset.panel === name));
   // Entrada de Mercadoria usa a largura total da tela (grade larga).
   document.querySelector('.content')?.classList.toggle('tela-full', name === 'entrada-mercadoria');
+  atualizarBreadcrumb(name);   // breadcrumb da topbar (global, menu.js)
 
   if (name === 'dashboard') loadDashboard();
   if (name === 'garantias') loadGarantias();
@@ -65,6 +66,8 @@ function aplicarTela(name) {
   if (name === 'config-raspadinha') loadConfigRaspadinha();
   if (name === 'precificacao') loadPrecificacao();
   if (name === 'entrada-mercadoria') loadEntradaMercadoria();
+  if (name === 'fidelidade') loadFidelidade();
+  if (name === 'bonus') loadBonus();
   if (name === 'lancador') loadLancador();
   window.scrollTo(0, 0);
 }
