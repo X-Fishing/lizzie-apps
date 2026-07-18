@@ -808,6 +808,7 @@ export function confComissaoUsarFaixa() {
 }
 
 const CONF_BTN_CONFERIR = '<button class="btn-secondary" style="flex:1" onclick="conferirFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Conferir fechamento</button>';
+const CONF_BTN_IMPRIMIR = '<button class="btn-secondary" style="flex:1" onclick="imprimirRelacaoVendidas()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Imprimir relação</button>';
 
 export async function abrirConferencia(revId) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
@@ -820,7 +821,7 @@ export async function abrirConferencia(revId) {
   if (!pecasConferencia().length) { toast('Nenhum mostruário ativo para conferir'); return; }
   const nome = state.revNameMap[revId] || 'Revendedora';
   abrirModalConferencia(`Conferência de fechamento — ${esc(nome)}`,
-    CONF_BTN_CONFERIR +
+    CONF_BTN_CONFERIR + CONF_BTN_IMPRIMIR +
     '<button id="conf-btn-finalizar" class="btn-secondary" style="flex:1;border-color:var(--gold);color:var(--gold)" onclick="finalizarAposConferencia()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar Mostruário</button>');
 }
 
@@ -856,7 +857,7 @@ export async function abrirConferenciaCorrecao(chave) {
   const nome = state.revNameMap[confRevId] || 'Revendedora';
   const dataFmt = chave ? chave.split('-').reverse().join('/') : '';
   abrirModalConferencia(`Correção de conferência — ${esc(nome)} <span style="font-size:12px;color:var(--muted)">(fechado em ${dataFmt})</span>`,
-    CONF_BTN_CONFERIR +
+    CONF_BTN_CONFERIR + CONF_BTN_IMPRIMIR +
     '<button class="btn-primary btn" style="flex:1" onclick="salvarCorrecaoConferencia()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Salvar correção</button>');
 }
 
@@ -1336,6 +1337,73 @@ async function executarFechamentoReconciliado() {
   const ok = await encerrarMostruarioCore(revId, msg);
   // 4) Financeiro fase 1: abre o recebimento (QR PIX) com o valor a receber.
   if (ok) window.abrirRecebimento(fech.id);
+}
+
+// Imprime a relação da conferência (vendidas + extraviadas + devolvidas) no
+// padrão do gerarPdfFechamento (#print-content + window.print). NÃO fecha o
+// modal de conferência — o admin volta pra ele após imprimir.
+export function imprimirRelacaoVendidas() {
+  const base = pecasConferencia();
+  if (!base.length) { toast('Nada para imprimir.'); return; }
+  const nome = state.revNameMap[confRevId] || 'Revendedora';
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const vendidas    = base.filter(c => !c.devolvido && !c.extraviado);
+  const extraviadas = base.filter(c => c.extraviado);
+  const devolvidas  = base.filter(c => c.devolvido);
+  const qtdVend = c => c.extraviado ? (c.quantidade_vendida || 0) : (c.quantidade_enviada || 1);
+
+  const linha = (c, status, cor, i) => {
+    const qtd = c.quantidade_enviada || 1;
+    const sub = qtd * Number(c.preco_venda || 0);
+    return `<tr style="background:${i % 2 === 0 ? '#faf7f2' : '#fff'}">
+      <td style="padding:8px 12px;font-size:12px;color:#8a7590">${esc(c.referencia || '—')}</td>
+      <td style="padding:8px 12px;font-size:13px">${esc(c.descricao)}</td>
+      <td style="padding:8px 12px;text-align:center;font-size:13px">${qtd}</td>
+      <td style="padding:8px 12px;text-align:right;font-size:13px">${c.preco_venda ? 'R$ ' + Number(c.preco_venda).toFixed(2) : '—'}</td>
+      <td style="padding:8px 12px;text-align:right;font-size:13px">R$ ${sub.toFixed(2)}</td>
+      <td style="padding:8px 12px;font-size:12px;font-weight:600;color:${cor}">${status}</td>
+    </tr>`;
+  };
+  let i = 0;
+  const linhas =
+    vendidas.map(c => linha(c, 'Vendida', '#1a0a2e', i++)).join('') +
+    extraviadas.map(c => linha(c, 'Extraviada', '#c0392b', i++)).join('') +
+    devolvidas.map(c => linha(c, 'Devolvida', '#5b6e5c', i++)).join('');
+
+  const totalExtrav = extraviadas.reduce((s, c) => s + (c.quantidade_enviada || 1) * Number(c.preco_venda || 0), 0);
+  const d = dadosComissao();
+  const totalCount = c => c.reduce((s, x) => s + qtdVend(x), 0);
+
+  document.getElementById('print-content').innerHTML = `
+    <div style="margin-bottom:20px">
+      <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8a7590;margin-bottom:6px">Lizzie Semijoias</div>
+      <h1 style="font-family:'Georgia',serif;font-size:22px;font-weight:400;margin:0 0 4px">Conferência de Maleta</h1>
+      <div style="font-size:13px;color:#8a7590">Revendedora: <strong style="color:#2d1f35">${esc(nome)}</strong> &nbsp;·&nbsp; Data: ${hoje} &nbsp;·&nbsp; ${vendidas.length} vendida${vendidas.length !== 1 ? 's' : ''} · ${extraviadas.length} extraviada${extraviadas.length !== 1 ? 's' : ''} · ${devolvidas.length} devolvida${devolvidas.length !== 1 ? 's' : ''}</div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;margin-bottom:18px">
+      <thead><tr style="background:#1a0a2e;color:#fff">
+        <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:500">Código</th>
+        <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:500">Descrição</th>
+        <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:500">Qtd</th>
+        <th style="padding:9px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:500">Preço</th>
+        <th style="padding:9px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:500">Subtotal</th>
+        <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:500">Status</th>
+      </tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>
+    <div style="margin-left:auto;width:280px;font-size:13px;margin-bottom:40px">
+      <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8a7590">Total vendido (${totalCount(vendidas.concat(extraviadas))} un.)</span><strong>R$ ${Number(d.total_vendido_valor).toFixed(2)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8a7590">Comissão (${String(d.comissao_percentual).replace('.', ',')}%)</span><span>− R$ ${Number(d.comissao_valor).toFixed(2)}</span></div>
+      <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #ddd;font-weight:700;font-size:15px"><span>A receber</span><span>R$ ${Number(d.valor_a_receber).toFixed(2)}</span></div>
+      ${totalExtrav > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;color:#c0392b"><span>Extraviado (fora do acerto)</span><span>R$ ${totalExtrav.toFixed(2)}</span></div>` : ''}
+    </div>
+    <div style="display:flex;gap:60px;margin-top:40px">
+      <div style="flex:1;border-top:1px solid #ccc;padding-top:8px;font-size:12px;color:#8a7590">Assinatura da revendedora</div>
+      <div style="flex:1;border-top:1px solid #ccc;padding-top:8px;font-size:12px;color:#8a7590">Assinatura Lizzie Semijoias</div>
+    </div>`;
+
+  document.getElementById('print-overlay').classList.add('show');
+  setTimeout(() => window.print(), 300);
 }
 
 // Ação destrutiva: exclui SOMENTE a maleta AGUARDANDO (a próxima já montada).
