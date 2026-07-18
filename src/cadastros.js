@@ -64,7 +64,7 @@ const CFG = {
       { key: 'telefone',   label: 'Telefone', type: 'text' },
       { key: 'email',      label: 'E-mail', type: 'text' },
       { key: 'contato',    label: 'Pessoa de contato', type: 'text' },
-      { key: 'desconto',   label: 'Desconto na peça bruta (%)', type: 'number' },
+      { key: 'desconto',   label: 'Desconto na peça bruta (%)', type: 'number', default: 0 },
       { key: 'observacao', label: 'Observação', type: 'textarea' },
       { key: 'ativo',      label: 'Ativo', type: 'bool', default: true },
     ],
@@ -358,7 +358,9 @@ export async function cadSalvar(tabela, id) {
     const elf = document.getElementById('cad-f-' + f.key);
     if (!elf) continue;
     if (f.type === 'bool') payload[f.key] = elf.checked;
-    else if (f.type === 'number') payload[f.key] = elf.value.trim() === '' ? null : Number(elf.value);
+    // Numérico vazio: usa o default do CFG (ex.: desconto NOT NULL default 0);
+    // sem default, cai em null (colunas opcionais). Evita violar NOT NULL.
+    else if (f.type === 'number') payload[f.key] = elf.value.trim() === '' ? (f.default ?? null) : Number(elf.value);
     else payload[f.key] = elf.value.trim() || null;
   }
   // == null (e não !valor): 0 é válido em campos numéricos (ex.: faixa "De R$ 0")
@@ -377,7 +379,8 @@ export async function cadSalvar(tabela, id) {
   if (error) {
     if (/duplicate key|unique/i.test(error.message || '')) { toast('Já existe um registro com esse nome.'); return; }
     if (await handleSupabaseError(error, 'Erro ao salvar')) return;
-    toast('Erro ao salvar'); return;
+    console.error('cadSalvar', tabela, error);
+    toast('Erro ao salvar: ' + (error.message || error.hint || error.details || 'erro desconhecido')); return;
   }
   toast('Salvo!');
   document.getElementById('modal-cadastro').classList.remove('show');
