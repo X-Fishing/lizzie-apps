@@ -130,7 +130,7 @@ function avisoFaixasComissao(linhas) {
 }
 
 // Cache simples para alimentar os <select> do cadastro de produto.
-export const cadastroCache = { categorias: [], colecoes: [], fornecedores: [] };
+export const cadastroCache = { categorias: [], colecoes: [], fornecedores: [], categorias_financeiras: [] };
 
 function panelEl(tabela) { return document.getElementById('panel-' + CFG[tabela].panel); }
 

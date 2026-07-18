@@ -15,6 +15,7 @@ import { mostrarRecovery, ehAdmin, ehGestor, ehStaff, loadUser, maskTelBR, salva
 import { loadDashboard, loadClientes, loadMarketing, loadFormasPagamento, loadCategoriasFinanceiras } from './dashboard.js';
 import { loadCalculadora, calcularSimulacao, loadPrecificacao, precifSalvarParams, precifSalvarBanhos, loadEntradaMercadoria, loteAdd, loteRemover, loteSet, loteRecalcTudo, loteLancar, loteDuplicar, loteTecla, loteArredondarTodos, entradaColarAbrir, entradaColarProcessar, entradaLimparLote } from './precificacao.js';
 import { loadFinanceiro, abrirRecebimento, registrarRecebimento, recRecalc, recAtalho, copiarPixCola, pixConfigAbrir, pixConfigSalvar, zapCobranca, estornarRecebimento, estornarConfirmar } from './financeiro.js';
+import { loadContasAPagar, capNovoTitulo, capEditarTitulo, capSalvarTitulo, capPagarTitulo, capConfirmarPagamento, capCancelarTitulo, capReabrirTitulo, capExcluirTitulo, capBuscar, capFiltrarFornecedor, capFiltrarCategoria, capFiltrarDataInicio, capFiltrarDataFim, capFiltrarStatus, capCopiarBoleto } from './contas-a-pagar.js';
 import { podeAcessarPanel, renderSidebar, toggleSnavGrupo, toggleSidebarLateral, primeiroPanelInicial } from './menu.js';
 import { loadFuncionarios, loadPerfis, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilFechar, perfilSalvarPermissoes } from './funcionarios.js';
 import { calcPrazoGarantia, loadGarantias, filtrarGarantias, sortGarantiasStaff, setGFilter, renderGarantiaCard, verGarantia, openNovaGarantia, editarGarantia, salvarGarantia, mudarStatus, atualizarStatusCard, excluirGarantia } from './garantias.js';
@@ -119,6 +120,7 @@ Object.assign(window, { renderAprovadas, renderGarantiaCard, ehAdmin, ehStaff, e
   perfilAbrirFoto, perfilFecharFoto, perfilTirarSelfie, perfilCapturar, perfilArquivo, perfilSalvarFoto,
   toast, podeAcessarPanel, renderSidebar, toggleSnavGrupo, primeiroPanelInicial, abrirRevendedora,
   abrirRecebimento, registrarRecebimento, recRecalc, recAtalho, copiarPixCola, pixConfigAbrir, pixConfigSalvar, zapCobranca, estornarRecebimento, estornarConfirmar,
+  loadContasAPagar, capNovoTitulo, capEditarTitulo, capSalvarTitulo, capPagarTitulo, capConfirmarPagamento, capCancelarTitulo, capReabrirTitulo, capExcluirTitulo, capBuscar, capFiltrarFornecedor, capFiltrarCategoria, capFiltrarDataInicio, capFiltrarDataFim, capFiltrarStatus, capCopiarBoleto,
   loadPerfis, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilFechar, perfilSalvarPermissoes,
   loadLancador, lancadorBipar, lancadorSetQtd, lancadorRemover, lancadorEnviar, lancadorCamera, fecharCamera, scanBarcodeInto, lancadorSelecionarRev, lancadorDestinoNova, lancadorDestinoExistente, lancadorTrocarDestino, lancadorAbrirBusca, lancadorFecharBusca, lancadorBuscaInput, lancadorBuscaTeclas, lancadorBuscaAdicionar,
   abrirDivulgarMaleta, copiarLinkMaleta, mostrarQrMaleta, regenerarLinkMaleta });

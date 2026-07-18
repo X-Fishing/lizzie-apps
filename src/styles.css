@@ -814,6 +814,10 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .dash-card h3 { font-size:14px; color:var(--plum); margin:0 0 2px; font-weight:600; }
 .dash-card .dash-sub { font-size:11px; color:var(--muted); margin-bottom:14px; }
 .dash-kpi { font-family:'Cormorant Garamond',serif; font-size:30px; color:var(--rose); line-height:1.1; }
+/* KPI cards clicáveis (Contas a Pagar) */
+.kpi-click { cursor:pointer; transition:border-color .15s, background .15s; }
+.kpi-click:hover { border-color:var(--rose); }
+.kpi-ativo { border:2px solid var(--rose); background:var(--blush); }
 .dash-row { display:flex; justify-content:space-between; align-items:center; padding:7px 0;
   border-bottom:1px solid var(--border); font-size:13px; }
 .dash-row:last-child { border-bottom:none; }

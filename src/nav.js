@@ -6,7 +6,7 @@
 import { state } from './state.js';
 import { registrar, navegar, iniciar } from './router.js';
 
-export const PANEIS_STAFF = ['financeiro','calculadora','clientes','bonus','funcionarios','perfis','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','faixas-comissao','config-raspadinha','precificacao','entrada-mercadoria','lancador'];
+export const PANEIS_STAFF = ['financeiro','contas-a-pagar','calculadora','clientes','bonus','funcionarios','perfis','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','faixas-comissao','config-raspadinha','precificacao','entrada-mercadoria','lancador'];
 
 // hash "bonito" p/ dashboard e revendedoras; demais = proprio nome do painel.
 function hashDePanel(name) {
@@ -49,6 +49,7 @@ function aplicarTela(name) {
   if (name === 'trocas') loadTrocasDashboard();
   if (name === 'admin') loadAdmin();
   if (name === 'financeiro') loadFinanceiro();
+  if (name === 'contas-a-pagar') loadContasAPagar();
   if (name === 'calculadora') loadCalculadora();
   if (name === 'clientes') loadClientes();
   if (name === 'marketing') loadMarketing();
