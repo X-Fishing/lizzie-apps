@@ -27,3 +27,6 @@ Thumbs.db
 
 # Clone acidental do proprio repo dentro da pasta
 lizzie-apps/
+
+# Netlify CLI local
+.netlify/
