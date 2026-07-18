@@ -873,13 +873,13 @@ export function renderConferencia() {
     `<div style="margin-top:8px"><div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--success);transition:width .2s"></div></div>
       <div style="font-size:11px;color:var(--muted);margin-top:3px">${conferidas} de ${base.length} peça${base.length !== 1 ? 's' : ''} conferida${conferidas !== 1 ? 's' : ''}</div></div>`;
 
-  // Gate: só finaliza quando TODAS as peças têm veredito (modo normal).
+  // Dica visual do gate (o bloqueio real e o toast ficam em finalizarAposConferencia,
+  // para o clique sempre dar feedback em vez de "não acontecer nada").
   const btnFin = document.getElementById('conf-btn-finalizar');
   if (btnFin) {
     const falta = pendentes.length;
-    btnFin.disabled = falta > 0;
-    btnFin.style.opacity = falta > 0 ? '.5' : '';
-    btnFin.title = falta > 0 ? `Confira todas as peças (${falta} pendente${falta > 1 ? 's' : ''}) para finalizar` : '';
+    btnFin.style.opacity = falta > 0 ? '.6' : '';
+    btnFin.title = falta > 0 ? `Faltam ${falta} peça${falta > 1 ? 's' : ''} para conferir` : '';
   }
 
   // Peças iguais (mesmo código/descrição) são LINHAS físicas distintas:
