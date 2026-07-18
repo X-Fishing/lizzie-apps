@@ -1169,9 +1169,15 @@ async function aplicarCorrecaoConferencia() {
   let fechId = confFechamento?.id || null;
   if (fechId) {
     let { error } = await sbQ(sb.from('fechamentos_mostruario').update(cab).eq('id', fechId));
-    if (error && /comissao|total_vendido|a_receber/i.test(error.message || '') && /column|schema cache/i.test(error.message || '')) {
-      console.warn('Colunas de comissão ausentes (rode a migração 0007):', error.message);
-      ['total_vendido_valor', 'comissao_percentual', 'comissao_valor', 'valor_a_receber'].forEach(k => delete cab[k]);
+    // Coluna opcional ausente: remove SÓ a citada no erro e tenta de novo.
+    const OPC = ['total_vendido_valor', 'comissao_percentual', 'comissao_valor', 'valor_a_receber'];
+    let tent = 0;
+    while (error && tent < OPC.length && /column|schema cache/i.test(error.message || '')) {
+      const col = (error.message || '').match(/'([a-z_]+)' column/i)?.[1];
+      if (!col || !OPC.includes(col) || !(col in cab)) break;
+      console.warn(`Coluna ausente "${col}" (rode a migração 0007):`, error.message);
+      delete cab[col];
+      tent++;
       ({ error } = await sbQ(sb.from('fechamentos_mostruario').update(cab).eq('id', fechId)));
     }
     if (error) { console.error('Auditoria (update):', error); toast(`Erro ao atualizar a auditoria: ${error.message}. Rode a migração 0005.`); return; }
@@ -1273,10 +1279,16 @@ async function executarFechamentoReconciliado() {
     ...dadosComissao(),
   };
   let { data: fech, error: eFech } = await sbQ(sb.from('fechamentos_mostruario').insert(cabecalho).select('id').single());
-  // Colunas das migrações 0007/0010 ausentes: grava sem elas.
-  if (eFech && /comissao|total_vendido|a_receber|numero_interno/i.test(eFech.message || '') && /column|schema cache/i.test(eFech.message || '')) {
-    console.warn('Colunas ausentes (rode as migrações 0007/0010):', eFech.message);
-    ['total_vendido_valor', 'comissao_percentual', 'comissao_valor', 'valor_a_receber', 'numero_interno'].forEach(k => delete cabecalho[k]);
+  // Coluna opcional ausente (migrações 0007/0010): remove SÓ a coluna citada
+  // no erro e tenta de novo — nunca descarta a comissão por causa de outra.
+  const OPCIONAIS = ['total_vendido_valor', 'comissao_percentual', 'comissao_valor', 'valor_a_receber', 'numero_interno'];
+  let tentativas = 0;
+  while (eFech && tentativas < OPCIONAIS.length && /column|schema cache/i.test(eFech.message || '')) {
+    const col = (eFech.message || '').match(/'([a-z_]+)' column/i)?.[1];
+    if (!col || !OPCIONAIS.includes(col) || !(col in cabecalho)) break;
+    console.warn(`Coluna ausente "${col}" (rode as migrações 0007/0010):`, eFech.message);
+    delete cabecalho[col];
+    tentativas++;
     ({ data: fech, error: eFech } = await sbQ(sb.from('fechamentos_mostruario').insert(cabecalho).select('id').single()));
   }
   if (eFech) {
