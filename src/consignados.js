@@ -734,13 +734,10 @@ function faixaPct(total) {
   return f ? Number(f.percentual) : null;
 }
 
-// Total vendido pelo veredito atual da conferência. Extraviada NÃO conta como
-// venda cheia — só o que já foi lançado (quantidade_vendida) entra.
+// Total vendido pelo veredito atual da conferência (não voltou = vendida).
 function totalVendidoConferencia() {
-  return pecasConferencia().filter(c => !c.devolvido).reduce((s, c) => {
-    const qtd = c.extraviado ? (c.quantidade_vendida || 0) : (c.quantidade_enviada || 1);
-    return s + qtd * Number(c.preco_venda || 0);
-  }, 0);
+  return pecasConferencia().filter(c => !c.devolvido)
+    .reduce((s, c) => s + (c.quantidade_enviada || 1) * Number(c.preco_venda || 0), 0);
 }
 
 const r2 = n => Math.round(n * 100) / 100;
@@ -865,16 +862,14 @@ export function renderConferencia() {
   const base = pecasConferencia();
   const pendentes  = base.filter(c => !confEstado(c));
   const devolvidos = base.filter(c => c.devolvido);
-  const vendidas   = base.filter(c => c.conf_vendida);
-  const extraviadas = base.filter(c => c.extraviado);
+  const vendidas   = base.filter(c => !c.devolvido && confConferida(c));
   const conferidas = base.length - pendentes.length;
   const pct = base.length ? Math.round(conferidas / base.length * 100) : 0;
 
   document.getElementById('conf-contadores').innerHTML =
     `Restantes: <b style="color:var(--plum)">${pendentes.length}</b> · ` +
     `Voltaram: <b style="color:var(--success)">${devolvidos.length}</b> · ` +
-    `Vendidas: <b style="color:var(--rose)">${vendidas.length}</b> · ` +
-    `Extraviadas: <b style="color:var(--danger)">${extraviadas.length}</b>` +
+    `Vendidas: <b style="color:var(--rose)">${vendidas.length}</b>` +
     `<div style="margin-top:8px"><div style="height:7px;border-radius:4px;background:var(--border);overflow:hidden"><div style="height:100%;width:${pct}%;background:var(--success);transition:width .2s"></div></div>
       <div style="font-size:11px;color:var(--muted);margin-top:3px">${conferidas} de ${base.length} peça${base.length !== 1 ? 's' : ''} conferida${conferidas !== 1 ? 's' : ''}</div></div>`;
 
@@ -914,7 +909,7 @@ export function renderConferencia() {
     return;
   }
 
-  const BADGE = { devolvido: ['Voltou', 'var(--success)'], vendida: ['Vendida', 'var(--rose)'], extraviada: ['Extraviada', 'var(--danger)'] };
+  const BADGE = { devolvido: ['Voltou', 'var(--success)'], vendida: ['Vendida', 'var(--rose)'] };
   div.innerHTML = bulk + lista.map(c => {
     const est = confEstado(c);
     const badge = est ? ` · <span style="color:${BADGE[est][1]};font-weight:600">${BADGE[est][0]}</span>` : '';
@@ -931,7 +926,6 @@ export function renderConferencia() {
       <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
         ${btn('devolvido', 'var(--success)', 'Voltou', 'confMarcarDevolvido')}
         ${btn('vendida', 'var(--rose)', 'Vendida', 'confMarcarVendida')}
-        ${btn('extraviada', 'var(--danger)', 'Extraviada', 'confMarcarExtraviada')}
       </div>
     </div>`;
   }).join('');
@@ -1015,15 +1009,16 @@ export function confBuscaTeclas(e) {
 }
 
 // Estado da peça na conferência (mutuamente exclusivo). null = pendente.
+// Só dois estados: Voltou (devolvido) ou Vendida (conf_vendida).
 function confEstado(c) {
-  return c.devolvido ? 'devolvido' : c.conf_vendida ? 'vendida' : c.extraviado ? 'extraviada' : null;
+  return c.devolvido ? 'devolvido' : c.conf_vendida ? 'vendida' : null;
 }
 const confConferida = c => !!confEstado(c);
 
 // Persistência da conferência (sobrevive a fechar o modal / recarregar).
-// Grava SEMPRE o trio completo — a marcação zera as outras duas.
+// Grava o par completo — a marcação zera a outra.
 async function confAplicarEstado(id, estado) {
-  const patch = { devolvido: estado === 'devolvido', conf_vendida: estado === 'vendida', extraviado: estado === 'extraviada' };
+  const patch = { devolvido: estado === 'devolvido', conf_vendida: estado === 'vendida' };
   const { error } = await sbQ(sb.from('consignados').update(patch).eq('id', id));
   if (error) {
     console.error('Erro ao salvar conferência:', error);
@@ -1034,7 +1029,7 @@ async function confAplicarEstado(id, estado) {
     if (await handleSupabaseError(error, `Erro ao salvar: ${error.message}`)) return false;
   }
   const c = state.allConsignados.find(x => String(x.id) === String(id));
-  if (c) { c.devolvido = patch.devolvido; c.conf_vendida = patch.conf_vendida; c.extraviado = patch.extraviado; }
+  if (c) { c.devolvido = patch.devolvido; c.conf_vendida = patch.conf_vendida; }
   document.getElementById('conf-resultado').innerHTML = ''; // resultado antigo fica obsoleto
   renderConferencia();
   return true;
@@ -1043,7 +1038,6 @@ async function confAplicarEstado(id, estado) {
 // Compatível com o código antigo (bipe `*` chama com true). false = desmarca.
 export async function confMarcarDevolvido(id, devolvido) { return confAplicarEstado(id, devolvido ? 'devolvido' : null); }
 export async function confMarcarVendida(id, on) { return confAplicarEstado(id, on ? 'vendida' : null); }
-export async function confMarcarExtraviada(id, on) { return confAplicarEstado(id, on ? 'extraviada' : null); }
 
 // Marca em lote todas as peças ainda não conferidas como vendidas.
 export function confTodasVendidas() {
@@ -1053,14 +1047,14 @@ export function confTodasVendidas() {
   confirmarAcao('Confirmar vendidas',
     `Marcar ${n} peça${n > 1 ? 's' : ''} restante${n > 1 ? 's' : ''} como vendida${n > 1 ? 's' : ''}?`, 'Confirmar vendidas', async () => {
       const ids = pendentes.map(c => c.id);
-      const { error } = await sbQ(sb.from('consignados').update({ conf_vendida: true, devolvido: false, extraviado: false }).in('id', ids));
+      const { error } = await sbQ(sb.from('consignados').update({ conf_vendida: true, devolvido: false }).in('id', ids));
       if (error) {
         console.error('confTodasVendidas:', error);
         if (/conf_vendida|column|schema cache/i.test(error.message || '')) { toast('Rode a migração 0027 no Supabase.'); return; }
         toast('Erro ao confirmar: ' + error.message); return;
       }
       const set = new Set(ids.map(String));
-      state.allConsignados.forEach(c => { if (set.has(String(c.id))) { c.conf_vendida = true; c.devolvido = false; c.extraviado = false; } });
+      state.allConsignados.forEach(c => { if (set.has(String(c.id))) { c.conf_vendida = true; c.devolvido = false; } });
       document.getElementById('conf-resultado').innerHTML = '';
       renderConferencia();
       toast(`${n} peça${n > 1 ? 's' : ''} marcada${n > 1 ? 's' : ''} como vendida${n > 1 ? 's' : ''}.`);
@@ -1068,20 +1062,18 @@ export function confTodasVendidas() {
 }
 
 // A = restantes (devolvido=false) · B = vendidos (lançados pela revendedora).
-// Extraviadas saem de "naoLancadas" (viraram extravio declarado, não surpresa).
 function divergenciasConferencia() {
   const base = pecasConferencia();
   return {
-    naoLancadas: base.filter(c => !c.devolvido && !c.extraviado && !foiLancada(c)), // em A e não em B
+    naoLancadas: base.filter(c => !c.devolvido && !foiLancada(c)), // em A e não em B
     voltouVendida: base.filter(c => c.devolvido && foiLancada(c)), // em B e não em A
-    extraviadas: base.filter(c => c.extraviado),
   };
 }
 
 export function conferirFechamento() {
-  const { naoLancadas, voltouVendida, extraviadas } = divergenciasConferencia();
+  const { naoLancadas, voltouVendida } = divergenciasConferencia();
   const div = document.getElementById('conf-resultado');
-  if (!naoLancadas.length && !voltouVendida.length && !extraviadas.length) {
+  if (!naoLancadas.length && !voltouVendida.length) {
     div.innerHTML = `<div style="margin-top:12px;padding:12px 14px;border-radius:10px;background:rgba(91,110,92,0.1);color:var(--success);font-weight:600"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Fechamento do mostruário conferido com sucesso!</div>`;
     toast('Fechamento do mostruário conferido com sucesso!');
     return;
@@ -1094,9 +1086,6 @@ export function conferirFechamento() {
       <div style="font-size:11.5px;color:var(--muted)">Possível peça extraviada ou venda não lançada.</div>` : ''}
     ${voltouVendida.length ? `<div style="font-weight:600;margin-top:8px">Marcado como vendido, porém voltou na maleta (${voltouVendida.length}):</div>
       <ul style="margin:4px 0 0 18px;padding:0">${voltouVendida.map(itemHtml).join('')}</ul>` : ''}
-    ${extraviadas.length ? `<div style="font-weight:600;margin-top:8px">Extraviadas — não voltaram e não foram vendidas (${extraviadas.length}):</div>
-      <ul style="margin:4px 0 0 18px;padding:0">${extraviadas.map(itemHtml).join('')}</ul>
-      <div style="font-size:11.5px;color:var(--muted)">Ficam fora do total a receber e registradas na auditoria.</div>` : ''}
   </div>`;
 }
 
@@ -1105,19 +1094,18 @@ export function finalizarAposConferencia() {
   const pend = pecasConferencia().filter(c => !confEstado(c));
   if (pend.length) { toast(`Confira todas as peças antes de finalizar (${pend.length} pendente${pend.length > 1 ? 's' : ''}).`); return; }
 
-  const { naoLancadas, voltouVendida, extraviadas } = divergenciasConferencia();
+  const { naoLancadas, voltouVendida } = divergenciasConferencia();
   const total = naoLancadas.length + voltouVendida.length;
   const nome = state.revNameMap[confRevId] || 'esta revendedora';
-  const notaExtravio = extraviadas.length ? ` ${extraviadas.length} peça${extraviadas.length > 1 ? 's' : ''} extraviada${extraviadas.length > 1 ? 's' : ''} ficará fora do valor a receber.` : '';
   if (!total) {
     confirmarAcao('Finalizar Mostruário',
-      `Finalizar o mostruário de ${nome}?\n\nPeças devolvidas voltam ao estoque e as demais ficam como vendidas.${notaExtravio}\n\nEssa ação não pode ser desfeita e abre o recebimento.`,
+      `Finalizar o mostruário de ${nome}?\n\nPeças devolvidas voltam ao estoque e as demais ficam como vendidas.\n\nEssa ação não pode ser desfeita e abre o recebimento.`,
       'Finalizar e receber', () => executarFechamentoReconciliado());
     return;
   }
   conferirFechamento(); // mostra a listagem antes de decidir
   confirmarAcao('⚠ Divergências na conferência',
-    `Há ${total} divergência${total > 1 ? 's' : ''}. Ao finalizar, a conferência física será aplicada: peças que voltaram retornam ao estoque (mesmo lançadas como vendidas) e peças não devolvidas ficam como vendidas (as não lançadas ficam como "Vendido por Divergência").${notaExtravio} Tudo será registrado. Deseja finalizar?`,
+    `Há ${total} divergência${total > 1 ? 's' : ''}. Ao finalizar, a conferência física será aplicada: peças que voltaram retornam ao estoque (mesmo lançadas como vendidas) e peças não devolvidas ficam como vendidas (as não lançadas ficam como "Vendido por Divergência"). Tudo será registrado. Deseja finalizar?`,
     'Finalizar e receber', () => executarFechamentoReconciliado());
 }
 
@@ -1144,10 +1132,9 @@ async function aplicarCorrecaoConferencia() {
   const base = pecasConferencia();
   const devolvidas  = base.filter(c => c.devolvido);
   const naoVoltaram = base.filter(c => !c.devolvido);
-  const extraviadas  = naoVoltaram.filter(c => c.extraviado);
-  const divVendida   = naoVoltaram.filter(c => !c.extraviado && !foiLancada(c));
+  const divVendida   = naoVoltaram.filter(c => !foiLancada(c));
   const divDevolvida = devolvidas.filter(c => foiLancada(c));
-  const totalDiv = divVendida.length + divDevolvida.length + extraviadas.length;
+  const totalDiv = divVendida.length + divDevolvida.length;
 
   // 1) Veredito por linha (idempotente). No modo correção TODAS as não
   //    voltadas são regravadas (podem ter sido marcadas devolvidas antes).
@@ -1157,7 +1144,7 @@ async function aplicarCorrecaoConferencia() {
       .in('id', ids));
     if (error) { console.error('Correção (devolvidas):', error); toast(`Erro ao aplicar devoluções: ${error.message}. Nada foi concluído — tente de novo.`); return; }
   }
-  const vendidasLancadas = naoVoltaram.filter(c => !c.extraviado && foiLancada(c));
+  const vendidasLancadas = naoVoltaram.filter(c => foiLancada(c));
   for (const [grupo, flag] of [[divVendida, true], [vendidasLancadas, false]]) {
     for (const [qtd, ids] of gruposPorQtd(grupo)) {
       const { error } = await sbQ(sb.from('consignados')
@@ -1166,20 +1153,12 @@ async function aplicarCorrecaoConferencia() {
       if (error) { console.error('Correção (vendas):', error); toast(`Erro ao marcar vendas: ${error.message}. Tente de novo.`); return; }
     }
   }
-  // Extraviadas: mantém a venda original (se havia) e sai do total a receber.
-  for (const c of extraviadas) {
-    const qv = foiLancada(c) ? (c.quantidade_enviada || 1) : 0;
-    const { error } = await sbQ(sb.from('consignados')
-      .update({ quantidade_vendida: qv, quantidade_devolvida: 0, vendido_por_divergencia: false })
-      .eq('id', c.id));
-    if (error) { console.error('Correção (extraviadas):', error); toast(`Erro ao registrar extravios: ${error.message}. Tente de novo.`); return; }
-  }
 
   // 2) Auditoria: ATUALIZA o cabeçalho existente (ou cria, se o fechamento
   //    for anterior à auditoria) e SUBSTITUI os itens divergentes.
   const cab = {
     total_pecas: base.length,
-    total_vendidas: naoVoltaram.length - extraviadas.length,
+    total_vendidas: naoVoltaram.length,
     total_devolvidas: devolvidas.length,
     total_divergencias: totalDiv,
     finalizado_com_divergencia: totalDiv > 0,
@@ -1211,7 +1190,6 @@ async function aplicarCorrecaoConferencia() {
   const divRows = [
     ...divVendida.map(c => ({ tipo: 'vendido_por_divergencia', c })),
     ...divDevolvida.map(c => ({ tipo: 'devolvido_estava_vendido', c })),
-    ...extraviadas.map(c => ({ tipo: 'extraviada', c })),
   ].map(({ tipo, c }) => ({
     fechamento_id: fechId, consignado_id: c.id,
     descricao: c.descricao || null, codigo: c.referencia || null, tipo,
@@ -1253,10 +1231,9 @@ async function executarFechamentoReconciliado() {
 
   const devolvidas   = base.filter(c => c.devolvido);
   const naoVoltaram  = base.filter(c => !c.devolvido);
-  const extraviadas  = naoVoltaram.filter(c => c.extraviado);   // não voltou e não vendida -> extravio declarado
-  const divVendida   = naoVoltaram.filter(c => !c.extraviado && !foiVendida(c)); // não voltou, não extraviada e não lançada -> Vendido por Divergência
+  const divVendida   = naoVoltaram.filter(c => !foiVendida(c)); // não voltou e não lançada -> Vendido por Divergência
   const divDevolvida = devolvidas.filter(foiVendida);           // voltou mas estava lançada vendida -> reverte a venda
-  const totalDiv = divVendida.length + divDevolvida.length + extraviadas.length;
+  const totalDiv = divVendida.length + divDevolvida.length;
 
   // 1) Veredito físico. Sequencial: no primeiro erro, aborta e avisa
   //    (reabra a conferência e finalize de novo — updates são idempotentes).
@@ -1275,13 +1252,6 @@ async function executarFechamentoReconciliado() {
       .in('id', ids));
     if (error) { console.error('Reconciliação (vendas por divergência):', error); toast(`Erro ao marcar vendas: ${error.message}. Nada foi finalizado — tente de novo.`); return; }
   }
-  // Extraviadas: preserva a venda parcial já lançada; zera devolvida; não é divergência de venda.
-  for (const c of extraviadas) {
-    const { error } = await sbQ(sb.from('consignados')
-      .update({ quantidade_vendida: c.quantidade_vendida || 0, quantidade_devolvida: 0, vendido_por_divergencia: false })
-      .eq('id', c.id));
-    if (error) { console.error('Reconciliação (extraviadas):', error); toast(`Erro ao registrar extravios: ${error.message}. Nada foi finalizado — tente de novo.`); return; }
-  }
   // (não voltou e JÁ estava vendida: nada a mudar)
 
   // 2) Auditoria (cabeçalho + itens divergentes)
@@ -1295,7 +1265,7 @@ async function executarFechamentoReconciliado() {
     revendedora_id: revId,
     revendedora_nome: nome,
     total_pecas: base.length,
-    total_vendidas: naoVoltaram.length - extraviadas.length,
+    total_vendidas: naoVoltaram.length,
     total_devolvidas: devolvidas.length,
     total_divergencias: totalDiv,
     finalizado_com_divergencia: totalDiv > 0,
@@ -1319,7 +1289,6 @@ async function executarFechamentoReconciliado() {
   const divRows = [
     ...divVendida.map(c => ({ tipo: 'vendido_por_divergencia', c })),
     ...divDevolvida.map(c => ({ tipo: 'devolvido_estava_vendido', c })),
-    ...extraviadas.map(c => ({ tipo: 'extraviada', c })),
   ].map(({ tipo, c }) => ({
     fechamento_id: fech.id, consignado_id: c.id,
     descricao: c.descricao || null, codigo: c.referencia || null, tipo,
@@ -1339,18 +1308,16 @@ async function executarFechamentoReconciliado() {
   if (ok) window.abrirRecebimento(fech.id);
 }
 
-// Imprime a relação da conferência (vendidas + extraviadas + devolvidas) no
-// padrão do gerarPdfFechamento (#print-content + window.print). NÃO fecha o
-// modal de conferência — o admin volta pra ele após imprimir.
+// Imprime a relação da conferência (vendidas + devolvidas) no padrão do
+// gerarPdfFechamento (#print-content + window.print). NÃO fecha o modal de
+// conferência — o admin volta pra ele após imprimir.
 export function imprimirRelacaoVendidas() {
   const base = pecasConferencia();
   if (!base.length) { toast('Nada para imprimir.'); return; }
   const nome = state.revNameMap[confRevId] || 'Revendedora';
   const hoje = new Date().toLocaleDateString('pt-BR');
-  const vendidas    = base.filter(c => !c.devolvido && !c.extraviado);
-  const extraviadas = base.filter(c => c.extraviado);
-  const devolvidas  = base.filter(c => c.devolvido);
-  const qtdVend = c => c.extraviado ? (c.quantidade_vendida || 0) : (c.quantidade_enviada || 1);
+  const vendidas   = base.filter(c => !c.devolvido);
+  const devolvidas = base.filter(c => c.devolvido);
 
   const linha = (c, status, cor, i) => {
     const qtd = c.quantidade_enviada || 1;
@@ -1367,18 +1334,16 @@ export function imprimirRelacaoVendidas() {
   let i = 0;
   const linhas =
     vendidas.map(c => linha(c, 'Vendida', '#1a0a2e', i++)).join('') +
-    extraviadas.map(c => linha(c, 'Extraviada', '#c0392b', i++)).join('') +
     devolvidas.map(c => linha(c, 'Devolvida', '#5b6e5c', i++)).join('');
 
-  const totalExtrav = extraviadas.reduce((s, c) => s + (c.quantidade_enviada || 1) * Number(c.preco_venda || 0), 0);
   const d = dadosComissao();
-  const totalCount = c => c.reduce((s, x) => s + qtdVend(x), 0);
+  const totalCount = c => c.reduce((s, x) => s + (x.quantidade_enviada || 1), 0);
 
   document.getElementById('print-content').innerHTML = `
     <div style="margin-bottom:20px">
       <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8a7590;margin-bottom:6px">Lizzie Semijoias</div>
       <h1 style="font-family:'Georgia',serif;font-size:22px;font-weight:400;margin:0 0 4px">Conferência de Maleta</h1>
-      <div style="font-size:13px;color:#8a7590">Revendedora: <strong style="color:#2d1f35">${esc(nome)}</strong> &nbsp;·&nbsp; Data: ${hoje} &nbsp;·&nbsp; ${vendidas.length} vendida${vendidas.length !== 1 ? 's' : ''} · ${extraviadas.length} extraviada${extraviadas.length !== 1 ? 's' : ''} · ${devolvidas.length} devolvida${devolvidas.length !== 1 ? 's' : ''}</div>
+      <div style="font-size:13px;color:#8a7590">Revendedora: <strong style="color:#2d1f35">${esc(nome)}</strong> &nbsp;·&nbsp; Data: ${hoje} &nbsp;·&nbsp; ${vendidas.length} vendida${vendidas.length !== 1 ? 's' : ''} · ${devolvidas.length} devolvida${devolvidas.length !== 1 ? 's' : ''}</div>
     </div>
     <table style="width:100%;border-collapse:collapse;margin-bottom:18px">
       <thead><tr style="background:#1a0a2e;color:#fff">
@@ -1392,10 +1357,9 @@ export function imprimirRelacaoVendidas() {
       <tbody>${linhas}</tbody>
     </table>
     <div style="margin-left:auto;width:280px;font-size:13px;margin-bottom:40px">
-      <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8a7590">Total vendido (${totalCount(vendidas.concat(extraviadas))} un.)</span><strong>R$ ${Number(d.total_vendido_valor).toFixed(2)}</strong></div>
+      <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8a7590">Total vendido (${totalCount(vendidas)} un.)</span><strong>R$ ${Number(d.total_vendido_valor).toFixed(2)}</strong></div>
       <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8a7590">Comissão (${String(d.comissao_percentual).replace('.', ',')}%)</span><span>− R$ ${Number(d.comissao_valor).toFixed(2)}</span></div>
       <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #ddd;font-weight:700;font-size:15px"><span>A receber</span><span>R$ ${Number(d.valor_a_receber).toFixed(2)}</span></div>
-      ${totalExtrav > 0 ? `<div style="display:flex;justify-content:space-between;padding:4px 0;color:#c0392b"><span>Extraviado (fora do acerto)</span><span>R$ ${totalExtrav.toFixed(2)}</span></div>` : ''}
     </div>
     <div style="display:flex;gap:60px;margin-top:40px">
       <div style="flex:1;border-top:1px solid #ccc;padding-top:8px;font-size:12px;color:#8a7590">Assinatura da revendedora</div>
