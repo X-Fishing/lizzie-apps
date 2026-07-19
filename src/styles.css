@@ -929,4 +929,11 @@ select.cap-inp { cursor:pointer; }
 .cap-menu-sub-item { display:block; width:100%; background:none; border:none; text-align:left;
   padding:7px 10px; border-radius:6px; cursor:pointer; color:var(--plum); font-size:12.5px; }
 .cap-menu-sub-item:hover { background:var(--blush); }
-@media (max-width:640px) { .cap-topo { flex-direction:column; align-items:stretch; } }
+/* Toolbar (mês + abas) e rodapé de totais — layout do redesign */
+.cap-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; margin-bottom:14px; }
+.cap-toolbar .cap-mes-nav { background:#fff; border:1px solid var(--border); border-radius:10px; padding:6px 12px; font-size:16px; }
+.cap-footer { display:flex; justify-content:flex-end; gap:28px; margin-top:14px; padding:14px 20px;
+  background:#fff; border:1px solid var(--border); border-radius:14px; flex-wrap:wrap; }
+.cap-foot-item span { font-size:12px; color:var(--muted); }
+.cap-foot-item b { font-family:'Cormorant Garamond',serif; font-size:16px; color:var(--plum); margin-left:6px; }
+@media (max-width:640px) { .cap-topo, .cap-toolbar { flex-direction:column; align-items:stretch; } }

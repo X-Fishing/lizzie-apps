@@ -113,29 +113,36 @@ export async function loadContasAPagar() {
 // ═══════════════════════════════════════════════════════════════════
 function render() {
   const panel = document.getElementById('panel-contas-a-pagar');
+  const [, mm] = capMes.split('-');
+  const mesNome = (MESES[+mm - 1] || '').toLowerCase();
   panel.innerHTML = `
-    <div class="section-header">
+    <div class="section-header" style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div>
         <div class="section-eyebrow" style="font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)">Financeiro</div>
         <div class="section-title">Contas a Pagar</div>
-        <div class="section-subtitle">Títulos de despesa — edite direto na tabela</div>
+        <div class="section-subtitle" id="cap-subtitle">${capTitulos.length} conta${capTitulos.length !== 1 ? 's' : ''} em ${mesNome}</div>
       </div>
+      ${ehGestor() ? `<button class="btn-primary btn-sm" onclick="capNovaAbrir()">+ Nova Conta</button>` : ''}
     </div>
-    <div class="cap-topo">
+
+    <div id="cap-kpis" class="kpi-grid"></div>
+
+    <div class="cap-toolbar">
       <div class="cap-mes-nav">
         <button class="btn-icon" onclick="capMudarMes(-1)" title="Mês anterior">${IC_PREV}</button>
         <span id="cap-mes-label">${mesLabel(capMes)}</span>
         <button class="btn-icon" onclick="capMudarMes(1)" title="Próximo mês">${IC_NEXT}</button>
       </div>
-      <div id="cap-resumo" class="cap-resumo"></div>
+      <div id="cap-abas" class="chips"></div>
     </div>
-    <div id="cap-abas" class="chips" style="margin-bottom:12px"></div>
+
     <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:12px">
-      <input type="text" class="form-control" style="max-width:260px" placeholder="Buscar por fornecedor, descrição, boleto..."
-        value="${esc(capFiltros.busca)}" oninput="capBuscar(this.value)">
       <div id="cap-chips" class="chips"></div>
+      <input type="text" class="form-control" style="max-width:240px;margin-left:auto" placeholder="Pesquisar na tabela"
+        value="${esc(capFiltros.busca)}" oninput="capBuscar(this.value)">
     </div>
     <div id="cap-grid"></div>
+    <div id="cap-footer" class="cap-footer"></div>
     <input type="file" id="cap-anexo-file" accept="application/pdf,image/*" style="display:none" onchange="capAnexoUpload(this)">`;
   capRenderResumo();
   capRenderAbas();
@@ -143,22 +150,34 @@ function render() {
   capRenderGrid();
 }
 
+// KPI card do topo (número em serif colorido + rótulo), no padrão do app.
+function capKpiCard(label, val, color) {
+  return `<div class="kpi-card"><div class="kpi-val" style="color:${color};margin-top:0">${val}</div>
+    <div class="kpi-label" style="margin-top:5px">${label}</div></div>`;
+}
+
+// Atualiza os KPIs do topo + o rodapé de totais (escopo do mês, todos os grupos).
 function capRenderResumo() {
-  const el = document.getElementById('cap-resumo');
   const lbl = document.getElementById('cap-mes-label');
   if (lbl) lbl.textContent = mesLabel(capMes);
-  if (!el) return;
-  let previsto = 0, pago = 0, falta = 0;
+  let total = 0, pago = 0, aberto = 0, atrasado = 0;
   capTitulos.forEach(t => {
     if (t.status === 'cancelado') return;
-    const v = Number(t.valor || 0);
-    previsto += v;
-    if (t.status === 'pago') pago += v; else falta += v;
+    const v = Number(t.valor || 0); total += v;
+    if (t.status === 'pago') { pago += v; return; }
+    if (statusEfetivo(t) === 'atrasado') atrasado += v; else aberto += v;
   });
-  el.innerHTML = `
-    <div class="cap-resumo-item"><span>Previsto</span><b>${fmtBRL(previsto)}</b></div>
-    <div class="cap-resumo-item"><span>Pago</span><b style="color:var(--success)">${fmtBRL(pago)}</b></div>
-    <div class="cap-resumo-item"><span>Falta</span><b style="color:var(--danger)">${fmtBRL(falta)}</b></div>`;
+  const kpis = document.getElementById('cap-kpis');
+  if (kpis) kpis.innerHTML =
+    capKpiCard('Total do mês', fmtBRL(total), 'var(--plum)') +
+    capKpiCard('Pago', fmtBRL(pago), 'var(--success)') +
+    capKpiCard('Em aberto', fmtBRL(aberto), 'var(--gold)') +
+    capKpiCard('Atrasado', fmtBRL(atrasado), 'var(--danger)');
+  const footer = document.getElementById('cap-footer');
+  if (footer) footer.innerHTML =
+    `<div class="cap-foot-item"><span>Total</span><b>${fmtBRL(total)}</b></div>
+     <div class="cap-foot-item"><span>Pago</span><b style="color:var(--success)">${fmtBRL(pago)}</b></div>
+     <div class="cap-foot-item"><span>A pagar</span><b style="color:var(--gold)">${fmtBRL(aberto + atrasado)}</b></div>`;
 }
 
 function capRenderAbas() {
