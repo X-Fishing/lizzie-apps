@@ -122,7 +122,7 @@ function render() {
         <div class="section-title">Contas a Pagar</div>
         <div class="section-subtitle" id="cap-subtitle">${capTitulos.length} conta${capTitulos.length !== 1 ? 's' : ''} em ${mesNome}</div>
       </div>
-      ${ehGestor() ? `<button class="btn-primary btn-sm" onclick="capNovaAbrir()">+ Nova Conta</button>` : ''}
+      ${ehGestor() ? `<button class="btn-primary btn-sm" style="width:auto;flex:none" onclick="capNovaAbrir()">+ Nova Conta</button>` : ''}
     </div>
 
     <div id="cap-kpis" class="kpi-grid"></div>
