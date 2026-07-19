@@ -15,8 +15,12 @@
 -- SECURITY INVOKER: roda com as permissões do usuário logado, respeitando
 -- as policies de RLS (revendedora só mexe nas próprias linhas).
 -- 0023: ganhou p_tel/p_nasc/p_combinada (DEFAULT null → retrocompatível).
--- A assinatura mudou; drop antes p/ não virar overload ambíguo no PostgREST.
+-- 0029: upserta a cliente (fidelidade), grava vendas.cliente_id e passou a
+--   RETORNAR jsonb {venda_id, cliente_id, fidelidade}. O front antigo descarta
+--   o retorno, então é retrocompatível. Mudança de tipo de retorno → drop antes.
+--   O trigger aplicar_fidelidade (0029) credita os selos após o insert.
 drop function if exists public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb);
+drop function if exists public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb,text,date,date);
 create or replace function public.registrar_venda(
   p_cliente   text,
   p_data      date,
@@ -30,14 +34,16 @@ create or replace function public.registrar_venda(
   p_nasc      date default null,
   p_combinada date default null
 )
-returns uuid
+returns jsonb
 language plpgsql
 security invoker
 set search_path = public
 as $$
 declare
-  v_venda_id uuid;
-  v_item     jsonb;
+  v_venda_id   uuid;
+  v_item       jsonb;
+  v_cliente_id uuid;
+  v_fid        jsonb;
 begin
   if auth.uid() is null then
     raise exception 'nao autenticado';
@@ -46,14 +52,16 @@ begin
     raise exception 'venda sem itens';
   end if;
 
+  v_cliente_id := public.cliente_upsert_para_venda(p_cliente, p_tel, p_nasc);
+
   insert into vendas (
     revendedora_id, nome_cliente, data_venda, forma_pagamento,
     valor_total, valor_pago, status, observacao,
-    telefone_cliente, nascimento_cliente, data_combinada
+    telefone_cliente, nascimento_cliente, data_combinada, cliente_id
   ) values (
     auth.uid(), p_cliente, p_data, p_forma,
     p_total, p_pago, p_status, p_obs,
-    p_tel, p_nasc, p_combinada
+    p_tel, p_nasc, p_combinada, v_cliente_id
   )
   returning id into v_venda_id;
 
@@ -80,7 +88,19 @@ begin
     values (v_venda_id, p_pago, p_data);
   end if;
 
-  return v_venda_id;
+  select jsonb_build_object(
+    'selos_ganhos',         s.quantidade,
+    'excedente_descartado', s.excedente_descartado,
+    'cartela_selos',        (select selos from fidelidade_cartelas
+                              where cliente_id = v_cliente_id and status = 'aberta'),
+    'completou',            exists (select 1 from fidelidade_cartelas c
+                              where c.id = s.cartela_id and c.status = 'completa'),
+    'premio_pendente',      exists (select 1 from fidelidade_premios p
+                              where p.cliente_id = v_cliente_id and p.status = 'pendente')
+  ) into v_fid
+  from fidelidade_selos s where s.venda_id = v_venda_id;
+
+  return jsonb_build_object('venda_id', v_venda_id, 'cliente_id', v_cliente_id, 'fidelidade', v_fid);
 end;
 $$;
 
