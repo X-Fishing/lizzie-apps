@@ -4,7 +4,8 @@
 import { state } from './state.js';
 import { esc, fmtBRL, openModal, closeModal, toast } from './utils.js';
 import { renderCartelaFidelidade } from './fidelidade.js';
-import { enviarWhatsApp } from './whatsapp.js';
+import { enviarWhatsApp, abrirWhatsAppAposAsync } from './whatsapp.js';
+import { gerarEEnviarCertificado } from './certificado.js';
 
 const primeiroNome = n => (n || '').trim().split(/\s+/)[0] || 'cliente';
 
@@ -33,6 +34,16 @@ export function abrirModalPosVenda(ret, snapshot) {
       <button class="btn-secondary" style="width:100%;border:none;color:var(--muted)" onclick="closeModalPosVenda()">Concluir</button>
     </div>`;
   openModal('modal-pos-venda');
+  prepararCertificado(state.posVendaCtx);   // pré-gera em background (clique fica síncrono)
+}
+
+// Pré-gera o certificado logo após a venda; guarda o link no contexto.
+function prepararCertificado(ctx) {
+  if (!ctx || !ctx.vendaId) return;
+  ctx.certificado = { status: 'gerando' };
+  gerarEEnviarCertificado({ vendaId: ctx.vendaId, cliente: ctx.cliente, tel: ctx.tel, dataISO: ctx.dataISO, itens: ctx.itens })
+    .then(r => { ctx.certificado = { status: 'pronto', ...r }; })
+    .catch(e => { console.error('prepararCertificado', e); ctx.certificado = { status: 'erro' }; });
 }
 
 export function closeModalPosVenda() { closeModal('modal-pos-venda'); }
@@ -49,5 +60,14 @@ export function posVendaEnviarSelos() {
   enviarWhatsApp({ telefone: c.tel, mensagem });
 }
 
-// Stub — a geração/envio do certificado de garantia é implementada na Fase 5.
-export function posVendaEnviarGarantia() { toast('Certificado de garantia em breve.'); }
+export function posVendaEnviarGarantia() {
+  const c = state.posVendaCtx;
+  if (!c || !c.vendaId) { toast('Venda sem dados para o certificado'); return; }
+  const cert = c.certificado;
+  if (cert?.status === 'pronto' && cert.waLink) { window.open(cert.waLink, '_blank'); return; }
+  // Ainda gerando ou falhou → gera agora (janela pré-aberta evita bloqueio de popup).
+  abrirWhatsAppAposAsync(
+    gerarEEnviarCertificado({ vendaId: c.vendaId, cliente: c.cliente, tel: c.tel, dataISO: c.dataISO, itens: c.itens })
+      .then(r => { c.certificado = { status: 'pronto', ...r }; return r.waLink; })
+  ).then(ok => { if (!ok) toast('Não foi possível gerar o certificado — use Reenviar no detalhe da venda'); });
+}
