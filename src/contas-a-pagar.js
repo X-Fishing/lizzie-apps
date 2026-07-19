@@ -238,10 +238,10 @@ function capRenderGrid() {
   }
 
   el.innerHTML = `<div class="pag-wrap"><table class="pag-table cap-grid-table"><thead><tr>
-    <th class="pag-th" style="width:26px"></th><th class="pag-th">Pago?</th><th class="pag-th">Vencimento</th>
+    <th class="pag-th" style="width:26px"></th><th class="pag-th">Vencimento</th>
     <th class="pag-th">Descrição</th><th class="pag-th">Fornecedor</th><th class="pag-th">Categoria</th>
     <th class="pag-th">Forma</th><th class="pag-th" style="text-align:right">Valor</th>
-    <th class="pag-th">Anexo</th><th class="pag-th"></th>
+    <th class="pag-th">Anexo</th><th class="pag-th"></th><th class="pag-th" style="text-align:center">Pago?</th>
   </tr></thead><tbody>${novaEdit}${novaRow}${corpo}</tbody></table></div>`;
 }
 
@@ -256,7 +256,6 @@ function capLinhaHtml(t) {
     : `<label class="cap-switch"><input type="checkbox" ${t.status === 'pago' ? 'checked' : ''} ${!ehGestor() ? 'disabled' : ''} onchange="capTogglePago('${t.id}',this.checked)"><span></span></label>`;
   return `<tr class="cap-row${cancel ? ' cap-cancelada' : ''}" data-id="${t.id}">
     <td class="ciclo-td" style="width:26px"><button class="cap-chevron${aberto ? ' aberto' : ''}" onclick="capToggleDetalhe('${t.id}')" title="Detalhes">${IC_CHEV}</button></td>
-    <td class="ciclo-td" style="text-align:center">${pagoCel}</td>
     <td class="ciclo-td"><input type="date" class="cap-inp${ef === 'atrasado' ? ' cap-atrasada' : ''}" value="${esc(t.vencimento || '')}" ${dis} onchange="capCampoChange('${t.id}','vencimento',this)"></td>
     <td class="ciclo-td"><input type="text" class="cap-inp" style="min-width:130px" value="${esc(t.descricao || '')}" ${dis} onchange="capCampoChange('${t.id}','descricao',this)">${temDet ? '<span class="cap-dot" title="tem observação/boleto"></span>' : ''}</td>
     <td class="ciclo-td"><select class="cap-inp" data-cap-sel="fornecedores" ${dis} onchange="capCampoChange('${t.id}','fornecedor_id',this)">${optsForn(t.fornecedor_id)}</select></td>
@@ -265,6 +264,7 @@ function capLinhaHtml(t) {
     <td class="ciclo-td" style="text-align:right"><input type="text" class="cap-inp cap-valor" inputmode="numeric" value="${t.valor ? moneyToInput(t.valor) : ''}" ${dis} oninput="maskMoneyBR(this)" onchange="capCampoChange('${t.id}','valor',this)"></td>
     <td class="ciclo-td" style="white-space:nowrap">${capAnexoCel(t)}</td>
     <td class="ciclo-td" style="text-align:right">${ehGestor() ? `<button class="btn-icon" data-cap-menu-btn onclick="capMenuAbrir('${t.id}',this)" title="Ações">${IC_CARET}</button>` : '—'}</td>
+    <td class="ciclo-td" style="text-align:center">${pagoCel}</td>
   </tr>`;
 }
 
@@ -295,7 +295,7 @@ function capAnexoCel(t) {
 function capNovaRowHtml() {
   const vencDefault = capMes === hojeISO().slice(0, 7) ? hojeISO() : `${capMes}-01`;
   return `<tr class="cap-nova">
-    <td class="ciclo-td"></td><td class="ciclo-td"></td>
+    <td class="ciclo-td"></td>
     <td class="ciclo-td"><input type="date" id="cap-novo-venc" class="cap-inp" value="${vencDefault}"></td>
     <td class="ciclo-td"><input type="text" id="cap-novo-desc" class="cap-inp" placeholder="Descrição"></td>
     <td class="ciclo-td"><select id="cap-novo-forn" class="cap-inp" data-cap-sel="fornecedores" onchange="capCampoChange('novo','fornecedor_id',this)">${optsForn('')}</select></td>
@@ -303,7 +303,8 @@ function capNovaRowHtml() {
     <td class="ciclo-td"><select id="cap-novo-forma" class="cap-inp">${optsForma('')}</select></td>
     <td class="ciclo-td" style="text-align:right"><input type="text" id="cap-novo-valor" class="cap-inp cap-valor" inputmode="numeric" oninput="maskMoneyBR(this)" placeholder="0,00"></td>
     <td class="ciclo-td"></td>
-    <td class="ciclo-td" style="text-align:right;white-space:nowrap"><button class="btn-primary btn-sm" id="cap-novo-salvar" onclick="capNovaSalvar()">Salvar</button> <button class="btn-secondary btn-sm" onclick="capNovaCancelar()">×</button></td>
+    <td class="ciclo-td" style="text-align:right;white-space:nowrap"><button class="btn-primary btn-sm" style="width:auto" id="cap-novo-salvar" onclick="capNovaSalvar()">Salvar</button> <button class="btn-secondary btn-sm" onclick="capNovaCancelar()">×</button></td>
+    <td class="ciclo-td"></td>
   </tr>`;
 }
 
