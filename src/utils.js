@@ -246,3 +246,16 @@ export function previewFoto(input, previewId, placeholderId) {
   };
   reader.readAsDataURL(file);
 }
+
+// ── Telefone / WhatsApp ────────────────────────────────────────────────
+// Só dígitos. telWa55 prefixa 55 quando o número vem sem DDI (10-11 dígitos).
+export function soDigitos(s) { return String(s || '').replace(/\D/g, ''); }
+export function telWa55(tel) {
+  const d = soDigitos(tel);
+  if (d.length < 10) return null;
+  return d.length <= 11 ? '55' + d : d;
+}
+export function waMeLink(tel, msg) {
+  const n = telWa55(tel);
+  return n ? `https://wa.me/${n}?text=${encodeURIComponent(msg || '')}` : null;
+}
