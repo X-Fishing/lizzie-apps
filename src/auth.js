@@ -109,6 +109,7 @@ function montarAppUI() {
   document.getElementById('nav-trocas').style.display = ehStaff() ? 'flex' : 'none';
   document.getElementById('nav-pagamentos').style.display = ehRevendedora ? 'flex' : 'none';
   document.getElementById('nav-historico').style.display = ehRevendedora ? 'flex' : 'none';
+  document.getElementById('nav-fidelidade').style.display = ehRevendedora ? 'flex' : 'none';
   // Dashboard PC (barra lateral) só para staff; o CSS faz o resto em telas >=900px.
   document.getElementById('app').classList.toggle('staff-desktop', ehStaff());
 
