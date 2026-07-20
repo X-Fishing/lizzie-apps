@@ -119,9 +119,24 @@ export function formatDate(d) {
   return `${day}/${m}/${y}`;
 }
 
-export function toast(msg) {
+// Regra (pedido do dono): silenciar as mensagens de SUCESSO/CONFIRMAÇÃO — elas
+// apareciam o tempo todo e incomodavam. Erros e avisos de validação continuam
+// aparecendo para todos (a revendedora precisa deles). A classificação é por
+// palavra-chave e ENVIESADA PARA MOSTRAR: na dúvida, aparece; só some quando é
+// claramente uma confirmação. Para forçar exibir algo, passe tipo 'erro'.
+const RE_ALERTA  = /erro|falh|inv[aá]lid|n[aã]o |sem |informe|preench|selecion|obrigat|tente|permit|escolh|digite|confir|limite|vazi|j[aá] existe|expir|negad|duplicat|nenhum|conex|precis|falta|inesperad/i;
+const RE_SUCESSO = /salv|registrad|adicionad|exclu[ií]d|deletad|remov|enviad|atualizad|importad|copiad|conclu|aprovad|resgatad|movid|finalizad|encerrad|gerad|duplicad|criad|marcad|desativad|ativad/i;
+
+export function toast(msg, tipo) {
   const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('show');
+  if (!t) return;
+  const m = String(msg || '');
+  if (tipo !== 'erro') {
+    const ehAlerta = RE_ALERTA.test(m);
+    const ehSucesso = !ehAlerta && (RE_SUCESSO.test(m) || /!\s*$/.test(m));
+    if (ehSucesso) return;   // silencia confirmações
+  }
+  t.textContent = m; t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 2800);
 }
 
