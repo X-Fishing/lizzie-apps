@@ -2,8 +2,7 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, parseMoneyBR, moneyToInput, hojeBR, brToISO } from './utils.js';
-import { abrirWhatsAppAposAsync } from './whatsapp.js';
-import { gerarEEnviarCertificado } from './certificado.js';
+import { enviarCertificado } from './certificado.js';
 export async function loadVendas() {
   document.getElementById('p-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
   let q = sb.from('vendas').select('*').eq('revendedora_id', state.currentUser.id);
@@ -144,16 +143,18 @@ export async function verVenda(id) {
 }
 
 // Regenera e reenvia o certificado de garantia de uma venda já registrada.
-export function reenviarGarantiaVenda(id) {
+export async function reenviarGarantiaVenda(id) {
   const v = state.allVendas.find(x => x.id === id);
   if (!v) { toast('Venda não encontrada'); return; }
   const itens = (state.vendaItensCache[id] || []).map(it => ({
     descricao: it.descricao, referencia: it.referencia || null, quantidade: it.quantidade,
   }));
-  abrirWhatsAppAposAsync(
-    gerarEEnviarCertificado({ vendaId: id, cliente: v.nome_cliente, tel: v.telefone_cliente, dataISO: v.data_venda, itens })
-      .then(r => r.waLink)
-  ).then(ok => { if (!ok) toast('Não foi possível gerar o certificado — tente de novo'); });
+  try {
+    await enviarCertificado({ vendaId: id, cliente: v.nome_cliente, tel: v.telefone_cliente, dataISO: v.data_venda, itens });
+  } catch (e) {
+    console.error('reenviarGarantiaVenda', e);
+    toast('Não foi possível enviar o certificado — tente de novo', 'erro');
+  }
 }
 
 export async function excluirVenda(id) {

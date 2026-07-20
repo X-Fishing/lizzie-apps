@@ -1,7 +1,7 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
 const soDigitos = s => (s || '').replace(/\D/g, '');
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 import { abrirModalPosVenda } from './pos-venda.js';
@@ -1547,6 +1547,8 @@ async function buscarClientePorTelefone(tel) {
   if (cli) {
     state.vendaClienteId = cli.id;
     if (!nomeEl.value.trim()) nomeEl.value = cli.nome || '';
+    const nascEl = document.getElementById('f-nasc');
+    if (nascEl && !nascEl.value.trim() && cli.nascimento) nascEl.value = isoToBR(cli.nascimento);
     if (status) status.innerHTML = `<span style="color:var(--rose)">Cliente já cadastrada · ${cli.selos ?? 0}/10 selos</span>`;
   } else {
     state.vendaClienteId = null;

@@ -4,8 +4,8 @@
 import { state } from './state.js';
 import { esc, fmtBRL, openModal, closeModal, toast } from './utils.js';
 import { renderCartelaFidelidade } from './fidelidade.js';
-import { enviarWhatsApp, abrirWhatsAppAposAsync } from './whatsapp.js';
-import { gerarEEnviarCertificado } from './certificado.js';
+import { enviarWhatsApp } from './whatsapp.js';
+import { gerarCertificadoGarantia, uploadCertificado, enviarCertificado } from './certificado.js';
 
 const primeiroNome = n => (n || '').trim().split(/\s+/)[0] || 'cliente';
 
@@ -41,11 +41,16 @@ export function abrirModalPosVenda(ret, snapshot) {
 }
 
 // Pré-gera o certificado logo após a venda; guarda o link no contexto.
+// Pré-gera a imagem (p/ o clique compartilhar na hora) e sobe em background
+// (p/ o fallback de link no PC). O clique não espera nada disso.
 function prepararCertificado(ctx) {
   if (!ctx || !ctx.vendaId) return;
   ctx.certificado = { status: 'gerando' };
-  gerarEEnviarCertificado({ vendaId: ctx.vendaId, cliente: ctx.cliente, tel: ctx.tel, dataISO: ctx.dataISO, itens: ctx.itens })
-    .then(r => { ctx.certificado = { status: 'pronto', ...r }; })
+  gerarCertificadoGarantia({ cliente: ctx.cliente, dataISO: ctx.dataISO, itens: ctx.itens })
+    .then(async (blob) => {
+      ctx.certificado = { status: 'pronto', blob };
+      try { ctx.certificado.publicUrl = await uploadCertificado(ctx.vendaId, blob); } catch { /* fallback só p/ PC */ }
+    })
     .catch(e => { console.error('prepararCertificado', e); ctx.certificado = { status: 'erro' }; });
 }
 
@@ -63,14 +68,17 @@ export function posVendaEnviarSelos() {
   enviarWhatsApp({ telefone: c.tel, mensagem });
 }
 
-export function posVendaEnviarGarantia() {
+export async function posVendaEnviarGarantia() {
   const c = state.posVendaCtx;
   if (!c || !c.vendaId) { toast('Venda sem dados para o certificado'); return; }
-  const cert = c.certificado;
-  if (cert?.status === 'pronto' && cert.waLink) { window.open(cert.waLink, '_blank'); return; }
-  // Ainda gerando ou falhou → gera agora (janela pré-aberta evita bloqueio de popup).
-  abrirWhatsAppAposAsync(
-    gerarEEnviarCertificado({ vendaId: c.vendaId, cliente: c.cliente, tel: c.tel, dataISO: c.dataISO, itens: c.itens })
-      .then(r => { c.certificado = { status: 'pronto', ...r }; return r.waLink; })
-  ).then(ok => { if (!ok) toast('Não foi possível gerar o certificado — use Reenviar no detalhe da venda'); });
+  const cert = c.certificado || {};
+  try {
+    await enviarCertificado({
+      vendaId: c.vendaId, cliente: c.cliente, tel: c.tel, dataISO: c.dataISO, itens: c.itens,
+      blob: cert.status === 'pronto' ? cert.blob : null, publicUrl: cert.publicUrl,
+    });
+  } catch (e) {
+    console.error('posVendaEnviarGarantia', e);
+    toast('Não foi possível enviar o certificado — use Reenviar no detalhe da venda', 'erro');
+  }
 }

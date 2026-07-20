@@ -96,10 +96,26 @@ export async function uploadCertificado(vendaId, blob) {
   return `${url}?v=${Date.now()}`;   // cache-bust p/ o reenvio
 }
 
-// Gera + sobe + monta o wa.me. Lança em qualquer falha (o chamador trata).
-export async function gerarEEnviarCertificado({ vendaId, cliente, tel, dataISO, itens }) {
-  const blob = await gerarCertificadoGarantia({ cliente, dataISO, itens });
-  const publicUrl = await uploadCertificado(vendaId, blob);
-  const mensagem = `Oi ${primeiroNome(cliente)}! Aqui está o certificado de garantia das suas joias Lizzie Semijoias, válido até ${validadeBR(dataISO)}:`;
-  return { publicUrl, waLink: waMeLink(tel, `${mensagem}\n${publicUrl}`) };
+function msgGarantia(cliente, dataISO) {
+  return `Oi ${primeiroNome(cliente)}! Aqui está o certificado de garantia das suas joias Lizzie Semijoias, válido até ${validadeBR(dataISO)}.`;
+}
+
+// Envia o certificado. No CELULAR compartilha a IMAGEM de verdade (share nativo →
+// abre o WhatsApp com a foto anexada, de graça). Sem suporte (PC), sobe a imagem e
+// manda o LINK no wa.me. Passe `blob`/`publicUrl` pré-gerados p/ o clique ficar
+// síncrono (o share nativo exige gesto do usuário). Lança só em falha real.
+export async function enviarCertificado({ vendaId, cliente, tel, dataISO, itens, blob, publicUrl }) {
+  const mensagem = msgGarantia(cliente, dataISO);
+  const b = blob || await gerarCertificadoGarantia({ cliente, dataISO, itens });
+  const file = new File([b], `garantia-${vendaId || 'lizzie'}.png`, { type: 'image/png' });
+
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], text: mensagem }); return true; }
+    catch (e) { if (e && e.name === 'AbortError') return true; /* senão cai no link */ }
+  }
+  // Fallback: link no wa.me (usa a URL pré-gerada p/ não travar em popup no PC).
+  const url = publicUrl || await uploadCertificado(vendaId, b);
+  const link = waMeLink(tel, `${mensagem}\n${url}`);
+  if (link) { window.open(link, '_blank'); return true; }
+  return false;
 }
