@@ -133,6 +133,18 @@ Object.assign(window, { renderAprovadas, renderGarantiaCard, ehAdmin, ehStaff, e
 // START
 init();
 
+// PWA — mantem o app atualizado no celular sem "limpar cache". O vite-plugin-pwa
+// (registerType: 'autoUpdate') recarrega sozinho quando ACHA uma versao nova; o
+// problema e que o PWA so checa de vez em quando. Aqui forcamos a checagem a cada
+// 60s e sempre que o app volta ao foco — assim o deploy novo entra sozinho.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.ready.then((reg) => {
+    const checar = () => { reg.update().catch(() => {}); };
+    setInterval(checar, 60 * 1000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) checar(); });
+  }).catch(() => {});
+}
+
 // PWA — botao "Instalar app" + banner iOS. O registro do service worker e feito
 // pelo vite-plugin-pwa (registerType: 'autoUpdate').
 (function () {
