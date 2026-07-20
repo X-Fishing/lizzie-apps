@@ -4,6 +4,7 @@ import { state } from './state.js';
 import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
 const soDigitos = s => (s || '').replace(/\D/g, '');
 import { IS_ADMIN, PERMISSOES } from './menu.js';
+import { abrirModalPosVenda } from './pos-venda.js';
 export async function loadConsignados() {
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
   const isAdmin = ehStaff();
@@ -1556,7 +1557,7 @@ export async function confirmarVendaCarrinho(btn) {
     // Venda atômica via RPC: cria venda + itens + recebimento e incrementa
     // quantidade_vendida numa única transação (ver db-functions.sql).
     // Evita venda órfã sem itens e a race condition do read-modify-write.
-    const { error: errRpc } = await sbQ(
+    const { data: vendaRet, error: errRpc } = await sbQ(
       sb.rpc('registrar_venda', {
         p_cliente: cliente,
         p_data: data,
@@ -1588,12 +1589,19 @@ export async function confirmarVendaCarrinho(btn) {
       return;
     }
 
+    // Snapshot da venda ANTES de zerar o carrinho (o modal pós-venda usa).
+    const snapshot = {
+      cliente, tel, dataISO: data, total,
+      itens: state.carrinhoVenda.map(i => ({ descricao: i.descricao, referencia: i.referencia || null, quantidade: i.quantidade })),
+    };
     state.carrinhoVenda = [];
     resetBtn();
-    toast('Venda registrada!');
     closeModal('modal-finalizar');
     renderCartBar();
     state.allVendas = [];
+    // Modal pós-venda (selos + garantia). Fallback p/ banco antigo (retorno uuid string).
+    if (vendaRet && typeof vendaRet === 'object') abrirModalPosVenda(vendaRet, snapshot);
+    else toast('Venda registrada!');
     await loadConsignados();
   } catch (e) {
     console.error('Falha inesperada na venda:', e);

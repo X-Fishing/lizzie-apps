@@ -17,6 +17,11 @@ verify_jwt = false
 [functions.bling-produto-foto]
 verify_jwt = false
 
+# Envio de WhatsApp (fidelidade/garantia). No modo 'none' só monta o link wa.me;
+# nos modos pagos faz a própria checagem. Portão sem JWT como as demais.
+[functions.whatsapp-enviar]
+verify_jwt = false
+
 # Callback OAuth (o Bling redireciona o navegador pra cá — não tem como mandar JWT)
 [functions.bling-auth]
 verify_jwt = false
