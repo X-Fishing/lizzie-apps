@@ -9,11 +9,14 @@ import { gerarEEnviarCertificado } from './certificado.js';
 
 const primeiroNome = n => (n || '').trim().split(/\s+/)[0] || 'cliente';
 
-// ret = jsonb do registrar_venda; snapshot = { cliente, tel, dataISO, total, itens }
+// ret = retorno do registrar_venda (jsonb novo OU uuid string do banco antigo).
+// O modal SEMPRE abre: a garantia funciona só com o id da venda; a fidelidade
+// aparece quando o retorno traz o resumo (registrar_venda em jsonb).
 export function abrirModalPosVenda(ret, snapshot) {
-  // Banco antigo (retorno uuid string) ou sem cliente vinculada → sem fidelidade.
-  const fid = (ret && typeof ret === 'object') ? ret.fidelidade : null;
-  state.posVendaCtx = { ...snapshot, vendaId: ret?.venda_id || null, fid };
+  const isObj = ret && typeof ret === 'object';
+  const vendaId = isObj ? (ret.venda_id || null) : (typeof ret === 'string' ? ret : null);
+  const fid = isObj ? ret.fidelidade : null;
+  state.posVendaCtx = { ...snapshot, vendaId, fid };
 
   const bloco = fid ? `
     <div style="text-align:center;margin:16px 0 4px">

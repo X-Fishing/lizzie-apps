@@ -1634,9 +1634,11 @@ export async function confirmarVendaCarrinho(btn) {
     closeModal('modal-finalizar');
     renderCartBar();
     state.allVendas = [];
-    // Modal pós-venda (selos + garantia). Fallback p/ banco antigo (retorno uuid string).
-    if (vendaRet && typeof vendaRet === 'object') abrirModalPosVenda(vendaRet, snapshot);
-    else toast('Venda registrada!');
+    // Modal pós-venda (selos + garantia). Abre sempre — mesmo com retorno antigo
+    // (uuid), o modal aparece com a garantia; a fidelidade entra quando o banco
+    // retorna o resumo (registrar_venda em jsonb).
+    try { abrirModalPosVenda(vendaRet, snapshot); }
+    catch (e) { console.error('modal pos-venda', e); toast('Venda registrada.', 'erro'); }
     await loadConsignados();
   } catch (e) {
     console.error('Falha inesperada na venda:', e);
