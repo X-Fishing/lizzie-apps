@@ -88,13 +88,15 @@ begin
     values (v_venda_id, p_pago, p_data);
   end if;
 
+  -- 0030: a venda pode gerar selos em 2 cartelas (excedente acumula) → soma.
   select jsonb_build_object(
-    'selos_ganhos',         s.quantidade,
-    'excedente_descartado', s.excedente_descartado,
+    'selos_ganhos',         coalesce(sum(s.quantidade), 0),
+    'excedente_descartado', 0,
     'cartela_selos',        (select selos from fidelidade_cartelas
                               where cliente_id = v_cliente_id and status = 'aberta'),
-    'completou',            exists (select 1 from fidelidade_cartelas c
-                              where c.id = s.cartela_id and c.status = 'completa'),
+    'completou',            exists (select 1 from fidelidade_selos s2
+                              join fidelidade_cartelas c on c.id = s2.cartela_id
+                              where s2.venda_id = v_venda_id and c.status = 'completa'),
     'premio_pendente',      exists (select 1 from fidelidade_premios p
                               where p.cliente_id = v_cliente_id and p.status = 'pendente')
   ) into v_fid
