@@ -1516,8 +1516,43 @@ export function abrirFinalizarVenda() {
   document.getElementById('f-forma').value = 'Pix';
   document.getElementById('f-combinada').value = '';
   document.getElementById('f-obs').value = '';
+  document.getElementById('f-cliente-status').innerHTML = '';
+  state.vendaClienteId = null;
   ajustarValorPago();
   openModal('modal-finalizar');
+  // Telefone é o gatilho do autocomplete → foca nele ao abrir.
+  setTimeout(() => document.getElementById('f-tel')?.focus(), 120);
+}
+
+// ── Autocomplete da cliente pelo telefone (chave única) ────────────────
+let _vendaTelTimer = null;
+export function vendaTelefoneInput() {
+  const status = document.getElementById('f-cliente-status');
+  const tel = soDigitos(document.getElementById('f-tel').value);
+  state.vendaClienteId = null;
+  clearTimeout(_vendaTelTimer);
+  if (tel.length < 10) { if (status) status.innerHTML = ''; return; }
+  if (status) status.innerHTML = '<span style="color:var(--muted)">Buscando cliente…</span>';
+  _vendaTelTimer = setTimeout(() => buscarClientePorTelefone(tel), 400);
+}
+
+async function buscarClientePorTelefone(tel) {
+  const status = document.getElementById('f-cliente-status');
+  const nomeEl = document.getElementById('f-cliente');
+  // Confere se o telefone ainda é o mesmo (evita resultado atrasado sobrescrever)
+  const { data, error } = await sbQ(sb.rpc('buscar_cliente_por_telefone', { p_telefone: tel }));
+  if (soDigitos(document.getElementById('f-tel').value) !== tel) return; // usuário mudou
+  if (error) { if (status) status.innerHTML = ''; return; }
+  const cli = data && data[0];
+  if (cli) {
+    state.vendaClienteId = cli.id;
+    if (!nomeEl.value.trim()) nomeEl.value = cli.nome || '';
+    if (status) status.innerHTML = `<span style="color:var(--rose)">Cliente já cadastrada · ${cli.selos ?? 0}/10 selos</span>`;
+  } else {
+    state.vendaClienteId = null;
+    if (status) status.innerHTML = '<span style="color:var(--muted)">Nova cliente</span>';
+    if (!nomeEl.value.trim()) nomeEl.focus();
+  }
 }
 
 export function ajustarValorPago() {

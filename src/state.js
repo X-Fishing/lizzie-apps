@@ -21,6 +21,7 @@ export const state = {
   maletaAtivaId: null,       // revendedora: id da maleta 'ativa' (catálogo só mostra ela)
   historicoCicloSel: null,
   carrinhoVenda: [],
+  vendaClienteId: null,       // cliente encontrada pelo autocomplete de telefone (PDV)
   posVendaCtx: null,          // contexto do modal pós-venda (fidelidade + garantia)
   blingRevs: [],
   blingItensAtual: [],
