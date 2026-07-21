@@ -17,10 +17,12 @@ const idAbrev = id => String(id || '').slice(0, 8);
 // bater na conciliação bancária). Cada linha vira 1 lançamento no financeiro.
 const REC_FORMAS = ['PIX', 'Dinheiro', 'Transferência', 'Cartão', 'Outro'];
 const IC_TRASH_REC = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
-function recRowHtml(forma = 'PIX', valor = '') {
-  return `<div class="rec-pag-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
-    <select class="form-control rec-pag-forma" style="max-width:150px" onchange="recRecalc()">${REC_FORMAS.map(f => `<option ${f === forma ? 'selected' : ''}>${f}</option>`).join('')}</select>
-    <input type="text" class="form-control rec-pag-valor" inputmode="numeric" placeholder="0,00" value="${valor}" oninput="maskMoneyBR(this);recRecalc()">
+function recRowHtml(forma = 'PIX', valor = '', data = '') {
+  const d = data || hojeISO();
+  return `<div class="rec-pag-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap">
+    <select class="form-control rec-pag-forma" style="flex:1;min-width:110px" onchange="recRecalc()">${REC_FORMAS.map(f => `<option ${f === forma ? 'selected' : ''}>${f}</option>`).join('')}</select>
+    <input type="text" class="form-control rec-pag-valor" style="flex:1;min-width:100px" inputmode="numeric" placeholder="0,00" value="${valor}" oninput="maskMoneyBR(this);recRecalc()">
+    <input type="date" class="form-control rec-pag-data" style="flex:1;min-width:130px" value="${d}" max="${hojeISO()}" title="Data em que o pagamento caiu">
     <button type="button" class="btn-icon" style="color:var(--danger);flex-shrink:0" onclick="recRemovePagamento(this)" title="Remover pagamento">${IC_TRASH_REC}</button>
   </div>`;
 }
@@ -259,6 +261,7 @@ export async function registrarRecebimento(btn) {
   const entradas = [...document.querySelectorAll('#rec-lista .rec-pag-row')].map(row => ({
     forma: row.querySelector('.rec-pag-forma').value,
     valor: r2(parseMoneyBR(row.querySelector('.rec-pag-valor').value)),
+    data: row.querySelector('.rec-pag-data')?.value || hojeISO(),
   })).filter(e => e.valor > 0);
   const agora = r2(entradas.reduce((s, e) => s + e.valor, 0));
   if (agora <= 0) { toast('Informe ao menos um pagamento com valor.'); return; }
@@ -285,7 +288,7 @@ export async function registrarRecebimento(btn) {
     numero_interno: f.numero_interno ?? null,
     fechamento_data: (f.created_at || '').slice(0, 10) || null,
   };
-  const pagos = entradas.map(e => ({ ...base, forma_pagamento: e.forma, valor: e.valor, pago: true, data_recebimento: hojeISO() }));
+  const pagos = entradas.map(e => ({ ...base, forma_pagamento: e.forma, valor: e.valor, pago: true, data_recebimento: e.data }));
 
   // 1) grava os recebidos
   const e1 = await insLanc(pagos);
