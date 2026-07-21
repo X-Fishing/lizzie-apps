@@ -1,9 +1,10 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
 const soDigitos = s => (s || '').replace(/\D/g, '');
 import { IS_ADMIN, PERMISSOES } from './menu.js';
+import { abrirModalPosVenda } from './pos-venda.js';
 export async function loadConsignados() {
   confTelaAberta = false; fechTelaAberta = false;
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
@@ -503,6 +504,7 @@ export function renderCicloAdminDetalhe(revId, list) {
     ? `<div class="btn-group" style="margin-top:12px">
         <button class="btn btn-outline" data-bling-id="${state.revBlingMap[revId] || ''}" data-rev-nome="${esc(nome)}" onclick="atualizarMaleta('${revId}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Atualizar itens da maleta</button>
         ${temAtivos ? `<button class="btn btn-danger" onclick="deletarCicloRev('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Excluir maleta aguardando</button>` : ''}
+        ${IS_ADMIN && temAtivos ? `<button class="btn btn-danger" onclick="excluirMaletaAdmin('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Excluir maleta ativa</button>` : ''}
       </div>`
     : (temAtivos ? '' : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem catálogo ativo</div>`);
 
@@ -1462,6 +1464,43 @@ export async function deletarCicloRev(revId) {
     });
 }
 
+// Admin: exclui a maleta ATIVA inteira (peças + linha da maleta). Trava de
+// segurança: se houver peças vendidas, bloqueia — apagar a maleta corromperia
+// vendas/recebimentos/financeiro (nesse caso o caminho é estornar/finalizar,
+// não excluir). O gargalo do deletarCicloRev era só cobrir 'aguardando'.
+export async function excluirMaletaAdmin(revId) {
+  if (!IS_ADMIN) { toast('Apenas admin pode excluir a maleta ativa.'); return; }
+  const nome = state.revNameMap[revId] || 'esta revendedora';
+
+  const { data: maleta, error: qErr } = await sbQ(sb.from('maletas')
+    .select('id,numero').eq('revendedora_id', revId).eq('status', 'ativa').maybeSingle());
+  if (await handleSupabaseError(qErr, 'Erro ao buscar a maleta')) return;
+  if (!maleta) { toast('Não há maleta ativa para excluir.'); return; }
+
+  const { data: pecas, error: cErr } = await sbQ(sb.from('consignados')
+    .select('id,quantidade_vendida').eq('maleta_id', maleta.id));
+  if (await handleSupabaseError(cErr, 'Erro ao buscar as peças da maleta')) return;
+  const vendidas = (pecas || []).reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+  if (vendidas > 0) {
+    toast(`Não é possível excluir: esta maleta tem ${vendidas} peça(s) vendida(s). Estorne/finalize o mostruário antes, para não corromper o financeiro.`);
+    return;
+  }
+
+  confirmarAcao('⚠ Excluir maleta ativa',
+    `Excluir a maleta ATIVA de ${nome} (${(pecas || []).length} peças, nenhuma vendida)?\n\nAs peças serão removidas permanentemente. Esta ação não pode ser desfeita.`,
+    'Excluir maleta', async () => {
+      let error;
+      try {
+        // escopo sempre por maleta_id — nunca por revendedora solta
+        ({ error } = await sb.from('consignados').delete().eq('maleta_id', maleta.id));
+        if (!error) ({ error } = await sb.from('maletas').delete().eq('id', maleta.id));
+      } catch (e) { error = e; }
+      if (await handleSupabaseError(error, 'Erro ao excluir a maleta')) return;
+      toast(`Maleta ativa de ${nome} excluída`);
+      loadConsignados();
+    });
+}
+
 export function openVenda(id) {
   const c = state.allConsignados.find(x => x.id === id);
   const dispOrig = qtdDisp(c);
@@ -1567,8 +1606,45 @@ export function abrirFinalizarVenda() {
   document.getElementById('f-forma').value = 'Pix';
   document.getElementById('f-combinada').value = '';
   document.getElementById('f-obs').value = '';
+  document.getElementById('f-cliente-status').innerHTML = '';
+  state.vendaClienteId = null;
   ajustarValorPago();
   openModal('modal-finalizar');
+  // Telefone é o gatilho do autocomplete → foca nele ao abrir.
+  setTimeout(() => document.getElementById('f-tel')?.focus(), 120);
+}
+
+// ── Autocomplete da cliente pelo telefone (chave única) ────────────────
+let _vendaTelTimer = null;
+export function vendaTelefoneInput() {
+  const status = document.getElementById('f-cliente-status');
+  const tel = soDigitos(document.getElementById('f-tel').value);
+  state.vendaClienteId = null;
+  clearTimeout(_vendaTelTimer);
+  if (tel.length < 10) { if (status) status.innerHTML = ''; return; }
+  if (status) status.innerHTML = '<span style="color:var(--muted)">Buscando cliente…</span>';
+  _vendaTelTimer = setTimeout(() => buscarClientePorTelefone(tel), 400);
+}
+
+async function buscarClientePorTelefone(tel) {
+  const status = document.getElementById('f-cliente-status');
+  const nomeEl = document.getElementById('f-cliente');
+  // Confere se o telefone ainda é o mesmo (evita resultado atrasado sobrescrever)
+  const { data, error } = await sbQ(sb.rpc('buscar_cliente_por_telefone', { p_telefone: tel }));
+  if (soDigitos(document.getElementById('f-tel').value) !== tel) return; // usuário mudou
+  if (error) { if (status) status.innerHTML = ''; return; }
+  const cli = data && data[0];
+  if (cli) {
+    state.vendaClienteId = cli.id;
+    if (!nomeEl.value.trim()) nomeEl.value = cli.nome || '';
+    const nascEl = document.getElementById('f-nasc');
+    if (nascEl && !nascEl.value.trim() && cli.nascimento) nascEl.value = isoToBR(cli.nascimento);
+    if (status) status.innerHTML = `<span style="color:var(--rose)">Cliente já cadastrada · ${cli.selos ?? 0}/10 selos</span>`;
+  } else {
+    state.vendaClienteId = null;
+    if (status) status.innerHTML = '<span style="color:var(--muted)">Nova cliente</span>';
+    if (!nomeEl.value.trim()) nomeEl.focus();
+  }
 }
 
 export function ajustarValorPago() {
@@ -1608,7 +1684,7 @@ export async function confirmarVendaCarrinho(btn) {
     // Venda atômica via RPC: cria venda + itens + recebimento e incrementa
     // quantidade_vendida numa única transação (ver db-functions.sql).
     // Evita venda órfã sem itens e a race condition do read-modify-write.
-    const { error: errRpc } = await sbQ(
+    const { data: vendaRet, error: errRpc } = await sbQ(
       sb.rpc('registrar_venda', {
         p_cliente: cliente,
         p_data: data,
@@ -1640,12 +1716,21 @@ export async function confirmarVendaCarrinho(btn) {
       return;
     }
 
+    // Snapshot da venda ANTES de zerar o carrinho (o modal pós-venda usa).
+    const snapshot = {
+      cliente, tel, dataISO: data, total,
+      itens: state.carrinhoVenda.map(i => ({ descricao: i.descricao, referencia: i.referencia || null, quantidade: i.quantidade })),
+    };
     state.carrinhoVenda = [];
     resetBtn();
-    toast('Venda registrada!');
     closeModal('modal-finalizar');
     renderCartBar();
     state.allVendas = [];
+    // Modal pós-venda (selos + garantia). Abre sempre — mesmo com retorno antigo
+    // (uuid), o modal aparece com a garantia; a fidelidade entra quando o banco
+    // retorna o resumo (registrar_venda em jsonb).
+    try { abrirModalPosVenda(vendaRet, snapshot); }
+    catch (e) { console.error('modal pos-venda', e); toast('Venda registrada.', 'erro'); }
     await loadConsignados();
   } catch (e) {
     console.error('Falha inesperada na venda:', e);

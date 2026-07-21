@@ -61,8 +61,8 @@ export const MENU = [
       { chave: 'calculadora',      panel: 'calculadora',  label: 'Calculadora',  icon: IC.calc },
   ]},
   { grupo: 'grp_financeiro', label: 'Financeiro', icon: IC.fin, filhos: [
-      // chave 'financeiro' mantida (item solto virou "Lançamentos" dentro do grupo)
-      { chave: 'financeiro',           panel: 'financeiro',             label: 'Lançamentos',            icon: IC.fin },
+      // chave 'financeiro' mantida (item solto virou "Contas a Receber" dentro do grupo)
+      { chave: 'financeiro',           panel: 'financeiro',             label: 'Contas a Receber',       icon: IC.fin },
       { chave: 'financeiro_contas_pagar', panel: 'contas-a-pagar',      label: 'Contas a Pagar',         icon: IC.fileText },
       { chave: 'cad_formas_pagamento', panel: 'formas-pagamento',       label: 'Formas de Pagamento',    icon: IC.card },
       { chave: 'cad_categorias_fin',   panel: 'categorias-financeiras', label: 'Categorias Financeiras', icon: IC.tag },

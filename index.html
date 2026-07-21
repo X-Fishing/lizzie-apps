@@ -299,6 +299,9 @@
     <button class="nav-item" id="nav-historico" onclick="showPanel('historico')">
       <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></span>Histórico
     </button>
+    <button class="nav-item" id="nav-fidelidade" onclick="showPanel('fidelidade')" style="display:none">
+      <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M11.5 6.5a4 4 0 0 0-8 0c0 2.5 3 4 3.5 6h1c.5-2 3.5-3.5 3.5-6z"/><circle cx="12" cy="12" r="10"/></svg></span>Fidelidade
+    </button>
     <button class="nav-item" id="nav-trocas" onclick="showPanel('trocas')" style="display:none">
       <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></span>Trocas
     </button>
@@ -510,27 +513,27 @@
     <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="21" r="1"/><circle cx="19" cy="21" r="1"/><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12"/></svg> Finalizar Venda</div>
     <div id="f-cart-list" style="margin-bottom:14px"></div>
     <div class="form-group">
+      <label class="form-label">WhatsApp da cliente *</label>
+      <input type="tel" id="f-tel" class="form-control" placeholder="(00) 00000-0000" maxlength="16" inputmode="numeric" autocomplete="off" oninput="maskTelBR(this);vendaTelefoneInput()">
+      <div id="f-cliente-status" style="font-size:11.5px;margin-top:5px;min-height:16px"></div>
+    </div>
+    <div class="form-group">
       <label class="form-label">Nome da cliente *</label>
       <input type="text" id="f-cliente" class="form-control" placeholder="Nome completo da cliente">
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">WhatsApp da cliente *</label>
-        <input type="tel" id="f-tel" class="form-control" placeholder="(00) 00000-0000" maxlength="16" inputmode="numeric" oninput="maskTelBR(this)">
-      </div>
-      <div class="form-group">
         <label class="form-label">Aniversário da cliente *</label>
         <input type="text" id="f-nasc" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)">
       </div>
-    </div>
-    <div class="form-row">
       <div class="form-group">
         <label class="form-label">Data da venda *</label>
         <input type="text" id="f-data" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)">
       </div>
-      <div class="form-group">
-        <label class="form-label">Forma de pagamento *</label>
-        <select id="f-forma" class="form-control" onchange="ajustarValorPago()">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Forma de pagamento *</label>
+      <select id="f-forma" class="form-control" onchange="ajustarValorPago()">
           <option value="Dinheiro">Dinheiro</option>
           <option value="Pix" selected>Pix</option>
           <option value="Cartão débito">Cartão débito</option>
@@ -542,7 +545,6 @@
           <option value="Parcelado 6x">Parcelado 6x</option>
           <option value="Fiado">Fiado</option>
         </select>
-      </div>
     </div>
     <div class="form-group" id="f-combinada-wrap" style="display:none">
       <label class="form-label">Data combinada de pagamento *</label>
@@ -570,6 +572,14 @@
   <div class="modal">
     <div class="modal-handle"></div>
     <div id="detalhe-venda-content"></div>
+  </div>
+</div>
+
+<!-- PÓS-VENDA (fidelidade + garantia via WhatsApp) -->
+<div class="modal-overlay" id="modal-pos-venda">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div id="pos-venda-content"></div>
   </div>
 </div>
 

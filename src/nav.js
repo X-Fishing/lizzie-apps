@@ -6,7 +6,10 @@
 import { state } from './state.js';
 import { registrar, navegar, iniciar } from './router.js';
 
-export const PANEIS_STAFF = ['financeiro','contas-a-pagar','calculadora','clientes','bonus','fidelidade','funcionarios','perfis','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','faixas-comissao','config-raspadinha','precificacao','entrada-mercadoria','lancador'];
+// 'fidelidade' NÃO está aqui de propósito: a revendedora também acessa (a RLS
+// filtra as clientes dela). O acesso do staff continua controlado pela permissão
+// do menu (marketing_fidelidade), via podeAcessarPanel.
+export const PANEIS_STAFF = ['financeiro','contas-a-pagar','calculadora','clientes','bonus','funcionarios','perfis','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','faixas-comissao','config-raspadinha','precificacao','entrada-mercadoria','lancador'];
 
 // hash "bonito" p/ dashboard e revendedoras; demais = proprio nome do painel.
 function hashDePanel(name) {
@@ -29,7 +32,7 @@ function panelPermitido(name) {
 
 // Executor real: troca os paineis, sincroniza o menu ativo e dispara o loader.
 function aplicarTela(name) {
-  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin', ...PANEIS_STAFF].forEach(p => {
+  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin','fidelidade', ...PANEIS_STAFF].forEach(p => {
     const el = document.getElementById('panel-' + p);
     if (el) el.style.display = p === name ? 'block' : 'none';
     const nav = document.getElementById('nav-' + p);
