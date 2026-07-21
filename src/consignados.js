@@ -493,6 +493,7 @@ export function renderCicloAdminDetalhe(revId, list) {
     ? `<div class="btn-group" style="margin-top:12px">
         <button class="btn btn-outline" data-bling-id="${state.revBlingMap[revId] || ''}" data-rev-nome="${esc(nome)}" onclick="atualizarMaleta('${revId}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg> Atualizar itens da maleta</button>
         ${temAtivos ? `<button class="btn btn-danger" onclick="deletarCicloRev('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Excluir maleta aguardando</button>` : ''}
+        ${IS_ADMIN && temAtivos ? `<button class="btn btn-danger" onclick="excluirMaletaAdmin('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> Excluir maleta ativa</button>` : ''}
       </div>`
     : (temAtivos ? '' : `<div style="margin-top:10px;font-size:12px;color:var(--muted)">Sem catálogo ativo</div>`);
 
@@ -1407,6 +1408,43 @@ export async function deletarCicloRev(revId) {
       } catch (e) { error = e; }
       if (await handleSupabaseError(error, 'Erro ao excluir maleta aguardando')) return;
       toast(`Maleta aguardando de ${nome} excluída`);
+      loadConsignados();
+    });
+}
+
+// Admin: exclui a maleta ATIVA inteira (peças + linha da maleta). Trava de
+// segurança: se houver peças vendidas, bloqueia — apagar a maleta corromperia
+// vendas/recebimentos/financeiro (nesse caso o caminho é estornar/finalizar,
+// não excluir). O gargalo do deletarCicloRev era só cobrir 'aguardando'.
+export async function excluirMaletaAdmin(revId) {
+  if (!IS_ADMIN) { toast('Apenas admin pode excluir a maleta ativa.'); return; }
+  const nome = state.revNameMap[revId] || 'esta revendedora';
+
+  const { data: maleta, error: qErr } = await sbQ(sb.from('maletas')
+    .select('id,numero').eq('revendedora_id', revId).eq('status', 'ativa').maybeSingle());
+  if (await handleSupabaseError(qErr, 'Erro ao buscar a maleta')) return;
+  if (!maleta) { toast('Não há maleta ativa para excluir.'); return; }
+
+  const { data: pecas, error: cErr } = await sbQ(sb.from('consignados')
+    .select('id,quantidade_vendida').eq('maleta_id', maleta.id));
+  if (await handleSupabaseError(cErr, 'Erro ao buscar as peças da maleta')) return;
+  const vendidas = (pecas || []).reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+  if (vendidas > 0) {
+    toast(`Não é possível excluir: esta maleta tem ${vendidas} peça(s) vendida(s). Estorne/finalize o mostruário antes, para não corromper o financeiro.`);
+    return;
+  }
+
+  confirmarAcao('⚠ Excluir maleta ativa',
+    `Excluir a maleta ATIVA de ${nome} (${(pecas || []).length} peças, nenhuma vendida)?\n\nAs peças serão removidas permanentemente. Esta ação não pode ser desfeita.`,
+    'Excluir maleta', async () => {
+      let error;
+      try {
+        // escopo sempre por maleta_id — nunca por revendedora solta
+        ({ error } = await sb.from('consignados').delete().eq('maleta_id', maleta.id));
+        if (!error) ({ error } = await sb.from('maletas').delete().eq('id', maleta.id));
+      } catch (e) { error = e; }
+      if (await handleSupabaseError(error, 'Erro ao excluir a maleta')) return;
+      toast(`Maleta ativa de ${nome} excluída`);
       loadConsignados();
     });
 }
