@@ -602,19 +602,6 @@
   </div>
 </div>
 
-<!-- MODAL FECHAMENTO DO CICLO -->
-<div class="modal-overlay" id="modal-fechamento">
-  <div class="modal">
-    <div class="modal-handle"></div>
-    <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</div>
-    <div id="fechamento-content"></div>
-    <div style="display:flex;gap:10px;margin-top:16px">
-      <button class="btn-secondary" style="flex:1" onclick="closeModal('modal-fechamento')">Fechar</button>
-      <button class="btn-primary" style="flex:2" onclick="gerarPdfFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg> Gerar PDF</button>
-    </div>
-  </div>
-</div>
-
 <!-- MODAL RECEBIMENTO DA MALETA (financeiro fase 1 — QR PIX + parciais) -->
 <div class="modal-overlay" id="modal-recebimento">
   <div class="modal" style="max-width:520px">
@@ -643,27 +630,6 @@
       <span style="font-size:11.5px;color:var(--muted)">↑/↓ navegar · Enter adicionar · Esc fechar</span>
       <button class="btn btn-outline" onclick="lancadorFecharBusca()">Fechar</button>
     </div>
-  </div>
-</div>
-
-<!-- MODAL CONFERÊNCIA DE FECHAMENTO (admin) — estado persiste no banco (coluna devolvido) -->
-<div class="modal-overlay" id="modal-conferencia">
-  <div class="modal modal-fixa">
-    <button type="button" class="modal-close-x" aria-label="Fechar" onclick="closeModal('modal-conferencia')">✕</button>
-    <div class="modal-handle"></div>
-    <div class="modal-title" id="conf-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Conferência de fechamento</div>
-    <div id="conf-contadores" style="font-size:12.5px;color:var(--muted);margin-bottom:10px"></div>
-    <input class="search-input" id="conf-search" placeholder="Buscar por nome ou código... (* marca como Voltou)" oninput="renderConferencia()" onkeydown="confBuscaTeclas(event)">
-    <label style="display:flex;align-items:center;gap:6px;margin:8px 0 10px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none">
-      <input type="checkbox" id="conf-ver-devolvidos" onchange="renderConferencia()" style="accent-color:var(--rose);cursor:pointer">
-      Ver já conferidas
-    </label>
-    <div id="conf-list" class="modal-body"></div>
-    <div id="conf-resultado"></div>
-    <!-- Passo de comissão: % sugerido pela faixa do total vendido, editável -->
-    <div id="conf-comissao"></div>
-    <!-- Rodapé montado pelo JS: modo normal (Conferir + Finalizar) ou modo correção (Conferir + Salvar correção) -->
-    <div id="conf-acoes" style="display:flex;gap:10px;margin-top:16px"></div>
   </div>
 </div>
 
