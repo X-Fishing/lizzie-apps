@@ -50,10 +50,8 @@ export function sortConsignados(col) {
 
 export function renderCicloGrid() {
   const div = document.getElementById('c-list');
-  // Sub-telas (conferência/fechamento) ocupam a tela toda: escondem a busca e
-  // aproveitam a largura (.tela-full, como a Entrada de Mercadoria).
-  const content = document.querySelector('.content');
-  if (content) content.classList.toggle('tela-full', confTelaAberta || fechTelaAberta);
+  // Sub-telas (conferência/fechamento) renderizam no lugar do catálogo, na
+  // largura normal centralizada (mesmo padrão do histórico de ciclos).
   if (confTelaAberta || fechTelaAberta) {
     const sb = document.getElementById('c-search-bar');
     if (sb) sb.style.display = 'none';
