@@ -5,6 +5,7 @@ import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError
 const soDigitos = s => (s || '').replace(/\D/g, '');
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 export async function loadConsignados() {
+  confTelaAberta = false; fechTelaAberta = false;
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
   const isAdmin = ehStaff();
   const makeQ = () => {
@@ -49,6 +50,16 @@ export function sortConsignados(col) {
 
 export function renderCicloGrid() {
   const div = document.getElementById('c-list');
+  // Sub-telas (conferência/fechamento) ocupam a tela toda: escondem a busca e
+  // aproveitam a largura (.tela-full, como a Entrada de Mercadoria).
+  const content = document.querySelector('.content');
+  if (content) content.classList.toggle('tela-full', confTelaAberta || fechTelaAberta);
+  if (confTelaAberta || fechTelaAberta) {
+    const sb = document.getElementById('c-search-bar');
+    if (sb) sb.style.display = 'none';
+    div.innerHTML = confTelaAberta ? confTelaSkeletonHtml() : fechTelaSkeletonHtml();
+    return;
+  }
   if (state.historicoCicloSel) {
     const sb = document.getElementById('c-search-bar');
     if (sb) sb.style.display = 'none';
@@ -349,6 +360,7 @@ async function preencherComissaoHistorico(chave) {
 }
 
 export function abrirHistoricoCiclo(chave) {
+  confTelaAberta = false; fechTelaAberta = false;
   state.historicoCicloSel = chave;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
@@ -357,6 +369,7 @@ export function abrirHistoricoCiclo(chave) {
 }
 
 export function voltarHistoricoCiclo() {
+  confTelaAberta = false; fechTelaAberta = false;
   state.historicoCicloSel = null;
   renderCicloGrid();
 }
@@ -535,6 +548,7 @@ export function renderCicloAdminDetalhe(revId, list) {
 }
 
 export function abrirCicloRev(revId) {
+  confTelaAberta = false; fechTelaAberta = false;
   state.cicloRevSelecionada = revId;
   state.historicoCicloSel = null;
   const cs = document.getElementById('c-search');
@@ -544,6 +558,7 @@ export function abrirCicloRev(revId) {
 }
 
 export function voltarCardsCiclo() {
+  confTelaAberta = false; fechTelaAberta = false;
   state.cicloRevSelecionada = null;
   state.historicoCicloSel = null;
   const cs = document.getElementById('c-search');
@@ -681,6 +696,10 @@ let confMaletaAtivaId = null;
 let confCicloChave = null;    // modo correção: chave (data) do ciclo FINALIZADO
 let confOrigVendida = null;   // modo correção: Set de ids lançados como vendidos na ORIGEM
 let confFechamento = null;    // modo correção: linha da auditoria (ou null se não achou)
+// Sub-telas de tela inteira (conferência e fechamento) — renderizam dentro do
+// panel-consignados no lugar do catálogo, padrão do histórico de ciclos.
+let confTelaAberta = false;
+let fechTelaAberta = false;
 
 // Peças em conferência. Modo normal: ativas da maleta ativa (mesmo escopo do
 // finalizarCicloRev; fallback legado = todas as ativas). Modo correção:
@@ -706,7 +725,34 @@ export function podeCorrigirMaleta() {
   return IS_ADMIN || PERMISSOES.has('acao_editar_maleta_finalizada');
 }
 
+// Esqueleto da conferência em tela inteira (mesmos ids/handlers do antigo
+// #modal-conferencia — os handlers on* dependem desses ids).
+function confTelaSkeletonHtml() {
+  return `<button class="btn-voltar-ciclo" onclick="voltarConferenciaTela()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg> Voltar</button>
+    <div class="card conf-tela">
+      <div class="modal-title" id="conf-title"></div>
+      <div id="conf-contadores" style="font-size:12.5px;color:var(--muted);margin-bottom:10px"></div>
+      <input class="search-input" id="conf-search" placeholder="Buscar por nome ou código... (* marca como Voltou)" oninput="renderConferencia()" onkeydown="confBuscaTeclas(event)">
+      <label style="display:flex;align-items:center;gap:6px;margin:8px 0 10px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none">
+        <input type="checkbox" id="conf-ver-devolvidos" onchange="renderConferencia()" style="accent-color:var(--rose);cursor:pointer">
+        Ver já conferidas
+      </label>
+      <div id="conf-list"></div>
+      <div id="conf-resultado"></div>
+      <div id="conf-comissao"></div>
+      <div id="conf-acoes" style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap"></div>
+    </div>`;
+}
+
+export function voltarConferenciaTela() {
+  confTelaAberta = false;
+  renderCicloGrid();
+}
+
 async function abrirModalConferencia(titulo, acoesHtml) {
+  // Renderiza a sub-tela (skeleton) antes de escrever nos ids.
+  confTelaAberta = true;
+  renderCicloGrid();
   document.getElementById('conf-title').innerHTML =
     `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> ${titulo}`;
   document.getElementById('conf-search').value = '';
@@ -721,7 +767,6 @@ async function abrirModalConferencia(titulo, acoesHtml) {
   if (error) console.error('Faixas de comissão:', error);
   confFaixas = data || [];
   renderConferencia();
-  openModal('modal-conferencia');
 }
 
 // ── Comissão do fechamento (sugerida pela faixa do total vendido) ──
@@ -1205,7 +1250,7 @@ async function aplicarCorrecaoConferencia() {
     if (eIns) { console.error('Auditoria (itens):', eIns); toast(`Erro ao registrar divergências: ${eIns.message}.`); return; }
   }
 
-  closeModal('modal-conferencia');
+  confTelaAberta = false;
   toast(totalDiv > 0
     ? `Correção salva. ${totalDiv} divergência${totalDiv !== 1 ? 's' : ''} registrada${totalDiv !== 1 ? 's' : ''} na auditoria.`
     : 'Conferência corrigida com sucesso!');
@@ -1311,7 +1356,7 @@ async function executarFechamentoReconciliado() {
   }
 
   // 3) Encerramento (fluxo existente: encerra peças, troca de maleta etc.)
-  closeModal('modal-conferencia');
+  confTelaAberta = false;
   const msg = totalDiv > 0
     ? `Mostruário finalizado. ${divVendida.length} peça${divVendida.length !== 1 ? 's' : ''} marcada${divVendida.length !== 1 ? 's' : ''} como Vendido por Divergência (registrado).`
     : 'Fechamento do mostruário conferido com sucesso!';
@@ -1662,6 +1707,23 @@ export async function salvarConsignado() {
   loadConsignados();
 }
 
+// Esqueleto do fechamento em tela inteira (mesmo id #fechamento-content).
+function fechTelaSkeletonHtml() {
+  return `<button class="btn-voltar-ciclo" onclick="voltarFechamentoTela()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg> Voltar</button>
+    <div class="card">
+      <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</div>
+      <div id="fechamento-content"></div>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn-primary" onclick="gerarPdfFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg> Gerar PDF</button>
+      </div>
+    </div>`;
+}
+
+export function voltarFechamentoTela() {
+  fechTelaAberta = false;
+  renderCicloGrid();
+}
+
 export function openFechamento() {
   const restantes = state.allConsignados.filter(c =>
     qtdDisp(c) > 0 && (!state.maletaAtivaId || c.maleta_id === state.maletaAtivaId)
@@ -1671,6 +1733,10 @@ export function openFechamento() {
     toast('Nenhuma peça restante — catálogo já está limpo!');
     return;
   }
+
+  // Renderiza a sub-tela (skeleton) antes de preencher o #fechamento-content.
+  fechTelaAberta = true;
+  renderCicloGrid();
 
   const total = restantes.reduce((s, c) => s + qtdDisp(c), 0);
   const valorTotal = restantes.reduce((s, c) => {
@@ -1706,8 +1772,6 @@ export function openFechamento() {
     <div style="text-align:right;font-size:13px;color:var(--muted)">
       Total estimado a devolver: <strong style="color:var(--plum)">R$ ${valorTotal.toFixed(2)}</strong>
     </div>`;
-
-  openModal('modal-fechamento');
 }
 
 export function gerarPdfFechamento() {
@@ -1757,7 +1821,8 @@ export function gerarPdfFechamento() {
       <div style="flex:1;border-top:1px solid #ccc;padding-top:8px;font-size:12px;color:#8a7590">Assinatura Lizzie Semijoias</div>
     </div>`;
 
-  closeModal('modal-fechamento');
+  fechTelaAberta = false;
+  renderCicloGrid();
   document.getElementById('print-overlay').classList.add('show');
   setTimeout(() => window.print(), 300);
 }
