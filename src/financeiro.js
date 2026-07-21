@@ -13,6 +13,22 @@ const r2 = n => Math.round(n * 100) / 100;
 const hojeISO = () => new Date().toISOString().slice(0, 10);
 const idAbrev = id => String(id || '').slice(0, 8);
 
+// Recebimento com MÚLTIPLOS pagamentos (ex.: 2-3 PIX de valores exatos para
+// bater na conciliação bancária). Cada linha vira 1 lançamento no financeiro.
+const REC_FORMAS = ['PIX', 'Dinheiro', 'Transferência', 'Cartão', 'Outro'];
+const IC_TRASH_REC = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
+function recRowHtml(forma = 'PIX', valor = '') {
+  return `<div class="rec-pag-row" style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+    <select class="form-control rec-pag-forma" style="max-width:150px" onchange="recRecalc()">${REC_FORMAS.map(f => `<option ${f === forma ? 'selected' : ''}>${f}</option>`).join('')}</select>
+    <input type="text" class="form-control rec-pag-valor" inputmode="numeric" placeholder="0,00" value="${valor}" oninput="maskMoneyBR(this);recRecalc()">
+    <button type="button" class="btn-icon" style="color:var(--danger);flex-shrink:0" onclick="recRemovePagamento(this)" title="Remover pagamento">${IC_TRASH_REC}</button>
+  </div>`;
+}
+function recSoma() {
+  return r2([...document.querySelectorAll('#rec-lista .rec-pag-valor')]
+    .reduce((s, el) => s + parseMoneyBR(el.value), 0));
+}
+
 // ID oficial = nosso número interno; pedido Bling vira referência legada.
 function fmtMostruario(obj) {
   if (obj?.numero_interno != null) return 'Mostruário #' + String(obj.numero_interno).padStart(4, '0');
@@ -120,15 +136,12 @@ export async function abrirRecebimento(fechamentoId) {
       </div>
       <div id="pix-qr-vazio" style="display:none;font-size:12.5px;color:var(--muted);padding:16px 0">Sem valor no PIX — nada a cobrar via QR.</div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Valor por PIX (R$)</label>
-        <input type="text" id="rec-pix" class="form-control" inputmode="numeric" placeholder="0,00" value="${moneyToInput(saldo)}" oninput="maskMoneyBR(this);recRecalc()"></div>
-      <div class="form-group"><label class="form-label">Valor em dinheiro (R$)</label>
-        <input type="text" id="rec-dinheiro" class="form-control" inputmode="numeric" placeholder="0,00" oninput="maskMoneyBR(this);recRecalc()"></div>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">
-      <button class="btn-secondary btn-sm" onclick="recAtalho('pix')">Recebi tudo via PIX</button>
-      <button class="btn-secondary btn-sm" onclick="recAtalho('dinheiro')">Tudo em dinheiro</button>
+    <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Pagamentos recebidos</div>
+    <div id="rec-lista">${recRowHtml('PIX', '')}</div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <button class="btn-secondary btn-sm" onclick="recAddPagamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg> Adicionar pagamento</button>
+      <button class="btn-secondary btn-sm" onclick="recAtalho('PIX')">Tudo via PIX</button>
+      <button class="btn-secondary btn-sm" onclick="recAtalho('Dinheiro')">Tudo em dinheiro</button>
     </div>
     <div class="form-group">
       <label class="form-label">Vencimento do restante (máx. 15 dias)</label>
@@ -137,8 +150,8 @@ export async function abrirRecebimento(fechamentoId) {
       <div style="font-size:11px;color:var(--muted);margin-top:3px">Usado só se sobrar valor a receber.</div>
     </div>
     <div style="display:flex;gap:18px;font-size:13px;margin-bottom:14px">
-      <span>Recebido agora: <b id="rec-agora" style="color:var(--success)">${fmtBRL(saldo)}</b></span>
-      <span>Restante: <b id="rec-restante" style="color:var(--rose)">${fmtBRL(0)}</b></span>
+      <span>Recebido agora: <b id="rec-agora" style="color:var(--success)">${fmtBRL(0)}</b></span>
+      <span>Restante: <b id="rec-restante" style="color:var(--rose)">${fmtBRL(saldo)}</b></span>
     </div>
     <button class="btn btn-primary" style="width:100%" ${teste ? 'disabled title="Conta de teste — nada é lançado"' : ''} onclick="registrarRecebimento(this)">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> ${teste ? 'Conta de teste (não lança)' : 'Registrar recebimento'}</button>`}`;
@@ -165,7 +178,8 @@ async function atualizarQrPix() {
   const wrap = document.getElementById('pix-qr-wrap');
   const vazio = document.getElementById('pix-qr-vazio');
   if (!wrap || !vazio) return;
-  const valorPix = r2(parseMoneyBR(document.getElementById('rec-pix')?.value));
+  // QR = o que ainda falta receber (saldo − pagamentos já lançados agora).
+  const valorPix = r2(Math.max(0, recCtx.saldo - recSoma()));
   if (valorPix <= 0) {
     wrap.style.display = 'none'; vazio.style.display = 'block';
     recCtx.pixCola = '';
@@ -180,7 +194,7 @@ async function atualizarQrPix() {
     const QRCode = (await import('qrcode')).default;
     await QRCode.toCanvas(document.getElementById('pix-qr'), recCtx.pixCola, { width: 220, margin: 1 });
     const lbl = document.getElementById('pix-qr-valor');
-    if (lbl) lbl.textContent = 'QR no valor de ' + fmtBRL(valorPix);
+    if (lbl) lbl.textContent = 'QR do restante: ' + fmtBRL(valorPix);
   } catch (e) {
     console.error('QR PIX:', e);
     const err = document.getElementById('pix-qr-erro');
@@ -198,9 +212,7 @@ export function copiarPixCola() {
 let qrTimer = null;
 
 export function recRecalc() {
-  const pix = parseMoneyBR(document.getElementById('rec-pix')?.value);
-  const din = parseMoneyBR(document.getElementById('rec-dinheiro')?.value);
-  const agora = r2(pix + din);
+  const agora = recSoma();
   const rest = r2(recCtx.saldo - agora);
   const elA = document.getElementById('rec-agora');
   const elR = document.getElementById('rec-restante');
@@ -215,21 +227,41 @@ export function recRecalc() {
   qrTimer = setTimeout(atualizarQrPix, 300);
 }
 
+// Adiciona uma linha de pagamento (outra forma/valor exato).
+export function recAddPagamento() {
+  const lista = document.getElementById('rec-lista');
+  if (!lista) return;
+  lista.insertAdjacentHTML('beforeend', recRowHtml('PIX', ''));
+  recRecalc();
+}
+
+// Remove a linha; nunca deixa a lista vazia (mantém 1 linha em branco).
+export function recRemovePagamento(btn) {
+  const row = btn.closest('.rec-pag-row');
+  if (row) row.remove();
+  const lista = document.getElementById('rec-lista');
+  if (lista && !lista.querySelector('.rec-pag-row')) lista.innerHTML = recRowHtml('PIX', '');
+  recRecalc();
+}
+
+// Atalho: uma única linha com o saldo inteiro na forma escolhida.
 export function recAtalho(forma) {
-  const alvo = forma === 'pix' ? 'rec-pix' : 'rec-dinheiro';
-  const outro = forma === 'pix' ? 'rec-dinheiro' : 'rec-pix';
-  document.getElementById(alvo).value = moneyToInput(recCtx.saldo);
-  document.getElementById(outro).value = '';
+  const lista = document.getElementById('rec-lista');
+  if (!lista) return;
+  lista.innerHTML = recRowHtml(forma, moneyToInput(recCtx.saldo));
   recRecalc();
 }
 
 export async function registrarRecebimento(btn) {
   if (recCtx.teste) { toast('Conta de teste — nada é lançado no financeiro.'); return; }
   const f = recCtx.fech;
-  const pix = parseMoneyBR(document.getElementById('rec-pix').value);
-  const din = parseMoneyBR(document.getElementById('rec-dinheiro').value);
-  const agora = r2(pix + din);
-  if (agora <= 0) { toast('Informe o valor recebido (PIX e/ou dinheiro).'); return; }
+  // Um lançamento por linha de pagamento (valores exatos p/ conciliação).
+  const entradas = [...document.querySelectorAll('#rec-lista .rec-pag-row')].map(row => ({
+    forma: row.querySelector('.rec-pag-forma').value,
+    valor: r2(parseMoneyBR(row.querySelector('.rec-pag-valor').value)),
+  })).filter(e => e.valor > 0);
+  const agora = r2(entradas.reduce((s, e) => s + e.valor, 0));
+  if (agora <= 0) { toast('Informe ao menos um pagamento com valor.'); return; }
   if (agora > recCtx.saldo + 0.001) { toast('Recebido maior que o restante a receber — confira.'); return; }
 
   // Vencimento do restante: obrigatório, hoje até hoje+15 dias.
@@ -253,9 +285,7 @@ export async function registrarRecebimento(btn) {
     numero_interno: f.numero_interno ?? null,
     fechamento_data: (f.created_at || '').slice(0, 10) || null,
   };
-  const pagos = [];
-  if (pix > 0) pagos.push({ ...base, forma_pagamento: 'PIX', valor: r2(pix), pago: true, data_recebimento: hojeISO() });
-  if (din > 0) pagos.push({ ...base, forma_pagamento: 'Dinheiro', valor: r2(din), pago: true, data_recebimento: hojeISO() });
+  const pagos = entradas.map(e => ({ ...base, forma_pagamento: e.forma, valor: e.valor, pago: true, data_recebimento: hojeISO() }));
 
   // 1) grava os recebidos
   const e1 = await insLanc(pagos);
