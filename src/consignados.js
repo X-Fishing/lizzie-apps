@@ -1374,51 +1374,60 @@ export function imprimirRelacaoVendidas() {
   const vendidas   = base.filter(c => !c.devolvido);
   const devolvidas = base.filter(c => c.devolvido);
 
-  const linha = (c, status, cor, i) => {
+  const pill = (label, bg, fg) => `<span style="display:inline-block;padding:2px 11px;border-radius:20px;font-size:10.5px;font-weight:600;background:${bg};color:${fg};-webkit-print-color-adjust:exact;print-color-adjust:exact">${label}</span>`;
+  const linha = (c, status) => {
     const qtd = c.quantidade_enviada || 1;
     const sub = qtd * Number(c.preco_venda || 0);
-    return `<tr style="background:${i % 2 === 0 ? '#faf7f2' : '#fff'}">
-      <td style="padding:8px 12px;font-size:12px;color:#8a7590">${esc(c.referencia || '—')}</td>
-      <td style="padding:8px 12px;font-size:13px">${esc(c.descricao)}</td>
-      <td style="padding:8px 12px;text-align:center;font-size:13px">${qtd}</td>
-      <td style="padding:8px 12px;text-align:right;font-size:13px">${c.preco_venda ? 'R$ ' + Number(c.preco_venda).toFixed(2) : '—'}</td>
-      <td style="padding:8px 12px;text-align:right;font-size:13px">R$ ${sub.toFixed(2)}</td>
-      <td style="padding:8px 12px;font-size:12px;font-weight:600;color:${cor}">${status}</td>
+    const badge = status === 'Vendida' ? pill('Vendida', '#f3e3ea', '#a03a5d') : pill('Devolvida', '#e6efe6', '#4a7a4a');
+    return `<tr style="border-bottom:1px solid #f0e8ee">
+      <td style="padding:9px 14px;font-size:11.5px;color:#9a8aa0;font-family:'DM Mono',monospace">${esc(c.referencia || '—')}</td>
+      <td style="padding:9px 14px;font-size:12.5px;color:#2d1f35">${esc(c.descricao)}</td>
+      <td style="padding:9px 14px;text-align:center;font-size:12.5px">${qtd}</td>
+      <td style="padding:9px 14px;text-align:right;font-size:12.5px;color:#6a5a70">${c.preco_venda ? 'R$ ' + Number(c.preco_venda).toFixed(2) : '—'}</td>
+      <td style="padding:9px 14px;text-align:right;font-size:12.5px;font-weight:600;color:#2d1f35">R$ ${sub.toFixed(2)}</td>
+      <td style="padding:9px 14px;text-align:center">${badge}</td>
     </tr>`;
   };
-  let i = 0;
   const linhas =
-    vendidas.map(c => linha(c, 'Vendida', '#1a0a2e', i++)).join('') +
-    devolvidas.map(c => linha(c, 'Devolvida', '#5b6e5c', i++)).join('');
+    vendidas.map(c => linha(c, 'Vendida')).join('') +
+    devolvidas.map(c => linha(c, 'Devolvida')).join('');
 
   const d = dadosComissao();
   const totalCount = c => c.reduce((s, x) => s + (x.quantidade_enviada || 1), 0);
+  const th = (txt, al) => `<th style="padding:10px 14px;text-align:${al};font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:600;color:#6d2947">${txt}</th>`;
 
   document.getElementById('print-content').innerHTML = `
-    <div style="margin-bottom:20px">
-      <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8a7590;margin-bottom:6px">Lizzie Semijoias</div>
-      <h1 style="font-family:'Georgia',serif;font-size:22px;font-weight:400;margin:0 0 4px">Conferência de Maleta</h1>
-      <div style="font-size:13px;color:#8a7590">Revendedora: <strong style="color:#2d1f35">${esc(nome)}</strong> &nbsp;·&nbsp; Data: ${hoje} &nbsp;·&nbsp; ${vendidas.length} vendida${vendidas.length !== 1 ? 's' : ''} · ${devolvidas.length} devolvida${devolvidas.length !== 1 ? 's' : ''}</div>
-    </div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:18px">
-      <thead><tr style="background:#1a0a2e;color:#fff">
-        <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:500">Código</th>
-        <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:500">Descrição</th>
-        <th style="padding:9px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:500">Qtd</th>
-        <th style="padding:9px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:500">Preço</th>
-        <th style="padding:9px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:500">Subtotal</th>
-        <th style="padding:9px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;font-weight:500">Status</th>
-      </tr></thead>
-      <tbody>${linhas}</tbody>
-    </table>
-    <div style="margin-left:auto;width:280px;font-size:13px;margin-bottom:40px">
-      <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8a7590">Total vendido (${totalCount(vendidas)} un.)</span><strong>R$ ${Number(d.total_vendido_valor).toFixed(2)}</strong></div>
-      <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8a7590">Comissão (${String(d.comissao_percentual).replace('.', ',')}%)</span><span>− R$ ${Number(d.comissao_valor).toFixed(2)}</span></div>
-      <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid #ddd;font-weight:700;font-size:15px"><span>A receber</span><span>R$ ${Number(d.valor_a_receber).toFixed(2)}</span></div>
-    </div>
-    <div style="display:flex;gap:60px;margin-top:40px">
-      <div style="flex:1;border-top:1px solid #ccc;padding-top:8px;font-size:12px;color:#8a7590">Assinatura da revendedora</div>
-      <div style="flex:1;border-top:1px solid #ccc;padding-top:8px;font-size:12px;color:#8a7590">Assinatura Lizzie Semijoias</div>
+    <div style="font-family:'DM Sans',Arial,sans-serif;color:#2d1f35;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #6d2947;padding-bottom:16px;margin-bottom:18px">
+        <div>
+          <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#c9748a;font-weight:600;margin-bottom:7px">Lizzie Semijoias</div>
+          <h1 style="font-family:'Cormorant Garamond',Georgia,serif;font-size:30px;font-weight:600;margin:0;line-height:1">Conferência de Maleta</h1>
+        </div>
+        <div style="text-align:right;font-size:12px;color:#9a8aa0">
+          <div style="font-size:14px;color:#2d1f35;font-weight:600">${esc(nome)}</div>
+          <div style="margin-top:3px">${hoje}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:28px;margin-bottom:20px;font-size:12.5px">
+        <span style="color:#9a8aa0">Vendidas <strong style="color:#a03a5d;font-size:14px">${vendidas.length}</strong></span>
+        <span style="color:#9a8aa0">Devolvidas <strong style="color:#4a7a4a;font-size:14px">${devolvidas.length}</strong></span>
+        <span style="color:#9a8aa0">Total <strong style="color:#2d1f35;font-size:14px">${base.length}</strong> peças</span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:22px">
+        <thead><tr style="background:#faf3f6;border-bottom:2px solid #e8d8e2;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+          ${th('Código', 'left')}${th('Descrição', 'left')}${th('Qtd', 'center')}${th('Preço', 'right')}${th('Subtotal', 'right')}${th('Status', 'center')}
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      <div style="margin-left:auto;width:300px;font-size:13px;margin-bottom:46px;background:#faf3f6;border-radius:12px;padding:14px 18px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+        <div style="display:flex;justify-content:space-between;padding:3px 0;color:#6a5a70"><span>Total vendido (${totalCount(vendidas)} un.)</span><strong style="color:#2d1f35">R$ ${Number(d.total_vendido_valor).toFixed(2)}</strong></div>
+        <div style="display:flex;justify-content:space-between;padding:3px 0;color:#6a5a70"><span>Comissão (${String(d.comissao_percentual).replace('.', ',')}%)</span><span>− R$ ${Number(d.comissao_valor).toFixed(2)}</span></div>
+        <div style="display:flex;justify-content:space-between;padding:9px 0 2px;margin-top:5px;border-top:1px solid #e8d8e2;font-weight:700;font-size:16px;color:#a03a5d"><span>A receber</span><span>R$ ${Number(d.valor_a_receber).toFixed(2)}</span></div>
+      </div>
+      <div style="display:flex;gap:56px;margin-top:60px">
+        <div style="flex:1;border-top:1px solid #c9b8c4;padding-top:8px;font-size:11.5px;color:#9a8aa0;text-align:center">Assinatura da revendedora</div>
+        <div style="flex:1;border-top:1px solid #c9b8c4;padding-top:8px;font-size:11.5px;color:#9a8aa0;text-align:center">Assinatura Lizzie Semijoias</div>
+      </div>
     </div>`;
 
   document.getElementById('print-overlay').classList.add('show');
