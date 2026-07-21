@@ -1793,39 +1793,46 @@ export function gerarPdfFechamento() {
     return s + (qtd * (c.preco_venda || 0));
   }, 0);
 
-  const linhas = restantes.map((c, i) => {
+  const th = (txt, al) => `<th style="padding:10px 14px;text-align:${al};font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:600;color:#6d2947">${txt}</th>`;
+  const linhas = restantes.map(c => {
     const qtd = qtdDisp(c);
-    return `<tr style="background:${i%2===0?'#faf7f2':'#fff'}">
-      <td style="padding:9px 12px;font-size:12px;color:#8a7590">${esc(c.referencia||'—')}</td>
-      <td style="padding:9px 12px;font-size:13px">${esc(c.descricao)}</td>
-      <td style="padding:9px 12px;text-align:center;font-size:13px">${qtd}</td>
-      <td style="padding:9px 12px;text-align:right;font-size:13px">${c.preco_venda?'R$ '+Number(c.preco_venda).toFixed(2):'—'}</td>
+    return `<tr style="border-bottom:1px solid #f0e8ee">
+      <td style="padding:9px 14px;font-size:11.5px;color:#9a8aa0;font-family:'DM Mono',monospace">${esc(c.referencia||'—')}</td>
+      <td style="padding:9px 14px;font-size:12.5px;color:#2d1f35">${esc(c.descricao)}</td>
+      <td style="padding:9px 14px;text-align:center;font-size:12.5px">${qtd}</td>
+      <td style="padding:9px 14px;text-align:right;font-size:12.5px;color:#6a5a70">${c.preco_venda?'R$ '+Number(c.preco_venda).toFixed(2):'—'}</td>
     </tr>`;
   }).join('');
 
   document.getElementById('print-content').innerHTML = `
-    <div style="margin-bottom:24px">
-      <div style="font-size:11px;letter-spacing:2px;text-transform:uppercase;color:#8a7590;margin-bottom:6px">Lizzie Semijoias</div>
-      <h1 style="font-family:'Georgia',serif;font-size:22px;font-weight:400;margin:0 0 4px">Fechamento do Catálogo</h1>
-      <div style="font-size:13px;color:#8a7590">Revendedora: <strong style="color:#2d1f35">${esc(nomeRev)}</strong> &nbsp;·&nbsp; Data: ${hoje} &nbsp;·&nbsp; ${restantes.length} iten${restantes.length!==1?'s':''} · ${total} unidade${total!==1?'s':''}</div>
-    </div>
-    <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
-      <thead>
-        <tr style="background:#1a0a2e;color:#fff">
-          <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:500">SKU</th>
-          <th style="padding:10px 12px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:500">Descrição</th>
-          <th style="padding:10px 12px;text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:500">Qtd</th>
-          <th style="padding:10px 12px;text-align:right;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;font-weight:500">Preço unit.</th>
-        </tr>
-      </thead>
-      <tbody>${linhas}</tbody>
-    </table>
-    <div style="text-align:right;font-size:14px;font-weight:600;margin-bottom:48px">
-      Total estimado a devolver: R$ ${valorTotal.toFixed(2)}
-    </div>
-    <div style="display:flex;gap:60px;margin-top:48px">
-      <div style="flex:1;border-top:1px solid #ccc;padding-top:8px;font-size:12px;color:#8a7590">Assinatura da revendedora</div>
-      <div style="flex:1;border-top:1px solid #ccc;padding-top:8px;font-size:12px;color:#8a7590">Assinatura Lizzie Semijoias</div>
+    <div style="font-family:'DM Sans',Arial,sans-serif;color:#2d1f35;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #6d2947;padding-bottom:16px;margin-bottom:18px">
+        <div>
+          <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#c9748a;font-weight:600;margin-bottom:7px">Lizzie Semijoias</div>
+          <h1 style="font-family:'Cormorant Garamond',Georgia,serif;font-size:30px;font-weight:600;margin:0;line-height:1">Fechamento do Catálogo</h1>
+        </div>
+        <div style="text-align:right;font-size:12px;color:#9a8aa0">
+          <div style="font-size:14px;color:#2d1f35;font-weight:600">${esc(nomeRev)}</div>
+          <div style="margin-top:3px">${hoje}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:28px;margin-bottom:20px;font-size:12.5px">
+        <span style="color:#9a8aa0">Itens <strong style="color:#2d1f35;font-size:14px">${restantes.length}</strong></span>
+        <span style="color:#9a8aa0">Unidades <strong style="color:#2d1f35;font-size:14px">${total}</strong></span>
+      </div>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:22px">
+        <thead><tr style="background:#faf3f6;border-bottom:2px solid #e8d8e2;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+          ${th('SKU', 'left')}${th('Descrição', 'left')}${th('Qtd', 'center')}${th('Preço unit.', 'right')}
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+      <div style="margin-left:auto;width:300px;font-size:13px;margin-bottom:46px;background:#faf3f6;border-radius:12px;padding:14px 18px;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+        <div style="display:flex;justify-content:space-between;font-weight:700;font-size:15px;color:#6d2947"><span>Total a devolver</span><span>R$ ${valorTotal.toFixed(2)}</span></div>
+      </div>
+      <div style="display:flex;gap:56px;margin-top:60px">
+        <div style="flex:1;border-top:1px solid #c9b8c4;padding-top:8px;font-size:11.5px;color:#9a8aa0;text-align:center">Assinatura da revendedora</div>
+        <div style="flex:1;border-top:1px solid #c9b8c4;padding-top:8px;font-size:11.5px;color:#9a8aa0;text-align:center">Assinatura Lizzie Semijoias</div>
+      </div>
     </div>`;
 
   fechTelaAberta = false;
