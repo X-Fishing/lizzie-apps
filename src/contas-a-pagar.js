@@ -47,6 +47,25 @@ const proximoMesVenc = iso => {
   return `${alvo.getFullYear()}-${String(alvo.getMonth() + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
 };
 
+const r2 = n => Math.round(n * 100) / 100;
+
+// Avança o vencimento em k períodos. Semanal = +7k dias; mensal/parcelado =
+// +k meses; anual = +12k meses. Mês/ano com clamp de fim de mês (31→28/30).
+const REC_LABEL = { mensal: 'Mensal', semanal: 'Semanal', anual: 'Anual', parcelado: 'Parcelado' };
+const somarPeriodo = (iso, tipo, k) => {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (tipo === 'semanal') {
+    const base = new Date(y, m - 1, d);
+    base.setDate(base.getDate() + 7 * k);
+    return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
+  }
+  const meses = tipo === 'anual' ? 12 * k : k;
+  const alvo = new Date(y, m - 1 + meses, 1);
+  const ult = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
+  const dd = Math.min(d, ult);
+  return `${alvo.getFullYear()}-${String(alvo.getMonth() + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+};
+
 // Status efetivo: aberto vencido vira "atrasado" só na exibição.
 const statusEfetivo = t =>
   t.status === 'aberto' && t.vencimento && t.vencimento < hojeISO() ? 'atrasado' : t.status;
@@ -257,7 +276,7 @@ function capLinhaHtml(t) {
   return `<tr class="cap-row${cancel ? ' cap-cancelada' : ''}" data-id="${t.id}">
     <td class="ciclo-td" style="width:26px"><button class="cap-chevron${aberto ? ' aberto' : ''}" onclick="capToggleDetalhe('${t.id}')" title="Detalhes">${IC_CHEV}</button></td>
     <td class="ciclo-td"><input type="date" class="cap-inp${ef === 'atrasado' ? ' cap-atrasada' : ''}" value="${esc(t.vencimento || '')}" ${dis} onchange="capCampoChange('${t.id}','vencimento',this)"></td>
-    <td class="ciclo-td"><input type="text" class="cap-inp" style="min-width:130px" value="${esc(t.descricao || '')}" ${dis} onchange="capCampoChange('${t.id}','descricao',this)">${temDet ? '<span class="cap-dot" title="tem observação/boleto"></span>' : ''}</td>
+    <td class="ciclo-td"><input type="text" class="cap-inp" style="min-width:130px" value="${esc(t.descricao || '')}" ${dis} onchange="capCampoChange('${t.id}','descricao',this)">${temDet ? '<span class="cap-dot" title="tem observação/boleto"></span>' : ''}${t.parcela_total ? `<span style="font-size:10px;color:var(--muted);margin-left:5px" title="${t.recorrencia === 'parcelado' ? 'parcela' : 'recorrência'} ${t.parcela_num}/${t.parcela_total}">${t.parcela_num}/${t.parcela_total}</span>` : ''}</td>
     <td class="ciclo-td"><select class="cap-inp" data-cap-sel="fornecedores" ${dis} onchange="capCampoChange('${t.id}','fornecedor_id',this)">${optsForn(t.fornecedor_id)}</select></td>
     <td class="ciclo-td"><select class="cap-inp" data-cap-sel="categorias_financeiras" ${dis} onchange="capCampoChange('${t.id}','categoria_id',this)">${optsCat(t.categoria_id)}</select></td>
     <td class="ciclo-td"><select class="cap-inp" ${dis} onchange="capCampoChange('${t.id}','forma_pagamento',this)">${optsForma(t.forma_pagamento)}</select></td>
@@ -279,8 +298,36 @@ function capDetalheHtml(t) {
       <div style="display:flex;gap:6px"><input type="url" class="form-control" value="${esc(t.boleto_url || '')}" ${dis} onchange="capCampoChange('${t.id}','boleto_url',this)">${t.boleto_url ? `<a class="btn-secondary btn-sm" href="${esc(t.boleto_url)}" target="_blank" rel="noopener">Abrir</a>` : ''}</div></div>
     ${t.status === 'pago' ? `<div><label class="form-label">Data do pagamento</label>
       <input type="date" class="form-control" value="${esc(t.data_pagamento || '')}" ${dis} onchange="capCampoChange('${t.id}','data_pagamento',this)"></div>` : ''}
+    ${capRecCardHtml(t)}
     <div style="font-size:11px;color:var(--muted);align-self:end">Origem: ${esc(t.origem || 'manual')} · criado ${formatDate((t.created_at || '').slice(0, 10))}</div>
   </div></td></tr>`;
+}
+
+// Card de recorrência: título em série mostra só a info; avulso mostra os
+// controles (tipo + N + Gerar) para multiplicar em ocorrências futuras.
+function capRecCardHtml(t) {
+  if (t.serie_id && t.parcela_total) {
+    const lbl = t.recorrencia === 'parcelado'
+      ? `Parcela ${t.parcela_num}/${t.parcela_total}`
+      : `${REC_LABEL[t.recorrencia] || t.recorrencia} · ${t.parcela_num}/${t.parcela_total}`;
+    return `<div><label class="form-label">Recorrência</label>
+      <div style="font-size:13px;color:var(--plum)">${lbl}</div>
+      <div style="font-size:11px;color:var(--muted)">Gerada por recorrência.</div></div>`;
+  }
+  if (!ehGestor() || t.status === 'cancelado') return '';
+  return `<div><label class="form-label">Recorrência</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+      <select id="cap-rec-tipo-${t.id}" class="form-control" style="max-width:150px" onchange="capRecTipoChange('${t.id}')">
+        <option value="">Nenhuma</option>
+        <option value="mensal">Mensal</option>
+        <option value="semanal">Semanal</option>
+        <option value="anual">Anual</option>
+        <option value="parcelado">Parcelado em X</option>
+      </select>
+      <input type="number" id="cap-rec-n-${t.id}" class="form-control" style="max-width:80px;display:none" min="2" max="60" value="12">
+      <button type="button" class="btn-secondary btn-sm" id="cap-rec-btn-${t.id}" style="display:none" onclick="capRecGerar('${t.id}')">Gerar</button>
+    </div>
+    <div id="cap-rec-hint-${t.id}" style="font-size:11px;color:var(--muted);margin-top:3px"></div></div>`;
 }
 
 function capAnexoCel(t) {
@@ -521,6 +568,78 @@ export function capMenuSub(n) {
   if (!m) return;
   m.querySelectorAll('.cap-submenu').forEach(s => {
     if (s.dataset.sub === String(n)) s.classList.toggle('aberto'); else s.classList.remove('aberto');
+  });
+}
+
+// Mostra/esconde o campo N e o botão Gerar conforme o tipo escolhido.
+export function capRecTipoChange(id) {
+  const tipo = document.getElementById(`cap-rec-tipo-${id}`)?.value || '';
+  const nEl = document.getElementById(`cap-rec-n-${id}`);
+  const btn = document.getElementById(`cap-rec-btn-${id}`);
+  const hint = document.getElementById(`cap-rec-hint-${id}`);
+  const on = !!tipo;
+  if (nEl) {
+    nEl.style.display = on ? '' : 'none';
+    if (on) nEl.value = tipo === 'parcelado' ? '4' : '12';
+  }
+  if (btn) btn.style.display = on ? '' : 'none';
+  if (hint) hint.textContent = !on ? ''
+    : tipo === 'parcelado' ? 'Divide o valor do título em X parcelas mensais.'
+      : 'Repete o título N vezes (mesmo valor), no intervalo escolhido.';
+}
+
+// Gera as ocorrências: parcelado divide o valor (última ajusta centavos);
+// mensal/semanal/anual repetem o mesmo valor. O título vira 1/N; as demais
+// são cópias (molde do capDuplicar) com serie_id/parcela.
+export async function capRecGerar(id) {
+  if (!ehGestor()) return;
+  const t = capTitulos.find(x => String(x.id) === String(id));
+  if (!t) return;
+  if (t.serie_id) { toast('Este título já faz parte de uma recorrência.'); return; }
+  const tipo = document.getElementById(`cap-rec-tipo-${id}`)?.value || '';
+  if (!tipo) return;
+  const N = Math.floor(Number(document.getElementById(`cap-rec-n-${id}`)?.value || 0));
+  if (!(N >= 2 && N <= 60)) { toast('Informe a quantidade (2 a 60).'); return; }
+
+  const total = Number(t.valor || 0);
+  const parcelaBase = tipo === 'parcelado' ? Math.floor(total / N * 100) / 100 : total;
+  const ultima = tipo === 'parcelado' ? r2(total - parcelaBase * (N - 1)) : total;
+  const ultimoVenc = somarPeriodo(t.vencimento, tipo, N - 1);
+  const resumo = tipo === 'parcelado'
+    ? `Gerar ${N} parcelas de ${fmtBRL(parcelaBase)}${ultima !== parcelaBase ? ` (última ${fmtBRL(ultima)})` : ''} — total ${fmtBRL(total)}. Última vence em ${formatDate(ultimoVenc)}.`
+    : `Repetir este título ${N}× (${REC_LABEL[tipo].toLowerCase()}), ${fmtBRL(total)} cada. Última vence em ${formatDate(ultimoVenc)}.`;
+
+  confirmarAcao('Gerar recorrência', resumo, 'Gerar', async () => {
+    const serie = crypto.randomUUID();
+    const copias = [];
+    for (let k = 1; k < N; k++) {
+      const valor = (tipo === 'parcelado' && k === N - 1) ? ultima : parcelaBase;
+      copias.push({
+        status: 'aberto', grupo: grupoDe(t),
+        fornecedor_id: t.fornecedor_id, fornecedor_nome: t.fornecedor_nome,
+        descricao: t.descricao, valor, vencimento: somarPeriodo(t.vencimento, tipo, k),
+        categoria_id: t.categoria_id, categoria_nome: t.categoria_nome,
+        forma_pagamento: t.forma_pagamento, observacao: t.observacao,
+        boleto_codigo: t.boleto_codigo, boleto_url: t.boleto_url,
+        created_by: state.currentUser?.id || null,
+        serie_id: serie, recorrencia: tipo, parcela_num: k + 1, parcela_total: N,
+      });
+    }
+    // 1) cria as cópias primeiro — se falhar, o título original fica intacto.
+    const { error: eIns } = await sbQ(sb.from('contas_a_pagar').insert(copias));
+    if (eIns) {
+      console.error('Recorrência (cópias):', eIns);
+      const dica = /column|schema cache/i.test(eIns.message || '') ? ' Rode a migração 0034 no Supabase.' : '';
+      toast('Erro ao gerar: ' + eIns.message + dica);
+      return;
+    }
+    // 2) marca o original como 1/N (parcelado também ajusta o valor).
+    const patchOrig = { serie_id: serie, recorrencia: tipo, parcela_num: 1, parcela_total: N };
+    if (tipo === 'parcelado') patchOrig.valor = parcelaBase;
+    const { error: eUpd } = await sbQ(sb.from('contas_a_pagar').update(patchOrig).eq('id', id));
+    if (eUpd) { console.error('Recorrência (original):', eUpd); toast('Cópias criadas, mas erro ao atualizar o título original: ' + eUpd.message); }
+    toast(tipo === 'parcelado' ? `${N} parcelas geradas.` : `Recorrência de ${N} lançamentos gerada.`);
+    loadContasAPagar();
   });
 }
 
