@@ -161,6 +161,9 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
   font-size: 18px; padding: 4px; transition: color 0.3s;
 }
 .btn-icon:hover { color: var(--gold); }
+/* No grid claro do Contas a Pagar o branco do .btn-icon some — usa muted. */
+.cap-grid-table .btn-icon { color: var(--muted); }
+.cap-grid-table .btn-icon:hover { color: var(--rose); }
 
 /* NAV */
 .nav {
