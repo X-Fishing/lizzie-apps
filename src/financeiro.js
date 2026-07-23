@@ -386,6 +386,7 @@ export async function loadFinanceiro() {
         ${l.estornado ? `<span class="badge badge-aberta" style="font-size:10px;margin-left:6px" title="Estornado em ${formatDate(l.estornado_em)}${l.estorno_motivo ? ' — ' + esc(l.estorno_motivo) : ''}">Estornado</span>` : ''}
         <div style="font-size:11px;color:var(--muted)">${esc(l.categoria || '')}${l.forma_pagamento ? ' · ' + esc(l.forma_pagamento) : ''} · ${refLinha(l)}</div></td>
       <td class="ciclo-td">${esc(l.pessoa_nome || '—')}</td>
+      <td class="ciclo-td">${l.forma_pagamento ? `<span class="badge badge-ativo" style="font-size:10px">${esc(l.forma_pagamento)}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
       <td class="ciclo-td" style="text-align:right"><span class="ciclo-preco" ${l.estornado ? 'style="text-decoration:line-through"' : ''}>${fmtBRL(l.valor)}</span></td>
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         ${l.pago && !l.estornado && l.tipo === 'receber' && podeEstornar()
@@ -393,7 +394,7 @@ export async function loadFinanceiro() {
         ${IS_ADMIN ? `<button class="btn-icon" title="Excluir lançamento" style="color:var(--danger)" onclick="excluirLancamento('${l.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>` : ''}
       </td>
     </tr>`).join('') :
-    '<tr><td colspan="5"><div class="empty-state" style="padding:18px 0"><p style="font-size:13px">Nenhum recebimento ainda — feche uma maleta para começar.</p></div></td></tr>';
+    '<tr><td colspan="6"><div class="empty-state" style="padding:18px 0"><p style="font-size:13px">Nenhum recebimento ainda — feche uma maleta para começar.</p></div></td></tr>';
 
   panel.innerHTML = `
     <div class="page-head">
@@ -415,7 +416,7 @@ export async function loadFinanceiro() {
     <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:8px 0">Recebidos</div>
     <div class="pag-wrap"><table class="pag-table"><thead><tr>
       <th class="pag-th">Data</th><th class="pag-th">Descrição</th><th class="pag-th">Pessoa</th>
-      <th class="pag-th" style="text-align:right">Valor</th><th class="pag-th"></th>
+      <th class="pag-th">Forma</th><th class="pag-th" style="text-align:right">Valor</th><th class="pag-th"></th>
     </tr></thead><tbody>${rowsRec}</tbody></table></div>`;
 }
 
