@@ -171,10 +171,11 @@ export async function loadDashboardStaff() {
   const panel = document.getElementById('panel-dashboard');
   panel.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando dashboard...</div>';
 
-  const [vRes, gRes, pRes] = await Promise.all([
-    fetchPaginado(() => sb.from('vendas').select('valor_total,valor_pago,status,data_venda,revendedora_id')),
+  const [vRes, gRes, pRes, mRes] = await Promise.all([
+    fetchPaginado(() => sb.from('vendas').select('valor_total,valor_pago,status,data_venda,revendedora_id,maleta_id')),
     sbQ(sb.from('garantias').select('status,prazo_maximo')),
-    sbQ(sb.from('profiles').select('*').eq('is_revendedora', true))
+    sbQ(sb.from('profiles').select('*').eq('is_revendedora', true)),
+    sbQ(sb.from('maletas').select('id,revendedora_id').eq('status', 'ativa'))
   ]);
   // Métricas de faturamento IGNORAM revendedoras TESTE (profiles.teste).
   const todasRevs = pRes.data || [];
@@ -218,6 +219,22 @@ export async function loadDashboardStaff() {
   });
   const ranking = Object.entries(porRev).map(([id, tot]) => ({ id, nome: nomeDe[id] || '—', tot, n: porRevCount[id] || 0 }))
     .sort((a, b) => b.tot - a.tot).slice(0, 5);
+
+  // Ranking do CICLO ATUAL: só vendas da maleta ATIVA de cada revendedora.
+  const maletasAtivas = new Set((mRes.data || []).map(m => String(m.id)));
+  const porRevCiclo = {}, porRevCicloCount = {};
+  vendas.forEach(v => {
+    if (!v.maleta_id || !maletasAtivas.has(String(v.maleta_id))) return;
+    porRevCiclo[v.revendedora_id] = (porRevCiclo[v.revendedora_id] || 0) + num(v.valor_total);
+    porRevCicloCount[v.revendedora_id] = (porRevCicloCount[v.revendedora_id] || 0) + 1;
+  });
+  const rankingCiclo = Object.entries(porRevCiclo).map(([id, tot]) => ({ id, nome: nomeDe[id] || '—', tot, n: porRevCicloCount[id] || 0 }))
+    .sort((a, b) => b.tot - a.tot).slice(0, 5);
+  const rankRow = r => `<div style="display:flex;align-items:center;gap:10px;padding:7px 0">
+    <div style="width:30px;height:30px;border-radius:9px;background:var(--blush);color:var(--rose);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none">${iniciais(r.nome)}</div>
+    <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;color:var(--plum);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.nome)}</div><div style="font-size:11px;color:var(--muted)">${r.n} venda${r.n !== 1 ? 's' : ''}</div></div>
+    <div style="font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--plum)">${fmtBRL(r.tot)}</div>
+  </div>`;
 
   // Barras dos últimos 7 dias (agrega o MESMO array vendas por dia).
   const DIA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
@@ -266,13 +283,13 @@ export async function loadDashboardStaff() {
         </div>
       </div>
       <div class="dash-card">
-        <h3>Top revendedoras</h3><div class="dash-sub">Por total vendido no período</div>
-        ${ranking.length ? ranking.map(r => `<div style="display:flex;align-items:center;gap:10px;padding:7px 0">
-          <div style="width:30px;height:30px;border-radius:9px;background:var(--blush);color:var(--rose);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none">${iniciais(r.nome)}</div>
-          <div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;color:var(--plum);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(r.nome)}</div><div style="font-size:11px;color:var(--muted)">${r.n} venda${r.n !== 1 ? 's' : ''}</div></div>
-          <div style="font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--plum)">${fmtBRL(r.tot)}</div>
-        </div>`).join('') : '<div class="dash-sub">Sem vendas ainda.</div>'}
+        <h3>Top do ciclo atual</h3><div class="dash-sub">Só a maleta ativa de cada revendedora</div>
+        ${rankingCiclo.length ? rankingCiclo.map(rankRow).join('') : '<div class="dash-sub">Sem vendas no ciclo atual.</div>'}
       </div>
+    </div>
+    <div class="dash-card" style="margin-bottom:18px">
+      <h3>Top revendedoras (histórico)</h3><div class="dash-sub">Por total vendido acumulado (todas as maletas)</div>
+      ${ranking.length ? ranking.map(rankRow).join('') : '<div class="dash-sub">Sem vendas ainda.</div>'}
     </div>
     <div class="kpi-grid">
       <div class="kpi-card">
