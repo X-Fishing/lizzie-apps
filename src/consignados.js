@@ -955,7 +955,14 @@ export function renderConferencia() {
   }
 
   const BADGE = { devolvido: ['Voltou', 'var(--success)'], vendida: ['Vendida', 'var(--rose)'] };
-  div.innerHTML = bulk + lista.map(c => {
+  const cabecalho = `<div style="display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);border-bottom:2px solid var(--border)">
+    <div style="flex:1;min-width:0">Peça</div>
+    <div style="width:88px;flex:none;text-align:right">SKU</div>
+    <div style="width:92px;flex:none;text-align:right">Preço</div>
+    <div style="width:26px;flex:none"></div>
+    <div style="width:128px;flex:none"></div>
+  </div>`;
+  div.innerHTML = bulk + cabecalho + lista.map(c => {
     const est = confEstado(c);
     const badge = est ? ` · <span style="color:${BADGE[est][1]};font-weight:600">${BADGE[est][0]}</span>` : '';
     const btn = (alvo, cor, lab, fn) => {
@@ -965,8 +972,10 @@ export function renderConferencia() {
     return `<div style="display:flex;align-items:center;gap:8px;padding:9px 4px;border-bottom:1px solid var(--line,#eee)">
       <div style="flex:1;min-width:0">
         <div class="ciclo-desc" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.descricao)}</div>
-        <div style="font-size:11px;color:var(--muted)">${c.referencia ? esc(c.referencia) + ' · ' : ''}${foiLancada(c) ? '<span style="color:var(--rose);font-weight:600">vendido</span>' : 'não vendido'}${contagem[chaveDup(c)] > 1 ? ` · <b style="color:var(--plum)">${posicao[c.id]} de ${contagem[chaveDup(c)]}</b>` : ''}${badge}</div>
+        <div style="font-size:11px;color:var(--muted)">${foiLancada(c) ? '<span style="color:var(--rose);font-weight:600">vendido</span>' : 'não vendido'}${contagem[chaveDup(c)] > 1 ? ` · <b style="color:var(--plum)">${posicao[c.id]} de ${contagem[chaveDup(c)]}</b>` : ''}${badge}</div>
       </div>
+      <div style="width:88px;flex:none;font-size:12px;color:var(--muted);font-family:monospace;text-align:right">${c.referencia ? esc(c.referencia) : '—'}</div>
+      <div style="width:92px;flex:none;text-align:right;font-family:'Cormorant Garamond',serif;font-size:15px;color:var(--plum)">${c.preco_venda ? fmtBRL(c.preco_venda) : '—'}</div>
       <button class="btn-icon" title="Ver foto" style="color:var(--rose)" onclick="confVerFoto('${c.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></button>
       <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">
         ${btn('devolvido', 'var(--success)', 'Voltou', 'confMarcarDevolvido')}
