@@ -628,6 +628,11 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .pag-resumo-valor { font-family: 'Cormorant Garamond', serif; font-size: 22px; color: var(--plum); }
 .pag-resumo-valor.recv { color: var(--success); }
 .pag-resumo-valor.pend { color: var(--danger); }
+.pag-scope { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.pag-scope .chip { cursor: pointer; }
+.pag-scope .chip[disabled] { opacity: .45; cursor: default; }
+.pag-kpi { cursor: pointer; transition: border-color .15s; }
+.pag-kpi:hover { border-color: var(--rose); }
 
 /* HISTÓRICO */
 .hist-card { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; }

@@ -1716,6 +1716,14 @@ export async function confirmarVendaCarrinho(btn) {
       return;
     }
 
+    // Vincula a venda à maleta ATIVA (ciclo atual) — best-effort, não bloqueia.
+    // Escopo de "maleta atual" em Pagamentos/Dashboard depende disso.
+    const vendaId = vendaRet?.venda_id || (typeof vendaRet === 'string' ? vendaRet : null);
+    if (vendaId && state.maletaAtivaId) {
+      sbQ(sb.from('vendas').update({ maleta_id: state.maletaAtivaId }).eq('id', vendaId))
+        .then(({ error }) => { if (error) console.warn('venda.maleta_id:', error.message); });
+    }
+
     // Snapshot da venda ANTES de zerar o carrinho (o modal pós-venda usa).
     const snapshot = {
       cliente, tel, dataISO: data, total,

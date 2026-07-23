@@ -5,33 +5,51 @@ import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError
 import { enviarCertificado } from './certificado.js';
 export async function loadVendas() {
   document.getElementById('p-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
-  let q = sb.from('vendas').select('*').eq('revendedora_id', state.currentUser.id);
-  const { data, error } = await sbQ(q.order('data_venda', { ascending: false }));
-  if (error) {
-    const msg = error.message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar.';
+  // Busca as vendas + a maleta ATIVA (para escopar por ciclo, não acumular tudo).
+  const [vendasRes, maletaRes] = await Promise.all([
+    sbQ(sb.from('vendas').select('*').eq('revendedora_id', state.currentUser.id).order('data_venda', { ascending: false })),
+    sbQ(sb.from('maletas').select('id,numero_interno,numero').eq('revendedora_id', state.currentUser.id).eq('status', 'ativa').maybeSingle()),
+  ]);
+  if (vendasRes.error) {
+    const msg = vendasRes.error.message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar.';
     document.getElementById('p-list').innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
     return;
   }
-  state.allVendas = data || [];
+  state.allVendas = vendasRes.data || [];
+  state.pMaletaAtiva = maletaRes.data || null;
+  if (state.pScope === undefined) state.pScope = 'maleta';   // abre na maleta atual
   state.vendaItensCache = {};
   filtrarPagamentos();
 }
 
 export function filtrarPagamentos() {
-  const list = state.pFilter === 'todos' ? state.allVendas : state.allVendas.filter(v => v.status === state.pFilter);
   const div = document.getElementById('p-list');
+  const maletaId = state.pMaletaAtiva?.id || null;
+  let scope = state.pScope || 'maleta';
+  if (scope === 'maleta' && !maletaId) scope = 'todos'; // sem maleta ativa → histórico
 
-  const totalGeral = state.allVendas.reduce((s, v) => s + Number(v.valor_total || 0), 0);
-  const totalPago = state.allVendas.reduce((s, v) => s + Number(v.valor_pago || 0), 0);
+  // 1) escopo (maleta atual x histórico); 2) filtro de status (chips/cards).
+  const base = scope === 'maleta' ? state.allVendas.filter(v => v.maleta_id === maletaId) : state.allVendas;
+  const list = state.pFilter === 'todos' ? base : base.filter(v => v.status === state.pFilter);
+
+  const totalGeral = base.reduce((s, v) => s + Number(v.valor_total || 0), 0);
+  const totalPago = base.reduce((s, v) => s + Number(v.valor_pago || 0), 0);
   const totalPendente = totalGeral - totalPago;
-  const resumo = `<div class="pag-resumo">
-    <div class="pag-resumo-card"><div class="pag-resumo-label">Total vendas</div><div class="pag-resumo-valor">R$ ${totalGeral.toFixed(2)}</div></div>
-    <div class="pag-resumo-card"><div class="pag-resumo-label">Recebido</div><div class="pag-resumo-valor recv">R$ ${totalPago.toFixed(2)}</div></div>
-    <div class="pag-resumo-card"><div class="pag-resumo-label">A receber</div><div class="pag-resumo-valor pend">R$ ${totalPendente.toFixed(2)}</div></div>
+
+  const nMaleta = state.pMaletaAtiva?.numero_interno ? `#${state.pMaletaAtiva.numero_interno}` : '';
+  const scopeToggle = `<div class="pag-scope">
+    <button class="chip${scope === 'maleta' ? ' active' : ''}"${maletaId ? '' : ' disabled'} onclick="setPScope('maleta')">Maleta atual ${nMaleta}</button>
+    <button class="chip${scope === 'todos' ? ' active' : ''}" onclick="setPScope('todos')">Histórico</button>
+  </div>`;
+  const resumo = scopeToggle + `<div class="pag-resumo">
+    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('todos')"><div class="pag-resumo-label">Total vendas</div><div class="pag-resumo-valor">R$ ${totalGeral.toFixed(2)}</div></div>
+    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('quitado')"><div class="pag-resumo-label">Recebido</div><div class="pag-resumo-valor recv">R$ ${totalPago.toFixed(2)}</div></div>
+    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('pendente')"><div class="pag-resumo-label">A receber</div><div class="pag-resumo-valor pend">R$ ${totalPendente.toFixed(2)}</div></div>
   </div>`;
 
   if (!list.length) {
-    div.innerHTML = resumo + '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg></div><p>Nenhuma venda encontrada</p></div>';
+    const msg = scope === 'maleta' ? 'Nenhuma venda nesta maleta.' : 'Nenhuma venda encontrada';
+    div.innerHTML = resumo + `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg></div><p>${msg}</p></div>`;
     return;
   }
 
@@ -65,12 +83,18 @@ export function filtrarPagamentos() {
   </table></div>`;
 }
 
-export function setPFilter(el, f) {
+// Aplica o filtro de status e sincroniza os chips do topo (index.html).
+function aplicarPFilter(f) {
   state.pFilter = f;
-  document.querySelectorAll('[data-pfilter]').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
+  document.querySelectorAll('[data-pfilter]').forEach(c =>
+    c.classList.toggle('active', c.getAttribute('data-pfilter') === f));
   filtrarPagamentos();
 }
+export function setPFilter(el, f) { aplicarPFilter(f); }
+// KPI cards clicáveis: Total→todos · Recebido→quitado · A receber→pendente.
+export function setPFilterFromCard(f) { aplicarPFilter(f); }
+// Escopo: 'maleta' (ciclo atual, padrão) ou 'todos' (histórico).
+export function setPScope(scope) { state.pScope = scope; filtrarPagamentos(); }
 
 export async function verVenda(id) {
   const v = state.allVendas.find(x => x.id === id);
