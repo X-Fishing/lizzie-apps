@@ -1,7 +1,7 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
 const soDigitos = s => (s || '').replace(/\D/g, '');
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 import { abrirModalPosVenda } from './pos-venda.js';
@@ -696,6 +696,12 @@ let confMaletaAtivaId = null;
 let confCicloChave = null;    // modo correção: chave (data) do ciclo FINALIZADO
 let confOrigVendida = null;   // modo correção: Set de ids lançados como vendidos na ORIGEM
 let confFechamento = null;    // modo correção: linha da auditoria (ou null se não achou)
+
+// "Adicionar peça" na conferência (peça que faltava na lista/lançamento).
+let confAddSel = null;        // produto vinculado pela busca ({produto_id, foto_url}) ou null (manual)
+let confAddTimer = null;      // debounce da busca
+let confAddResultados = [];   // últimos resultados da busca de produto
+let confAddBusy = false;      // trava contra duplo clique no salvar
 // Sub-telas de tela inteira (conferência e fechamento) — renderizam dentro do
 // panel-consignados no lugar do catálogo, padrão do histórico de ciclos.
 let confTelaAberta = false;
@@ -851,6 +857,8 @@ export function confComissaoUsarFaixa() {
 
 const CONF_BTN_CONFERIR = '<button class="btn-secondary" style="flex:1" onclick="conferirFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 11 3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Conferir fechamento</button>';
 const CONF_BTN_IMPRIMIR = '<button class="btn-secondary" style="flex:1" onclick="imprimirRelacaoVendidas()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Imprimir relação</button>';
+// Peça que faltava na maleta/lançamento, incluída direto no fechamento.
+const CONF_BTN_ADD = '<button class="btn-secondary" style="flex:1 1 150px;border-color:var(--rose);color:var(--rose)" onclick="confAbrirAdicionar()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg> Adicionar peça</button>';
 
 export async function abrirConferencia(revId) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
@@ -863,7 +871,7 @@ export async function abrirConferencia(revId) {
   if (!pecasConferencia().length) { toast('Nenhum mostruário ativo para conferir'); return; }
   const nome = state.revNameMap[revId] || 'Revendedora';
   abrirModalConferencia(`Conferência de fechamento — ${esc(nome)}`,
-    CONF_BTN_CONFERIR + CONF_BTN_IMPRIMIR +
+    CONF_BTN_ADD + CONF_BTN_CONFERIR + CONF_BTN_IMPRIMIR +
     '<button id="conf-btn-finalizar" class="btn-secondary" style="flex:1;border-color:var(--gold);color:var(--gold)" onclick="finalizarAposConferencia()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar Mostruário</button>');
 }
 
@@ -899,7 +907,7 @@ export async function abrirConferenciaCorrecao(chave) {
   const nome = state.revNameMap[confRevId] || 'Revendedora';
   const dataFmt = chave ? chave.split('-').reverse().join('/') : '';
   abrirModalConferencia(`Correção de conferência — ${esc(nome)} <span style="font-size:12px;color:var(--muted)">(fechado em ${dataFmt})</span>`,
-    CONF_BTN_CONFERIR + CONF_BTN_IMPRIMIR +
+    CONF_BTN_ADD + CONF_BTN_CONFERIR + CONF_BTN_IMPRIMIR +
     '<button class="btn-primary btn" style="flex:1" onclick="salvarCorrecaoConferencia()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Salvar correção</button>');
 }
 
@@ -1092,6 +1100,190 @@ async function confAplicarEstado(id, estado) {
 // Compatível com o código antigo (bipe `*` chama com true). false = desmarca.
 export async function confMarcarDevolvido(id, devolvido) { return confAplicarEstado(id, devolvido ? 'devolvido' : null); }
 export async function confMarcarVendida(id, on) { return confAplicarEstado(id, on ? 'vendida' : null); }
+
+// ── "Adicionar peça" na conferência ─────────────────────────────────
+// Para a peça que faltava na maleta (voltou sem estar na lista) ou a venda
+// que nunca foi lançada. Busca no catálogo (preenche descrição/SKU/preço) ou
+// digita manual; entra já com o destino escolhido — nunca fica "pendente".
+export function confAbrirAdicionar() {
+  if (confCicloChave ? !podeCorrigirMaleta() : !ehGestor()) { toast('Sem permissão'); return; }
+  if (!confRevId) { toast('Abra a conferência antes de adicionar.'); return; }
+  confAddSel = null;
+  confAddResultados = [];
+  confAddBusy = false;
+  document.getElementById('cad-modal-titulo').textContent = 'Adicionar peça à conferência';
+  document.getElementById('cad-modal-body').innerHTML = `
+    <div class="form-group">
+      <label class="form-label">Buscar no catálogo</label>
+      <input type="text" class="search-input" id="confadd-busca" placeholder="Nome ou SKU..." oninput="confAddBuscaInput()" autocomplete="off">
+      <div id="confadd-results" style="max-height:190px;overflow:auto;margin-top:6px"></div>
+    </div>
+    <div id="confadd-vinculo"></div>
+    <div style="text-align:center;font-size:11.5px;color:var(--muted);margin:12px 0;position:relative">
+      <span style="background:#fff;padding:0 8px;position:relative;z-index:1">ou preencha à mão</span>
+      <div style="position:absolute;top:50%;left:0;right:0;border-top:1px solid var(--border);z-index:0"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Descrição *</label>
+      <input type="text" id="confadd-desc" class="form-control" onblur="confAddChecarDuplicata()"></div>
+    <div class="form-group"><label class="form-label">Código / SKU</label>
+      <input type="text" id="confadd-ref" class="form-control" onblur="confAddChecarDuplicata()"></div>
+    <div id="confadd-dup"></div>
+    <div style="display:flex;gap:10px">
+      <div class="form-group" style="flex:1"><label class="form-label">Preço (R$)</label>
+        <input type="text" id="confadd-preco" class="form-control" inputmode="decimal" placeholder="0,00" oninput="maskMoneyBR(this)"></div>
+      <div class="form-group" style="flex:1"><label class="form-label">Quantidade</label>
+        <input type="number" id="confadd-qtd" class="form-control" min="1" value="1"></div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Esta peça...</label>
+      <div style="display:flex;gap:14px;margin-top:4px">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13.5px">
+          <input type="radio" name="confadd-destino" value="devolvido" style="accent-color:var(--rose)"> Voltou na maleta</label>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13.5px">
+          <input type="radio" name="confadd-destino" value="vendida" style="accent-color:var(--rose)"> Foi vendida</label>
+      </div>
+    </div>`;
+  const btn = document.getElementById('cad-modal-salvar');
+  btn.style.display = '';
+  btn.disabled = false;
+  btn.textContent = 'Adicionar peça';
+  btn.setAttribute('onclick', 'confAddSalvar()');
+  openModal('modal-cadastro');
+  setTimeout(() => document.getElementById('confadd-busca')?.focus(), 50);
+}
+
+export function confAddBuscaInput() {
+  clearTimeout(confAddTimer);
+  confAddTimer = setTimeout(confAddBuscar, 250);
+}
+
+async function confAddBuscar() {
+  const el = document.getElementById('confadd-busca');
+  if (!el) return; // modal já foi fechado
+  const termo = (el.value || '').trim();
+  const div = document.getElementById('confadd-results');
+  if (termo.length < 2) { div.innerHTML = ''; confAddResultados = []; return; }
+
+  const t = termo.replace(/"/g, '');
+  const ors = [`nome.ilike."%${t}%"`, `sku.ilike."%${t}%"`, `codigo_fornecedor.ilike."%${t}%"`, `codigo_barras.ilike."%${t}%"`];
+  const { data, error } = await sbQ(sb.from('produtos')
+    .select('id,nome,sku,codigo_fornecedor,preco_venda,foto_url').eq('ativo', true).or(ors.join(',')).order('nome').limit(30));
+  if (error) { console.error('Busca de produto (conferência):', error); div.innerHTML = ''; return; }
+  confAddResultados = data || [];
+  if (!confAddResultados.length) {
+    div.innerHTML = `<div style="font-size:12.5px;color:var(--muted);padding:8px 0">Nenhum produto encontrado — preencha à mão abaixo.</div>`;
+    return;
+  }
+  div.innerHTML = confAddResultados.map((p, i) => `
+    <div class="f3-row" onclick="confAddEscolher(${i})">
+      <div style="flex:1;min-width:0">
+        <div class="ciclo-desc">${esc(p.nome)}</div>
+        <div class="f3-meta"><span>SKU ${esc(p.sku || '—')}</span></div>
+      </div>
+      <span class="ciclo-preco" style="white-space:nowrap">${fmtBRL(p.preco_venda || 0)}</span>
+    </div>`).join('');
+}
+
+export function confAddEscolher(idx) {
+  const p = confAddResultados[idx];
+  if (!p) return;
+  confAddSel = { produto_id: p.id, foto_url: p.foto_url || null, nome: p.nome };
+  document.getElementById('confadd-desc').value = p.nome;
+  document.getElementById('confadd-ref').value = p.sku || '';
+  document.getElementById('confadd-preco').value = moneyToInput(p.preco_venda || 0);
+  document.getElementById('confadd-busca').value = '';
+  document.getElementById('confadd-results').innerHTML = '';
+  document.getElementById('confadd-vinculo').innerHTML =
+    `<div style="font-size:12.5px;color:var(--success);margin-bottom:6px">✓ Vinculada a ${esc(p.nome)}
+      <button type="button" style="background:none;border:none;color:var(--muted);text-decoration:underline;cursor:pointer;font-size:12px" onclick="confAddLimparProduto()">desvincular</button></div>`;
+  confAddChecarDuplicata();
+}
+
+export function confAddLimparProduto() {
+  confAddSel = null;
+  document.getElementById('confadd-vinculo').innerHTML = '';
+}
+
+// Aviso não bloqueante: mesma referência já presente na conferência.
+export function confAddChecarDuplicata() {
+  const div = document.getElementById('confadd-dup');
+  if (!div) return;
+  const ref = (document.getElementById('confadd-ref')?.value || '').trim();
+  if (!ref) { div.innerHTML = ''; return; }
+  const iguais = pecasConferencia().filter(c => (c.referencia || '').trim().toLowerCase() === ref.toLowerCase());
+  if (!iguais.length) { div.innerHTML = ''; return; }
+  const conferidas = iguais.filter(confConferida).length;
+  div.innerHTML = `<div style="font-size:12px;color:var(--warning);background:rgba(232,168,56,.12);border-radius:8px;padding:6px 10px;margin:-6px 0 10px">
+    ⚠ Já existe ${iguais.length} peça(s) com este código na conferência (${conferidas} conferida${conferidas !== 1 ? 's' : ''}, ${iguais.length - conferidas} pendente${iguais.length - conferidas !== 1 ? 's' : ''}). Se for a mesma, marque a existente em vez de adicionar outra.</div>`;
+}
+
+export async function confAddSalvar() {
+  if (confAddBusy) return;
+  const desc = (document.getElementById('confadd-desc').value || '').trim();
+  const ref = (document.getElementById('confadd-ref').value || '').trim();
+  const preco = parseMoneyBR(document.getElementById('confadd-preco').value);
+  const qtd = parseInt(document.getElementById('confadd-qtd').value, 10);
+  const destino = document.querySelector('input[name="confadd-destino"]:checked')?.value || null;
+
+  if (!desc) { toast('Informe a descrição da peça'); return; }
+  if (!qtd || qtd < 1) { toast('Quantidade inválida'); return; }
+  if (!destino) { toast('Escolha se a peça voltou ou foi vendida'); return; }
+  if (destino === 'vendida' && !(preco > 0)) { toast('Informe o preço da peça vendida'); return; }
+
+  const base = pecasConferencia();
+  const payload = {
+    revendedora_id: confRevId,
+    produto_id: confAddSel?.produto_id ?? null,
+    descricao: desc,
+    referencia: ref || null,
+    quantidade_enviada: qtd,
+    preco_venda: preco || null,
+    foto_url: confAddSel?.foto_url ?? null,
+    vendido_por_divergencia: false,
+    devolvido: destino === 'devolvido',
+    conf_vendida: destino === 'vendida',
+    quantidade_vendida: destino === 'vendida' ? qtd : 0,
+    quantidade_devolvida: destino === 'devolvido' ? qtd : 0,
+  };
+  if (confCicloChave) {
+    // Modo correção: a peça já nasce ENCERRADA, no mesmo ciclo (mesma maleta e
+    // mesma data de encerramento das demais peças — nunca criar maleta nova).
+    const ref2 = base.find(c => c.encerrado_em) || base[0];
+    payload.status = 'encerrado';
+    payload.maleta_id = ref2?.maleta_id ?? null;
+    payload.encerrado_em = ref2?.encerrado_em || (confCicloChave + 'T12:00:00.000Z');
+  } else {
+    // Modo normal: NUNCA criar/garantir maleta aqui — copiar o escopo atual
+    // literalmente (inclusive null, o fallback legado de "todas as ativas").
+    payload.status = 'ativo';
+    payload.maleta_id = confMaletaAtivaId;
+  }
+
+  confAddBusy = true;
+  const btn = document.getElementById('cad-modal-salvar');
+  btn.disabled = true; btn.textContent = 'Adicionando...';
+  const { data: row, error } = await sbQ(sb.from('consignados').insert(payload).select('*').single());
+  confAddBusy = false;
+  if (btn) { btn.disabled = false; btn.textContent = 'Adicionar peça'; }
+
+  if (error || !row) {
+    console.error('Adicionar peça na conferência:', error);
+    if (/row-level security|policy|permission/i.test(error?.message || '')) { toast('Sem permissão para adicionar peça (exige gestor).'); return; }
+    if (await handleSupabaseError(error, `Erro ao adicionar peça: ${error?.message || ''}`)) return;
+    return;
+  }
+
+  state.allConsignados.unshift(row);
+  if (confCicloChave && destino === 'vendida') confOrigVendida.add(String(row.id));
+  closeModal('modal-cadastro');
+  document.getElementById('conf-resultado').innerHTML = ''; // resultado do "Conferir" ficou obsoleto
+  const chkVer = document.getElementById('conf-ver-devolvidos');
+  if (chkVer) chkVer.checked = true;
+  const buscaEl = document.getElementById('conf-search');
+  if (buscaEl) buscaEl.value = '';
+  renderConferencia();
+  toast(`Peça na conferência: ${desc} — ${destino === 'vendida' ? 'Vendida' : 'Voltou'}`, 'erro');
+}
 
 // Marca em lote todas as peças ainda não conferidas como vendidas.
 export function confTodasVendidas() {
