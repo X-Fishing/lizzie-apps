@@ -222,7 +222,11 @@ export async function enviarLinkRecuperacao(btn) {
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
   btn.disabled = false; btn.textContent = 'Enviar link de recuperação';
   if (error) { showMsg(msg, 'Erro ao enviar. Confira o e-mail e tente de novo.', 'error'); return; }
-  showMsg(msg, 'Link enviado para ' + email + '. Confira sua caixa de entrada (e o spam).', 'success');
+  // NÃO prometer que o e-mail foi enviado: o Supabase ignora silenciosamente
+  // e-mail sem conta (para não revelar quem tem cadastro). Prometer "enviado"
+  // deixava a revendedora esperando um e-mail que nunca sairia.
+  showMsg(msg, `Se existir uma conta com ${email}, o link chega em instantes (confira o spam). `
+    + 'Não recebeu? Fale com a Lizzie no WhatsApp — pode ser que seu acesso ainda não tenha sido criado.', 'success');
 }
 
 // Chamado na tela de nova senha (apos clicar no link do e-mail de recuperacao).

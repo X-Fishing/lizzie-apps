@@ -83,6 +83,19 @@ export async function loadAdmin() {
   document.getElementById('pendentes-list').innerHTML = '';   // vão pro grid unificado (chip Pendentes)
   state.aprovadasCache = prep(aprovadas);
 
+  // Possível cadastro DUPLICADO: ela entrou com outro e-mail (típico do Google)
+  // e nasceu um pendente novo, enquanto a maleta/histórico ficaram no cadastro
+  // antigo. Aprovar o pendente cria duas fichas da mesma pessoa — por isso o
+  // alerta. Compara pelo nome normalizado (sem acento/caixa).
+  const chaveNome = n => (n || '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().replace(/\s+/g, ' ').trim();
+  const nomesAprovados = new Map(state.aprovadasCache.map(r => [chaveNome(r.nome), r]));
+  state.revDuplicadas = new Map();
+  pendentesRev.forEach(p => {
+    const igual = nomesAprovados.get(chaveNome(p.nome));
+    if (igual) state.revDuplicadas.set(String(p.id), igual);
+  });
+
   const stats = document.getElementById('rev-stats');
   if (stats) {
     const ativas = state.aprovadasCache.length;
@@ -145,6 +158,11 @@ export function renderRevCard(r, pendente) {
     // Sem conta de login: ela NÃO consegue entrar, por mais que esteja "Ativa".
     state.revSemAcesso?.has(String(r.id))
       ? '<span class="badge-soon" style="background:var(--danger);color:#fff;margin-left:0" title="Ela ainda não tem login — use Criar acesso no cadastro">Sem acesso</span>' : '',
+    // Sem e-mail não há como criar/vincular acesso nenhum.
+    !r.email ? '<span class="badge-soon" style="background:var(--danger);color:#fff;margin-left:0" title="Sem e-mail não dá para criar o acesso dela">Sem e-mail</span>' : '',
+    // Provável 2ª ficha da mesma pessoa (entrou com outro e-mail, ex.: Google).
+    state.revDuplicadas?.has(String(r.id))
+      ? `<span class="badge-soon" style="background:var(--warning);color:#fff;margin-left:0" title="Já existe uma revendedora ativa com este nome (${esc(state.revDuplicadas.get(String(r.id))?.email || 'outro e-mail')}). Não aprove: acerte o e-mail no cadastro existente.">Possível duplicado</span>` : '',
     revIncompleta(r) ? '<span class="badge-soon" style="background:var(--warning);color:#fff;margin-left:0" title="Falta CPF, nascimento ou endereço">Cadastro incompleto</span>' : '',
   ].filter(Boolean).join(' ');
   return `<div class="card rev-card" onclick="abrirRevendedora('${r.id}')">
@@ -370,6 +388,12 @@ export async function salvarRevendedora(id) {
   const val = elId => (document.getElementById(elId)?.value || '').trim();
   const nome = val('rev-nome');
   if (!nome) { toast('Nome é obrigatório'); return; }
+  // E-mail é OBRIGATÓRIO: é a única chave que liga o cadastro ao login dela.
+  // Sem e-mail o cadastro fica órfão — nenhuma conta consegue ser vinculada
+  // e o botão "Criar acesso" não tem para onde apontar.
+  const emailRev = val('rev-email').toLowerCase();
+  if (!emailRev) { toast('E-mail é obrigatório — é por ele que o acesso dela é criado.'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailRev)) { toast('E-mail inválido — confira o endereço.'); return; }
   const gestor = ehGestor();
 
   const btn = panelAdmin().querySelector('.btn-primary[onclick^="salvarRevendedora"]');
@@ -378,7 +402,7 @@ export async function salvarRevendedora(id) {
   const nb = v => v || null;
   const profilePayload = {
     nome,
-    telefone: nb(val('rev-tel')), email: nb(val('rev-email')),
+    telefone: nb(val('rev-tel')), email: emailRev,   // normalizado (índice único é por lower(email))
     cep: nb(val('rev-cep')), logradouro: nb(val('rev-logradouro')), numero: nb(val('rev-numero')),
     complemento: nb(val('rev-complemento')), bairro: nb(val('rev-bairro')),
     cidade: nb(val('rev-cidade')), estado: nb(val('rev-estado')),
@@ -393,12 +417,17 @@ export async function salvarRevendedora(id) {
   // "Erro ao criar" genérico, o que impedia diagnosticar RLS/schema.
   const detalhe = e => `${e?.code ? '[' + e.code + '] ' : ''}${e?.message || e?.hint || e?.details || 'erro desconhecido'}`;
   let profileId = id;
+  // Índice único por lower(email) (0036): e-mail repetido é justamente a origem
+  // do "aprovei mas ela não entra" (aprovavam uma linha, ela logava na outra).
+  const emailDuplicado = e => /profiles_email_uniq|duplicate key/i.test(e?.message || '');
   if (id) {
     const { error } = await sbQ(sb.from('profiles').update(profilePayload).eq('id', id));
-    if (error) { console.error('salvarRevendedora update:', error); desfazerBtn(); if (isAuthError(error)) { await handleSupabaseError(error); return; } toast('Erro ao salvar: ' + detalhe(error)); return; }
+    if (error) { console.error('salvarRevendedora update:', error); desfazerBtn(); if (isAuthError(error)) { await handleSupabaseError(error); return; }
+      toast(emailDuplicado(error) ? 'Já existe outra revendedora com este e-mail. Confira o endereço.' : 'Erro ao salvar: ' + detalhe(error)); return; }
   } else {
     const { data, error } = await sbQ(sb.from('profiles').insert({ role: 'revendedora', is_revendedora: true, aprovada: true, ...profilePayload }).select('id').single());
-    if (error || !data) { console.error('salvarRevendedora insert:', error); desfazerBtn(); if (error && isAuthError(error)) { await handleSupabaseError(error); return; } toast('Erro ao criar: ' + detalhe(error)); return; }
+    if (error || !data) { console.error('salvarRevendedora insert:', error); desfazerBtn(); if (error && isAuthError(error)) { await handleSupabaseError(error); return; }
+      toast(emailDuplicado(error) ? 'Já existe uma revendedora com este e-mail — abra o cadastro dela em vez de criar outro.' : 'Erro ao criar: ' + detalhe(error)); return; }
     profileId = data.id;
   }
 
