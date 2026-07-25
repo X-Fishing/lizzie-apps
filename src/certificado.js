@@ -4,6 +4,7 @@
 import { sb } from './supabase.js';
 import { isoToBR, waMeLink } from './utils.js';
 import { GARANTIA_TEMPLATE as T } from './garantia-template.js';
+import { VERSO_TITULO, VERSO_BLOCOS, CONTATO } from './garantia-textos.js';
 
 const primeiroNome = n => (n || '').trim().split(/\s+/)[0] || 'cliente';
 
@@ -117,6 +118,104 @@ export async function gerarCertificadoGarantia({ cliente, dataISO, itens, revend
     cv.toBlob(b => (b ? resolve(b) : reject(new Error('toBlob falhou'))), 'image/png'));
 }
 
+// ── VERSO: termos aprovados (garantia + cuidados) na mesma moldura ──
+// Fluxo de cima para baixo, com quebra de linha e auto-ajuste: se o texto
+// crescer, a escala cai até caber na moldura (nunca vaza nem sobrepõe).
+export async function gerarVersoGarantia() {
+  try { await Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1500))]); } catch { /* segue */ }
+
+  const cv = document.createElement('canvas');
+  cv.width = T.width; cv.height = T.height;
+  const ctx = cv.getContext('2d');
+  const cx = T.pos.centroX;
+  const X = T.areaX, W = T.areaLargura;
+  const TOPO = 130, BASE = 1130;          // área de conteúdo (rodapé abaixo)
+
+  const fundo = await carregarFundo();
+  if (fundo) ctx.drawImage(fundo, 0, 0, T.width, T.height);
+  else { ctx.fillStyle = T.bg; ctx.fillRect(0, 0, T.width, T.height); }
+
+  const wrap = (txt, maxW) => {
+    const linhas = []; let atual = '';
+    for (const p of String(txt).split(/\s+/)) {
+      const t = atual ? `${atual} ${p}` : p;
+      if (!atual || ctx.measureText(t).width <= maxW) atual = t;
+      else { linhas.push(atual); atual = p; }
+    }
+    if (atual) linhas.push(atual);
+    return linhas;
+  };
+
+  // Monta o plano de desenho numa escala e devolve onde o conteúdo termina.
+  const planejar = (s) => {
+    const fs = n => Math.round(n * s);
+    const lh = Math.round(30 * s);
+    const ops = [];
+    let y = TOPO, num = 0;
+
+    ctx.font = `400 ${fs(42)}px 'Cormorant Garamond', Georgia, serif`;
+    ops.push({ k: 'titulo', txt: VERSO_TITULO, y, font: ctx.font });
+    y += Math.round(58 * s);
+
+    for (const b of VERSO_BLOCOS) {
+      if (b.t !== 'ol') num = 0;
+      if (b.t === 'h') {
+        y += Math.round(18 * s);
+        ctx.font = `600 ${fs(21)}px 'DM Sans', sans-serif`;
+        ops.push({ k: 'h', txt: b.x, y, font: ctx.font });
+        y += Math.round(32 * s);
+      } else if (b.t === 'li' || b.t === 'ol') {
+        const ind = Math.round(32 * s);
+        ctx.font = `400 ${fs(21)}px 'DM Sans', sans-serif`;
+        const marcador = b.t === 'ol' ? `${++num}.` : '•';
+        const linhas = wrap(b.x, W - ind);
+        linhas.forEach((l, i) => ops.push({
+          k: 'li', txt: l, y: y + i * lh, font: ctx.font, ind, marcador: i === 0 ? marcador : null,
+        }));
+        y += linhas.length * lh + Math.round(6 * s);
+      } else {
+        ctx.font = `${b.forte ? '600' : '400'} ${fs(21)}px 'DM Sans', sans-serif`;
+        const linhas = wrap(b.x, W);
+        linhas.forEach((l, i) => ops.push({ k: 'p', txt: l, y: y + i * lh, font: ctx.font, forte: b.forte }));
+        y += linhas.length * lh + Math.round(13 * s);
+      }
+    }
+    return { ops, fim: y };
+  };
+
+  let escala = 1, plano = planejar(1);
+  while (plano.fim > BASE && escala > 0.6) { escala = +(escala - 0.03).toFixed(2); plano = planejar(escala); }
+
+  for (const o of plano.ops) {
+    ctx.font = o.font;
+    if (o.k === 'titulo') {
+      ctx.textAlign = 'center'; ctx.fillStyle = T.cores.titulo;
+      ctx.fillText(o.txt, cx, o.y);
+    } else if (o.k === 'h') {
+      ctx.textAlign = 'left'; ctx.fillStyle = T.cores.marca;
+      ctx.fillText(o.txt, X, o.y);
+    } else if (o.k === 'li') {
+      ctx.textAlign = 'left'; ctx.fillStyle = T.cores.texto;
+      if (o.marcador) ctx.fillText(o.marcador, X, o.y);
+      ctx.fillText(o.txt, X + o.ind, o.y);
+    } else {
+      ctx.textAlign = 'left'; ctx.fillStyle = o.forte ? T.cores.titulo : T.cores.texto;
+      ctx.fillText(o.txt, X, o.y);
+    }
+  }
+
+  // Rodapé (centralizado, entre as folhinhas dos cantos)
+  ctx.textAlign = 'center';
+  ctx.fillStyle = T.cores.marca; ctx.font = "600 22px 'DM Sans', sans-serif";
+  ctx.fillText('LIZZIE SEMIJOIAS', cx, 1178);
+  ctx.fillStyle = T.cores.suave; ctx.font = "400 20px 'DM Sans', sans-serif";
+  ctx.fillText(`Dúvidas? Fale com a gente no WhatsApp: ${CONTATO.whatsapp}`, cx, 1210);
+  ctx.fillText(CONTATO.instagram, cx, 1240);
+
+  return await new Promise((resolve, reject) =>
+    cv.toBlob(b => (b ? resolve(b) : reject(new Error('toBlob falhou'))), 'image/png'));
+}
+
 export async function uploadCertificado(vendaId, blob) {
   const path = `garantias-certificado/${vendaId}.png`;
   const { error } = await sb.storage.from('lizzie-fotos').upload(path, blob, { upsert: true, contentType: 'image/png' });
@@ -137,10 +236,20 @@ export async function enviarCertificado({ vendaId, cliente, tel, dataISO, itens,
   const mensagem = msgGarantia(cliente, dataISO);
   const b = blob || await gerarCertificadoGarantia({ cliente, dataISO, itens, revendedora, numero });
   const file = new File([b], `garantia-${vendaId || 'lizzie'}.png`, { type: 'image/png' });
+  // Verso (termos + cuidados) vai junto — falha no verso não impede a frente.
+  let verso = null;
+  try {
+    verso = new File([await gerarVersoGarantia()], `garantia-${vendaId || 'lizzie'}-termos.png`, { type: 'image/png' });
+  } catch (e) { console.warn('verso do certificado', e); }
 
-  if (navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], text: mensagem }); return true; }
+  const arquivos = verso ? [file, verso] : [file];
+  if (navigator.canShare && navigator.canShare({ files: arquivos })) {
+    try { await navigator.share({ files: arquivos, text: mensagem }); return true; }
     catch (e) { if (e && e.name === 'AbortError') return true; /* senão cai no link */ }
+  }
+  if (verso && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], text: mensagem }); return true; }
+    catch (e) { if (e && e.name === 'AbortError') return true; }
   }
   // Fallback: link no wa.me (usa a URL pré-gerada p/ não travar em popup no PC).
   const url = publicUrl || await uploadCertificado(vendaId, b);

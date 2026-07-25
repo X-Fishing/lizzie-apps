@@ -2,7 +2,7 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, parseMoneyBR, moneyToInput, hojeBR, brToISO } from './utils.js';
-import { enviarCertificado, gerarCertificadoGarantia, numeroCertificado } from './certificado.js';
+import { enviarCertificado, gerarCertificadoGarantia, gerarVersoGarantia, numeroCertificado } from './certificado.js';
 
 // Nome da revendedora (vendedora) para o certificado: mapa de nomes já
 // carregado (consignados) ou o próprio usuário logado; senão omite.
@@ -201,24 +201,31 @@ export async function reenviarGarantiaVenda(id) {
 
 // "Gerar certificado": gera o PNG, baixa o arquivo e mostra um preview (modal).
 // Envio por WhatsApp continua no botão "Enviar certificado de garantia".
-let certPreview = null;   // { url, nome } do último gerado (para "Baixar de novo")
+let certPreview = [];   // [{ url, nome }] frente + verso (para "Baixar de novo")
 export async function gerarCertificadoVenda(id) {
   const v = state.allVendas.find(x => x.id === id);
   if (!v) { toast('Venda não encontrada'); return; }
   toast('Gerando certificado...');
   try {
-    const blob = await gerarCertificadoGarantia({
-      cliente: v.nome_cliente, dataISO: v.data_venda, itens: certItens(id),
-      revendedora: certRevNome(v), numero: numeroCertificado(id),
-    });
-    const nome = `Certificado_Garantia_${sanitizarNome(v.nome_cliente)}_${numeroCertificado(id)}.png`;
-    if (certPreview?.url) URL.revokeObjectURL(certPreview.url);
-    certPreview = { url: URL.createObjectURL(blob), nome };
-    baixarCertNovamente();   // baixa de imediato
+    const num = numeroCertificado(id);
+    const base = `Certificado_Garantia_${sanitizarNome(v.nome_cliente)}_${num}`;
+    const [frente, verso] = await Promise.all([
+      gerarCertificadoGarantia({
+        cliente: v.nome_cliente, dataISO: v.data_venda, itens: certItens(id),
+        revendedora: certRevNome(v), numero: num,
+      }),
+      gerarVersoGarantia(),
+    ]);
+    certPreview.forEach(p => URL.revokeObjectURL(p.url));
+    certPreview = [
+      { url: URL.createObjectURL(frente), nome: `${base}.png` },
+      { url: URL.createObjectURL(verso), nome: `${base}_termos.png` },
+    ];
+    baixarCertNovamente();   // baixa as duas de imediato
     document.getElementById('cad-modal-titulo').textContent = 'Certificado de garantia';
     document.getElementById('cad-modal-body').innerHTML =
-      `<img src="${certPreview.url}" alt="Certificado" style="width:100%;border-radius:12px;border:1px solid var(--border)">
-       <div style="font-size:12.5px;color:var(--muted);margin-top:10px">Arquivo <b>baixado</b>. Para enviar por WhatsApp, use "Enviar certificado de garantia" (anexa a imagem no celular) ou anexe este arquivo na conversa.</div>`;
+      certPreview.map(p => `<img src="${p.url}" alt="Certificado" style="width:100%;border-radius:12px;border:1px solid var(--border);margin-bottom:10px">`).join('')
+      + `<div style="font-size:12.5px;color:var(--muted)">As <b>2 imagens</b> (frente e verso) foram <b>baixadas</b>. Para enviar por WhatsApp, use "Enviar certificado de garantia" (anexa as duas no celular) ou anexe os arquivos na conversa.</div>`;
     const btn = document.getElementById('cad-modal-salvar');
     btn.textContent = 'Baixar de novo';
     btn.setAttribute('onclick', 'baixarCertNovamente()');
@@ -230,10 +237,11 @@ export async function gerarCertificadoVenda(id) {
 }
 
 export function baixarCertNovamente() {
-  if (!certPreview) return;
-  const a = document.createElement('a');
-  a.href = certPreview.url; a.download = certPreview.nome;
-  document.body.appendChild(a); a.click(); a.remove();
+  certPreview.forEach((p, i) => setTimeout(() => {
+    const a = document.createElement('a');
+    a.href = p.url; a.download = p.nome;
+    document.body.appendChild(a); a.click(); a.remove();
+  }, i * 400));   // intervalo: navegador bloqueia downloads simultâneos
 }
 
 export async function excluirVenda(id) {
