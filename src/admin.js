@@ -480,7 +480,7 @@ export function enviarAcessoRev(btn) {
 
 // ── Gestão (aprovar/revogar/papel/teste/excluir) ────────────────────
 export async function aprovarRev(id) {
-  if (!ehGestor()) { toast('Sem permissão'); return; }
+  if (!ehStaff()) { toast('Sem permissão'); return; }
   const { error } = await sbQ(sb.from('profiles').update({ aprovada: true }).eq('id', id));
   if (await handleSupabaseError(error, 'Erro ao aprovar revendedora')) return;
   toast('Revendedora aprovada!');
@@ -488,7 +488,7 @@ export async function aprovarRev(id) {
 }
 
 export async function revogarRev(id) {
-  if (!ehGestor()) { toast('Sem permissão'); return; }
+  if (!ehStaff()) { toast('Sem permissão'); return; }
   const { error } = await sbQ(sb.from('profiles').update({ aprovada: false }).eq('id', id));
   if (await handleSupabaseError(error, 'Erro ao revogar acesso')) return;
   toast('Acesso revogado');

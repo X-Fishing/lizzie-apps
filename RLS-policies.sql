@@ -87,12 +87,13 @@ create policy profiles_update_own on public.profiles
     and is_revendedora = (select is_revendedora from public.profiles where id = auth.uid())
   );
 
--- Gestor/admin atualizam qualquer profile (aprovar/revogar, bling_id).
--- Troca de role é barrada para não-admin pelo trigger guard_profile_role.
-create policy profiles_update_gestor on public.profiles
+-- Qualquer funcionária (staff) atualiza profiles de revendedora (aprovar/revogar,
+-- editar dados, bling_id). Troca de role/is_revendedora é barrada para não-admin
+-- pelo trigger guard_profile_role; excluir continua só admin (policy abaixo).
+create policy profiles_update_staff on public.profiles
   for update to authenticated
-  using ( public.is_gestor() )
-  with check ( public.is_gestor() );
+  using ( public.is_staff() )
+  with check ( public.is_staff() );
 
 -- Só admin deleta profiles (excluir revendedora).
 create policy profiles_delete_admin on public.profiles
