@@ -110,43 +110,20 @@ revoke all on function public.registrar_venda(text,date,text,numeric,numeric,tex
 grant execute on function public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb,text,date,date) to authenticated;
 
 -- ════════════════════════════════════════════════════════════════════
--- handle_new_user: cria o profile automaticamente quando um usuario se
--- cadastra (after insert on auth.users). Resolve o caso em que a confirmacao
--- de e-mail esta ativa: nao ha sessao apos signUp, o insert client-side
--- falharia por RLS e a usuaria ficaria sem profile (preso no splash).
--- SECURITY DEFINER: roda com privilegios do dono, ignorando RLS.
--- Le nome/telefone/cidade de raw_user_meta_data (enviados em options.data).
+-- handle_new_user: NÃO MORA MAIS AQUI.  ⚠ NÃO REINTRODUZIR NESTE ARQUIVO.
+--
+-- A versão que existia aqui era ANTIGA (inseria o profile sem
+-- is_revendedora e sem adotar o pré-cadastro pelo e-mail). Como o cabeçalho
+-- deste arquivo manda "colar inteiro e Run", rodá-lo REVERTIA o trigger e
+-- quebrava TODOS os cadastros novos: o insert sem is_revendedora viola o
+-- check profiles_revendedora_flag_chk (0019/0025) e o signUp morre com
+-- "Database error saving new user".
+--
+-- A versão VÁLIDA é a da migração mais recente que a redefine:
+--   supabase/migrations/0037_corrige_adocao_pre_cadastro.sql
+-- (0016 criou a adoção por e-mail, 0025 acrescentou is_revendedora,
+--  0037 corrigiu a ordem da adoção + FKs on update cascade + e-mail).
 -- ════════════════════════════════════════════════════════════════════
-create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
-set search_path = public
-as $$
-begin
-  insert into public.profiles (id, role, nome, telefone, cidade, aprovada)
-  values (
-    new.id,
-    'revendedora',
-    coalesce(
-      new.raw_user_meta_data->>'nome',       -- cadastro por formulario
-      new.raw_user_meta_data->>'full_name',  -- Google
-      new.raw_user_meta_data->>'name',
-      split_part(new.email, '@', 1)
-    ),
-    new.raw_user_meta_data->>'telefone',     -- null no Google
-    new.raw_user_meta_data->>'cidade',       -- null no Google
-    false
-  )
-  on conflict (id) do nothing;
-  return new;
-end;
-$$;
-
-drop trigger if exists on_auth_user_created on auth.users;
-create trigger on_auth_user_created
-  after insert on auth.users
-  for each row execute function public.handle_new_user();
 
 -- ════════════════════════════════════════════════════════════════════
 -- sincronizar_maleta: ADD-ONLY. Insere no catálogo da revendedora só as
