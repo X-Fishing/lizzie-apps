@@ -306,6 +306,7 @@ function renderGestao(r) {
       ${!r.aprovada
         ? `<button class="btn-primary" onclick="aprovarRev('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Aprovar acesso</button>`
         : `<button class="btn-danger" onclick="revogarRev('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg> Revogar acesso</button>`}
+      ${r.aprovada && r.telefone && r.email ? `<button class="btn-secondary" style="border-color:#25D366;color:#128C7E" data-nome="${esc(r.nome || '')}" data-email="${esc(r.email)}" data-tel="${esc(r.telefone)}" onclick="enviarAcessoRev(this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Enviar acesso</button>` : ''}
       ${ehAdmin() ? `<button class="btn-danger" data-rev-nome="${esc(r.nome || '')}" data-func="${r.role && r.role !== 'revendedora' ? '1' : ''}" onclick="confirmarExclusaoRev('${r.id}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> ${r.role && r.role !== 'revendedora' ? 'Remover da lista de revendedoras' : 'Excluir revendedora'}</button>` : ''}
     </div>`;
 }
@@ -456,6 +457,25 @@ function popupContratoStatus(id, r, doc) {
       '\n\n(O RG é o único opcional.) Complete e salve novamente.',
       'Continuar editando', () => {});
   }
+}
+
+// Mensagem de PRIMEIRO ACESSO pra revendedora pré-cadastrada, pronta pro WhatsApp.
+// O pré-cadastro NÃO cria login: ela precisa se cadastrar com o e-mail informado
+// (aí o trigger handle_new_user vincula ela a este registro já aprovado e ela entra
+// direto). Este botão só monta/abre a mensagem — não toca no banco.
+export function enviarAcessoRev(btn) {
+  const nome = btn.dataset.nome || '';
+  const email = btn.dataset.email || '';
+  const d = (btn.dataset.tel || '').replace(/\D/g, '');
+  if (!d) { toast('Revendedora sem telefone.'); return; }
+  if (!email) { toast('Revendedora sem e-mail — o acesso é vinculado por e-mail.'); return; }
+  const num = d.length <= 11 ? '55' + d : d;
+  const url = location.origin + location.pathname;
+  const primeiro = nome.split(' ')[0] || '';
+  const msg = `Oi ${primeiro}! 💗 Seu cadastro na Lizzie Semijoias foi liberado.\n\n`
+    + `Para acessar pela primeira vez, entre em ${url} , toque em "Cadastrar" e use este e-mail: ${email}\n\n`
+    + `Depois é só criar uma senha e pronto — você já entra com tudo liberado. Qualquer dúvida, estou à disposição! 🌸`;
+  window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 // ── Gestão (aprovar/revogar/papel/teste/excluir) ────────────────────
