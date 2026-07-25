@@ -43,7 +43,6 @@ export async function gerarCertificadoGarantia({ cliente, dataISO, itens, revend
   const cx = P.centroX;
 
   const fundo = await carregarFundo();
-  const temArte = !!fundo && T.arteComCabecalho;
   if (fundo) {
     ctx.drawImage(fundo, 0, 0, T.width, T.height);
   } else {
@@ -53,18 +52,22 @@ export async function gerarCertificadoGarantia({ cliente, dataISO, itens, revend
     ctx.strokeRect(P.molduraMargem + 12, P.molduraMargem + 12, T.width - 2 * (P.molduraMargem + 12), T.height - 2 * (P.molduraMargem + 12));
   }
 
-  // Cabeçalho (marca + título) só no fallback — a arte já traz isso.
-  if (!temArte) {
-    ctx.textAlign = 'center';
-    ctx.fillStyle = T.cores.marca; ctx.font = T.fontes.marca;
-    ctx.fillText('Lizzie', cx, P.marcaY);
-    ctx.fillStyle = T.cores.suave; ctx.font = T.fontes.rotulo;
-    ctx.fillText('S E M I J O I A S', cx, P.submarcaY);
-    ctx.fillStyle = T.cores.titulo; ctx.font = T.fontes.titulo;
-    ctx.fillText('Certificado de Garantia', cx, P.tituloY);
-  }
+  // Encurta o texto (com reticências) para caber na largura útil.
+  const caber = (txt, maxW) => {
+    if (ctx.measureText(txt).width <= maxW) return txt;
+    let s = txt;
+    while (s.length > 4 && ctx.measureText(s + '…').width > maxW) s = s.slice(0, -1);
+    return s.trimEnd() + '…';
+  };
 
+  // Cabeçalho — a arte é só a moldura, o texto é todo desenhado aqui.
   ctx.textAlign = 'center';
+  ctx.fillStyle = T.cores.marca; ctx.font = T.fontes.marca;
+  ctx.fillText('Lizzie', cx, P.marcaY);
+  ctx.fillStyle = T.cores.titulo; ctx.font = T.fontes.rotulo;
+  ctx.fillText('S E M I J O I A S', cx, P.submarcaY);
+  ctx.fillStyle = T.cores.titulo; ctx.font = T.fontes.titulo;
+  ctx.fillText('Certificado de Garantia', cx, P.tituloY);
 
   // Número do certificado (dourado)
   if (numero) {
@@ -76,7 +79,7 @@ export async function gerarCertificadoGarantia({ cliente, dataISO, itens, revend
   ctx.fillStyle = T.cores.suave; ctx.font = T.fontes.rotulo;
   ctx.fillText('CLIENTE', cx, P.clienteRotuloY);
   ctx.fillStyle = T.cores.texto; ctx.font = T.fontes.texto;
-  ctx.fillText(cliente || '—', cx, P.clienteY);
+  ctx.fillText(caber(cliente || '—', T.areaLargura), cx, P.clienteY);
 
   // Datas em duas colunas: Compra | Válido até
   ctx.fillStyle = T.cores.suave; ctx.font = T.fontes.rotulo;
@@ -97,26 +100,18 @@ export async function gerarCertificadoGarantia({ cliente, dataISO, itens, revend
     const ref = it.referencia ? ` (${it.referencia})` : '';
     const qt = it.quantidade && it.quantidade > 1 ? `${it.quantidade}x ` : '';
     ctx.fillStyle = T.cores.texto;
-    ctx.fillText(`${qt}${it.descricao || 'Peça'}${ref}`, cx, P.itens0Y + i * P.itensLineH);
+    ctx.fillText(caber(`${qt}${it.descricao || 'Peça'}${ref}`, T.areaLargura), cx, P.itens0Y + i * P.itensLineH);
   });
   if ((itens || []).length > P.itensMax) {
     ctx.fillStyle = T.cores.suave;
     ctx.fillText(`+ ${itens.length - P.itensMax} outra(s) peça(s)`, cx, P.itens0Y + P.itensMax * P.itensLineH);
   }
 
-  // Rodapé: cobre o número solto que a arte trouxe ("2250"), amostrando a cor
-  // exata do fundo (canvas same-origin não tainta), e escreve revendedora + aviso.
-  if (temArte) {
-    try {
-      const px = ctx.getImageData(cx, 600, 1, 1).data;   // ponto limpo do fundo
-      ctx.fillStyle = `rgb(${px[0]},${px[1]},${px[2]})`;
-    } catch { ctx.fillStyle = T.bg; }
-    ctx.fillRect(cx - 90, P.rodapeCoverY, 180, P.rodapeCoverH);
-  }
+  // Rodapé (entre as folhinhas dos cantos): revendedora + aviso curto.
   ctx.textAlign = 'center';
   ctx.fillStyle = T.cores.suave; ctx.font = T.fontes.rodape;
   const rev = revendedora ? `Revendedora ${revendedora} · ` : '';
-  ctx.fillText(`${rev}Garantia contra defeitos de fabricação (${T.validadeMeses} meses)`, cx, P.rodapeY);
+  ctx.fillText(caber(`${rev}Garantia contra defeitos de fabricação (${T.validadeMeses} meses)`, 700), cx, P.rodapeY);
 
   return await new Promise((resolve, reject) =>
     cv.toBlob(b => (b ? resolve(b) : reject(new Error('toBlob falhou'))), 'image/png'));

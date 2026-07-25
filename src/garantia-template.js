@@ -9,9 +9,10 @@ export const GARANTIA_TEMPLATE = {
   width: 1080,
   height: 1350,                          // 4:5 — legível no WhatsApp
   bg: '#faf7f2',
-  fundoUrl,                              // arte versionada no repo (src/assets)
-  arteComCabecalho: true,                // a arte já tem marca+título → não redesenhar
+  fundoUrl,                              // arte = só a moldura (sem texto gravado)
   validadeMeses: 12,                     // prazo da garantia (config única)
+  // Área útil dentro da moldura (as folhinhas ficam nos cantos de baixo).
+  areaX: 110, areaLargura: 860,
 
   cores: { marca: '#b08d57', titulo: '#5c4a54', texto: '#4a3b44', suave: '#8a7590', linha: '#e6ded4' },
 
@@ -27,18 +28,17 @@ export const GARANTIA_TEMPLATE = {
     titulo: "400 46px 'Cormorant Garamond', Georgia, serif",
   },
 
-  // Posições para a ARTE atual (título "Certificado de Garantia" ~y=745).
-  // Miolo limpo ~800..1150; rodapé/folhas ~1160..1245.
+  // Layout de cima para baixo. A moldura útil vai de ~y75 a ~y1265; as
+  // folhinhas ocupam os cantos inferiores (x<180 e x>900, y>1140).
   pos: {
     centroX: 540,
-    numeroY: 832,                        // "CERTIFICADO Nº ..." (dourado)
-    clienteRotuloY: 900, clienteY: 944,
-    dataColL: 356, dataColR: 724,        // datas em duas colunas
-    dataRotuloY: 1006, dataValY: 1046,
-    itensRotuloY: 1104, itens0Y: 1142, itensLineH: 38, itensMax: 2,
-    // rodapé cobre o número solto que a arte trouxe ("2250")
-    rodapeCoverY: 1200, rodapeCoverH: 46, rodapeY: 1224,
-    // fallback (sem arte): moldura + cabeçalho programático
-    molduraMargem: 46, marcaY: 210, submarcaY: 250, tituloY: 340, margemX: 130,
+    marcaY: 210, submarcaY: 252, tituloY: 342,   // Lizzie / SEMIJOIAS / título
+    numeroY: 424,                                 // CERTIFICADO Nº ...
+    clienteRotuloY: 502, clienteY: 548,
+    dataColL: 356, dataColR: 724,                 // datas em duas colunas
+    dataRotuloY: 624, dataValY: 666,
+    itensRotuloY: 742, itens0Y: 786, itensLineH: 40, itensMax: 8,
+    rodapeY: 1200,                                // entre as folhinhas
+    molduraMargem: 46,                            // fallback sem arte
   },
 };
