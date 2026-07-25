@@ -175,7 +175,15 @@ export async function fazerLogin() {
   const msg = document.getElementById('login-msg');
   if (!email || !senha) { showMsg(msg, 'Preencha todos os campos', 'error'); return; }
   const { error } = await sb.auth.signInWithPassword({ email, password: senha });
-  if (error) { showMsg(msg, 'E-mail ou senha incorretos', 'error'); }
+  if (error) {
+    // Mesma mensagem para senha errada e conta inexistente (não revela quem
+    // tem cadastro), mas orienta o caso real mais comum: revendedora
+    // pré-cadastrada que ainda não recebeu a senha.
+    const m = (error.message || '').toLowerCase();
+    showMsg(msg, m.includes('not confirmed')
+      ? 'Seu e-mail ainda não foi confirmado. Fale com a Lizzie para liberar seu acesso.'
+      : 'E-mail ou senha incorretos. Se é seu primeiro acesso, peça sua senha para a Lizzie no WhatsApp.', 'error');
+  }
 }
 
 // Mostra o painel embutido de recuperacao (sem prompt, que e bloqueado em PWA).

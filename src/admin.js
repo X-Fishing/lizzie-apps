@@ -58,11 +58,14 @@ export async function loadAdmin() {
 
   // A lista agora é por is_revendedora (não por role): funcionária-revendedora
   // aparece aqui automaticamente. Staff puro tem is_revendedora=false e some.
-  const [{ data: pendentes, error: e1 }, { data: aprovadas, error: e2 }, { data: docs }] = await Promise.all([
+  const [{ data: pendentes, error: e1 }, { data: aprovadas, error: e2 }, { data: docs }, { data: semAcesso }] = await Promise.all([
     sbQ(sb.from('profiles').select('*').eq('is_revendedora', true).eq('aprovada',false).order('created_at')),
     sbQ(sb.from('profiles').select('*').eq('is_revendedora', true).eq('aprovada',true).order('nome')),
     // Só gestor/admin recebem (RLS). func_basico → erro/vazio → sem selo, sem quebrar.
     sbQ(sb.from('revendedora_docs').select('profile_id,cpf,data_nascimento')),
+    // Quem ainda NÃO tem conta de login (pré-cadastro sem auth.users). Se a
+    // migração 0036 não estiver aplicada, vem erro → segue sem o selo.
+    sbQ(sb.rpc('fn_revendedoras_sem_acesso')),
   ]);
   if (e1 || e2) {
     const msg = (e1||e2).message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar revendedoras.';
@@ -71,6 +74,8 @@ export async function loadAdmin() {
   }
 
   const docMap = new Map((docs || []).map(d => [String(d.profile_id), d]));
+  // fn_revendedoras_sem_acesso devolve uma lista de uuid (setof uuid).
+  state.revSemAcesso = new Set((semAcesso || []).map(x => String(x?.id ?? x)));
   const prep = lista => (lista || []).map(r => ({ ...r, _doc: docMap.get(String(r.id)) || null }));
   const pendentesRev = prep(pendentes);
 
@@ -137,6 +142,9 @@ export function renderRevCard(r, pendente) {
     // Badge "Funcionária" quando também tem acesso de funcionária (role != revendedora).
     r.role && r.role !== 'revendedora' ? '<span class="badge-soon" style="background:var(--plum);color:#fff;margin-left:0" title="Também é funcionária">Funcionária</span>' : '',
     r.teste ? '<span class="badge-soon" style="background:var(--warning);color:#fff;margin-left:0">Teste</span>' : '',
+    // Sem conta de login: ela NÃO consegue entrar, por mais que esteja "Ativa".
+    state.revSemAcesso?.has(String(r.id))
+      ? '<span class="badge-soon" style="background:var(--danger);color:#fff;margin-left:0" title="Ela ainda não tem login — use Criar acesso no cadastro">Sem acesso</span>' : '',
     revIncompleta(r) ? '<span class="badge-soon" style="background:var(--warning);color:#fff;margin-left:0" title="Falta CPF, nascimento ou endereço">Cadastro incompleto</span>' : '',
   ].filter(Boolean).join(' ');
   return `<div class="card rev-card" onclick="abrirRevendedora('${r.id}')">
@@ -306,6 +314,7 @@ function renderGestao(r) {
       ${!r.aprovada
         ? `<button class="btn-primary" onclick="aprovarRev('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Aprovar acesso</button>`
         : `<button class="btn-danger" onclick="revogarRev('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg> Revogar acesso</button>`}
+      ${r.email && ehGestor() ? `<button class="btn-primary" data-nome="${esc(r.nome || '')}" data-tel="${esc(r.telefone || '')}" onclick="criarAcessoRev('${r.id}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ${state.revSemAcesso?.has(String(r.id)) ? 'Criar acesso' : 'Redefinir senha'}</button>` : ''}
       ${r.aprovada && r.telefone && r.email ? `<button class="btn-secondary" style="border-color:#25D366;color:#128C7E" data-nome="${esc(r.nome || '')}" data-email="${esc(r.email)}" data-tel="${esc(r.telefone)}" onclick="enviarAcessoRev(this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Enviar acesso</button>` : ''}
       ${ehAdmin() ? `<button class="btn-danger" data-rev-nome="${esc(r.nome || '')}" data-func="${r.role && r.role !== 'revendedora' ? '1' : ''}" onclick="confirmarExclusaoRev('${r.id}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> ${r.role && r.role !== 'revendedora' ? 'Remover da lista de revendedoras' : 'Excluir revendedora'}</button>` : ''}
     </div>`;
@@ -476,6 +485,55 @@ export function enviarAcessoRev(btn) {
     + `Para acessar pela primeira vez, entre em ${url} , toque em "Cadastrar" e use este e-mail: ${email}\n\n`
     + `Depois é só criar uma senha e pronto — você já entra com tudo liberado. Qualquer dúvida, estou à disposição! 🌸`;
   window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+// Cria (ou redefine) o LOGIN da revendedora e mostra a senha provisória.
+// Resolve de vez o caso "está aprovada mas não consegue entrar": o pré-cadastro
+// não cria conta, e link de recuperação nunca chega para e-mail sem conta.
+// Aqui a conta nasce já confirmada — sem e-mail, sem link que expira.
+export async function criarAcessoRev(id, btn) {
+  if (!ehGestor()) { toast('Sem permissão'); return; }
+  const nome = btn?.dataset.nome || '';
+  const tel = btn?.dataset.tel || '';
+  const txtOriginal = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Criando...'; }
+
+  const { data, error } = await sbQ(sb.functions.invoke('criar-acesso-revendedora', { body: { profile_id: id } }), 30000);
+  if (btn) { btn.disabled = false; btn.innerHTML = txtOriginal; }
+
+  // O erro útil vem no corpo da resposta (FunctionsHttpError esconde no context).
+  let msg = error ? (error.message || 'Falha ao criar o acesso') : null;
+  if (error?.context?.json) { try { msg = (await error.context.json())?.error || msg; } catch { /* mantém */ } }
+  if (msg || !data?.senha) {
+    console.error('criarAcessoRev:', error || data);
+    toast(msg || 'Não foi possível criar o acesso.');
+    return;
+  }
+
+  const primeiro = nome.split(' ')[0] || '';
+  const url = location.origin + location.pathname;
+  const recado = `Oi ${primeiro}! 💗 Seu acesso ao app da Lizzie Semijoias está pronto.\n\n`
+    + `Endereço: ${url}\nE-mail: ${data.email}\nSenha provisória: ${data.senha}\n\n`
+    + `É só entrar com esses dados (na aba "Entrar"). Qualquer dúvida, me chama! 🌸`;
+  const d = tel.replace(/\D/g, '');
+  const num = d ? (d.length <= 11 ? '55' + d : d) : '';
+
+  document.getElementById('cad-modal-titulo').textContent = data.criado ? 'Acesso criado!' : 'Senha redefinida!';
+  document.getElementById('cad-modal-body').innerHTML = `
+    <div style="font-size:13.5px;margin-bottom:12px">${data.criado ? 'A conta foi criada' : 'A senha foi redefinida'} para <b>${esc(nome)}</b>. Passe estes dados para ela:</div>
+    <div style="background:var(--blush);border-radius:12px;padding:14px 16px;margin-bottom:12px">
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">E-mail</div>
+      <div style="font-size:14px;margin-bottom:10px;word-break:break-all">${esc(data.email)}</div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">Senha provisória</div>
+      <div style="font-family:monospace;font-size:22px;color:var(--rose);font-weight:600">${esc(data.senha)}</div>
+    </div>
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">Ela entra pela aba <b>"Entrar"</b> (não é "Cadastrar"). Depois pode trocar a senha em "Esqueci minha senha".</div>
+    ${num ? `<button class="btn-secondary" style="width:100%;border-color:#25D366;color:#128C7E" onclick="window.open('https://wa.me/${num}?text=${encodeURIComponent(recado)}','_blank')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Enviar no WhatsApp</button>` : '<div style="font-size:12px;color:var(--warning)">Sem telefone no cadastro — copie os dados acima.</div>'}`;
+  const btnOk = document.getElementById('cad-modal-salvar');
+  btnOk.textContent = 'Fechar';
+  btnOk.setAttribute('onclick', "closeModal('modal-cadastro')");
+  openModal('modal-cadastro');
+  state.blingRevs = []; state.aprovadasCache = [];
 }
 
 // ── Gestão (aprovar/revogar/papel/teste/excluir) ────────────────────
