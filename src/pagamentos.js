@@ -2,7 +2,24 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, parseMoneyBR, moneyToInput, hojeBR, brToISO } from './utils.js';
-import { enviarCertificado } from './certificado.js';
+import { enviarCertificado, gerarCertificadoGarantia, numeroCertificado } from './certificado.js';
+
+// Nome da revendedora (vendedora) para o certificado: mapa de nomes já
+// carregado (consignados) ou o próprio usuário logado; senão omite.
+function certRevNome(v) {
+  return state.revNameMap?.[v.revendedora_id]
+    || (v.revendedora_id === state.currentUser?.id ? state.currentProfile?.nome : null)
+    || null;
+}
+function certItens(id) {
+  return (state.vendaItensCache[id] || []).map(it => ({
+    descricao: it.descricao, referencia: it.referencia || null, quantidade: it.quantidade,
+  }));
+}
+function sanitizarNome(s) {
+  return (s || 'cliente').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'cliente';
+}
 export async function loadVendas() {
   document.getElementById('p-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
   // Busca as vendas + a maleta ATIVA (para escopar por ciclo, não acumular tudo).
@@ -141,6 +158,7 @@ export async function verVenda(id) {
     </div>
     ${restante > 0 && v.telefone_cliente ? `<button class="btn-secondary" style="width:100%;margin-bottom:10px;border-color:#25D366;color:#128C7E" onclick="zapCobrancaCliente('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Cobrar no WhatsApp</button>` : ''}
     ${v.telefone_cliente ? `<button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="reenviarGarantiaVenda('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg> Enviar certificado de garantia</button>` : ''}
+    <button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="gerarCertificadoVenda('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Gerar certificado (baixar)</button>
     <div class="divider"></div>
     <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Itens da compra</div>
     <div style="background:#faf7f2;padding:10px 12px;border-radius:10px;margin-bottom:14px">${itensHtml}</div>
@@ -170,15 +188,52 @@ export async function verVenda(id) {
 export async function reenviarGarantiaVenda(id) {
   const v = state.allVendas.find(x => x.id === id);
   if (!v) { toast('Venda não encontrada'); return; }
-  const itens = (state.vendaItensCache[id] || []).map(it => ({
-    descricao: it.descricao, referencia: it.referencia || null, quantidade: it.quantidade,
-  }));
   try {
-    await enviarCertificado({ vendaId: id, cliente: v.nome_cliente, tel: v.telefone_cliente, dataISO: v.data_venda, itens });
+    await enviarCertificado({
+      vendaId: id, cliente: v.nome_cliente, tel: v.telefone_cliente, dataISO: v.data_venda,
+      itens: certItens(id), revendedora: certRevNome(v), numero: numeroCertificado(id),
+    });
   } catch (e) {
     console.error('reenviarGarantiaVenda', e);
     toast('Não foi possível enviar o certificado — tente de novo', 'erro');
   }
+}
+
+// "Gerar certificado": gera o PNG, baixa o arquivo e mostra um preview (modal).
+// Envio por WhatsApp continua no botão "Enviar certificado de garantia".
+let certPreview = null;   // { url, nome } do último gerado (para "Baixar de novo")
+export async function gerarCertificadoVenda(id) {
+  const v = state.allVendas.find(x => x.id === id);
+  if (!v) { toast('Venda não encontrada'); return; }
+  toast('Gerando certificado...');
+  try {
+    const blob = await gerarCertificadoGarantia({
+      cliente: v.nome_cliente, dataISO: v.data_venda, itens: certItens(id),
+      revendedora: certRevNome(v), numero: numeroCertificado(id),
+    });
+    const nome = `Certificado_Garantia_${sanitizarNome(v.nome_cliente)}_${numeroCertificado(id)}.png`;
+    if (certPreview?.url) URL.revokeObjectURL(certPreview.url);
+    certPreview = { url: URL.createObjectURL(blob), nome };
+    baixarCertNovamente();   // baixa de imediato
+    document.getElementById('cad-modal-titulo').textContent = 'Certificado de garantia';
+    document.getElementById('cad-modal-body').innerHTML =
+      `<img src="${certPreview.url}" alt="Certificado" style="width:100%;border-radius:12px;border:1px solid var(--border)">
+       <div style="font-size:12.5px;color:var(--muted);margin-top:10px">Arquivo <b>baixado</b>. Para enviar por WhatsApp, use "Enviar certificado de garantia" (anexa a imagem no celular) ou anexe este arquivo na conversa.</div>`;
+    const btn = document.getElementById('cad-modal-salvar');
+    btn.textContent = 'Baixar de novo';
+    btn.setAttribute('onclick', 'baixarCertNovamente()');
+    openModal('modal-cadastro');
+  } catch (e) {
+    console.error('gerarCertificadoVenda', e);
+    toast('Erro ao gerar o certificado', 'erro');
+  }
+}
+
+export function baixarCertNovamente() {
+  if (!certPreview) return;
+  const a = document.createElement('a');
+  a.href = certPreview.url; a.download = certPreview.nome;
+  document.body.appendChild(a); a.click(); a.remove();
 }
 
 export async function excluirVenda(id) {

@@ -7,28 +7,32 @@ import { GARANTIA_TEMPLATE as T } from './garantia-template.js';
 
 const primeiroNome = n => (n || '').trim().split(/\s+/)[0] || 'cliente';
 
-// data ISO (yyyy-mm-dd) + N anos → dd/mm/aaaa (normaliza 29/02).
+// Número do certificado a partir do id da venda (curto e estável).
+export function numeroCertificado(vendaId) {
+  const s = String(vendaId || '').replace(/-/g, '').slice(-6).toUpperCase();
+  return s || null;
+}
+
+// data ISO (yyyy-mm-dd) + N meses → dd/mm/aaaa (JS normaliza estouro de mês/dia).
 function validadeBR(dataISO) {
-  const base = dataISO && /^\d{4}-\d{2}-\d{2}/.test(dataISO) ? dataISO.slice(0, 10) : null;
-  const [y, m, d] = (base || new Date().toISOString().slice(0, 10)).split('-').map(Number);
-  const alvo = new Date(y + T.validadeAnos, m - 1, d);
+  const base = dataISO && /^\d{4}-\d{2}-\d{2}/.test(dataISO) ? dataISO.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  const [y, m, d] = base.split('-').map(Number);
+  const alvo = new Date(y, m - 1 + T.validadeMeses, d);
   return `${String(alvo.getDate()).padStart(2, '0')}/${String(alvo.getMonth() + 1).padStart(2, '0')}/${alvo.getFullYear()}`;
 }
 
+// Fundo = arte versionada no repo (bundled, same-origin → não tainta o canvas).
 function carregarFundo() {
   return new Promise(resolve => {
-    try {
-      const url = sb.storage.from('lizzie-fotos').getPublicUrl(T.fundoStoragePath).data.publicUrl;
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => resolve(img);
-      img.onerror = () => resolve(null);   // sem arte → layout programático
-      img.src = url + '?v=1';
-    } catch { resolve(null); }
+    if (!T.fundoUrl) { resolve(null); return; }
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);   // sem arte → layout programático (fallback)
+    img.src = T.fundoUrl;
   });
 }
 
-export async function gerarCertificadoGarantia({ cliente, dataISO, itens }) {
+export async function gerarCertificadoGarantia({ cliente, dataISO, itens, revendedora, numero }) {
   // Garante as fontes carregadas (senão o Canvas usa fallback e desalinha).
   try { await Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1500))]); } catch { /* segue */ }
 
@@ -36,8 +40,10 @@ export async function gerarCertificadoGarantia({ cliente, dataISO, itens }) {
   cv.width = T.width; cv.height = T.height;
   const ctx = cv.getContext('2d');
   const P = T.pos;
+  const cx = P.centroX;
 
   const fundo = await carregarFundo();
+  const temArte = !!fundo && T.arteComCabecalho;
   if (fundo) {
     ctx.drawImage(fundo, 0, 0, T.width, T.height);
   } else {
@@ -47,42 +53,70 @@ export async function gerarCertificadoGarantia({ cliente, dataISO, itens }) {
     ctx.strokeRect(P.molduraMargem + 12, P.molduraMargem + 12, T.width - 2 * (P.molduraMargem + 12), T.height - 2 * (P.molduraMargem + 12));
   }
 
-  // Marca + título (centralizados)
+  // Cabeçalho (marca + título) só no fallback — a arte já traz isso.
+  if (!temArte) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = T.cores.marca; ctx.font = T.fontes.marca;
+    ctx.fillText('Lizzie', cx, P.marcaY);
+    ctx.fillStyle = T.cores.suave; ctx.font = T.fontes.rotulo;
+    ctx.fillText('S E M I J O I A S', cx, P.submarcaY);
+    ctx.fillStyle = T.cores.titulo; ctx.font = T.fontes.titulo;
+    ctx.fillText('Certificado de Garantia', cx, P.tituloY);
+  }
+
   ctx.textAlign = 'center';
-  ctx.fillStyle = T.cores.marca; ctx.font = T.fontes.marca;
-  ctx.fillText('Lizzie', T.width / 2, P.marcaY);
+
+  // Número do certificado (dourado)
+  if (numero) {
+    ctx.fillStyle = T.cores.marca; ctx.font = T.fontes.numero;
+    ctx.fillText(`CERTIFICADO Nº ${String(numero).toUpperCase()}`, cx, P.numeroY);
+  }
+
+  // Cliente
   ctx.fillStyle = T.cores.suave; ctx.font = T.fontes.rotulo;
-  ctx.fillText('S E M I J O I A S', T.width / 2, P.submarcaY);
-  ctx.fillStyle = T.cores.titulo; ctx.font = T.fontes.titulo;
-  ctx.fillText('Certificado de Garantia', T.width / 2, P.tituloY);
+  ctx.fillText('CLIENTE', cx, P.clienteRotuloY);
+  ctx.fillStyle = T.cores.texto; ctx.font = T.fontes.texto;
+  ctx.fillText(cliente || '—', cx, P.clienteY);
 
-  // Campos (alinhados à esquerda)
-  ctx.textAlign = 'left';
-  const rotulo = (txt, y) => { ctx.fillStyle = T.cores.suave; ctx.font = T.fontes.rotulo; ctx.fillText(txt.toUpperCase(), P.margemX, y); };
-  const valor  = (txt, y) => { ctx.fillStyle = T.cores.texto; ctx.font = T.fontes.texto; ctx.fillText(txt, P.margemX, y); };
+  // Datas em duas colunas: Compra | Válido até
+  ctx.fillStyle = T.cores.suave; ctx.font = T.fontes.rotulo;
+  ctx.fillText('COMPRA', P.dataColL, P.dataRotuloY);
+  ctx.fillText('VÁLIDO ATÉ', P.dataColR, P.dataRotuloY);
+  ctx.font = T.fontes.dataVal;
+  ctx.fillStyle = T.cores.texto;
+  ctx.fillText(isoToBR((dataISO || '').slice(0, 10)) || '—', P.dataColL, P.dataValY);
+  ctx.fillStyle = T.cores.marca;
+  ctx.fillText(validadeBR(dataISO), P.dataColR, P.dataValY);
 
-  rotulo('Cliente', P.clienteRotuloY);           valor(cliente || '—', P.clienteY);
-  rotulo('Data da compra', P.dataRotuloY);        valor(isoToBR((dataISO || '').slice(0, 10)) || '—', P.dataY);
-
-  rotulo('Peças', P.itensRotuloY);
-  ctx.fillStyle = T.cores.texto; ctx.font = T.fontes.item;
+  // Peças (com referência/SKU)
+  ctx.fillStyle = T.cores.suave; ctx.font = T.fontes.rotulo;
+  ctx.fillText('PEÇAS', cx, P.itensRotuloY);
+  ctx.font = T.fontes.item;
   const lista = (itens || []).slice(0, P.itensMax);
   lista.forEach((it, i) => {
     const ref = it.referencia ? ` (${it.referencia})` : '';
     const qt = it.quantidade && it.quantidade > 1 ? `${it.quantidade}x ` : '';
-    ctx.fillText(`• ${qt}${it.descricao || 'Peça'}${ref}`, P.margemX, P.itens0Y + i * P.itensLineH);
+    ctx.fillStyle = T.cores.texto;
+    ctx.fillText(`${qt}${it.descricao || 'Peça'}${ref}`, cx, P.itens0Y + i * P.itensLineH);
   });
   if ((itens || []).length > P.itensMax) {
     ctx.fillStyle = T.cores.suave;
-    ctx.fillText(`+ ${itens.length - P.itensMax} outra(s) peça(s)`, P.margemX, P.itens0Y + P.itensMax * P.itensLineH);
+    ctx.fillText(`+ ${itens.length - P.itensMax} outra(s) peça(s)`, cx, P.itens0Y + P.itensMax * P.itensLineH);
   }
 
-  // Validade + rodapé
+  // Rodapé: cobre o número solto que a arte trouxe ("2250"), amostrando a cor
+  // exata do fundo (canvas same-origin não tainta), e escreve revendedora + aviso.
+  if (temArte) {
+    try {
+      const px = ctx.getImageData(cx, 600, 1, 1).data;   // ponto limpo do fundo
+      ctx.fillStyle = `rgb(${px[0]},${px[1]},${px[2]})`;
+    } catch { ctx.fillStyle = T.bg; }
+    ctx.fillRect(cx - 90, P.rodapeCoverY, 180, P.rodapeCoverH);
+  }
   ctx.textAlign = 'center';
-  ctx.fillStyle = T.cores.marca; ctx.font = T.fontes.validade;
-  ctx.fillText(`Garantia válida até ${validadeBR(dataISO)}`, T.width / 2, P.validadeY);
   ctx.fillStyle = T.cores.suave; ctx.font = T.fontes.rodape;
-  ctx.fillText('Guarde este certificado. Garantia contra defeitos de fabricação.', T.width / 2, P.rodapeY);
+  const rev = revendedora ? `Revendedora ${revendedora} · ` : '';
+  ctx.fillText(`${rev}Garantia contra defeitos de fabricação (${T.validadeMeses} meses)`, cx, P.rodapeY);
 
   return await new Promise((resolve, reject) =>
     cv.toBlob(b => (b ? resolve(b) : reject(new Error('toBlob falhou'))), 'image/png'));
@@ -104,9 +138,9 @@ function msgGarantia(cliente, dataISO) {
 // abre o WhatsApp com a foto anexada, de graça). Sem suporte (PC), sobe a imagem e
 // manda o LINK no wa.me. Passe `blob`/`publicUrl` pré-gerados p/ o clique ficar
 // síncrono (o share nativo exige gesto do usuário). Lança só em falha real.
-export async function enviarCertificado({ vendaId, cliente, tel, dataISO, itens, blob, publicUrl }) {
+export async function enviarCertificado({ vendaId, cliente, tel, dataISO, itens, revendedora, numero, blob, publicUrl }) {
   const mensagem = msgGarantia(cliente, dataISO);
-  const b = blob || await gerarCertificadoGarantia({ cliente, dataISO, itens });
+  const b = blob || await gerarCertificadoGarantia({ cliente, dataISO, itens, revendedora, numero });
   const file = new File([b], `garantia-${vendaId || 'lizzie'}.png`, { type: 'image/png' });
 
   if (navigator.canShare && navigator.canShare({ files: [file] })) {

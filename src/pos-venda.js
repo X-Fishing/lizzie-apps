@@ -5,7 +5,7 @@ import { state } from './state.js';
 import { esc, fmtBRL, openModal, closeModal, toast } from './utils.js';
 import { renderCartelaFidelidade } from './fidelidade.js';
 import { enviarWhatsApp } from './whatsapp.js';
-import { gerarCertificadoGarantia, uploadCertificado, enviarCertificado } from './certificado.js';
+import { gerarCertificadoGarantia, uploadCertificado, enviarCertificado, numeroCertificado } from './certificado.js';
 
 const primeiroNome = n => (n || '').trim().split(/\s+/)[0] || 'cliente';
 
@@ -46,7 +46,9 @@ export function abrirModalPosVenda(ret, snapshot) {
 function prepararCertificado(ctx) {
   if (!ctx || !ctx.vendaId) return;
   ctx.certificado = { status: 'gerando' };
-  gerarCertificadoGarantia({ cliente: ctx.cliente, dataISO: ctx.dataISO, itens: ctx.itens })
+  const revendedora = state.currentProfile?.nome || null;
+  const numero = numeroCertificado(ctx.vendaId);
+  gerarCertificadoGarantia({ cliente: ctx.cliente, dataISO: ctx.dataISO, itens: ctx.itens, revendedora, numero })
     .then(async (blob) => {
       ctx.certificado = { status: 'pronto', blob };
       try { ctx.certificado.publicUrl = await uploadCertificado(ctx.vendaId, blob); } catch { /* fallback só p/ PC */ }
@@ -75,6 +77,7 @@ export async function posVendaEnviarGarantia() {
   try {
     await enviarCertificado({
       vendaId: c.vendaId, cliente: c.cliente, tel: c.tel, dataISO: c.dataISO, itens: c.itens,
+      revendedora: state.currentProfile?.nome || null, numero: numeroCertificado(c.vendaId),
       blob: cert.status === 'pronto' ? cert.blob : null, publicUrl: cert.publicUrl,
     });
   } catch (e) {
