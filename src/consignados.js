@@ -1473,10 +1473,10 @@ export async function deletarCicloRev(revId) {
     });
 }
 
-// Admin: exclui a maleta ATIVA inteira (peças + linha da maleta). Trava de
-// segurança: se houver peças vendidas, bloqueia — apagar a maleta corromperia
-// vendas/recebimentos/financeiro (nesse caso o caminho é estornar/finalizar,
-// não excluir). O gargalo do deletarCicloRev era só cobrir 'aguardando'.
+// Admin: exclui a maleta ATIVA inteira, EM CASCATA — peças + vendas do ciclo
+// (com itens, recebimentos e selos de fidelidade, que caem por FK) + a linha da
+// maleta. Uso típico: limpar teste ou re-baixar um mostruário do Bling.
+// Sem trava por peça vendida: a exclusão é do ciclo inteiro, de propósito.
 export async function excluirMaletaAdmin(revId) {
   if (!IS_ADMIN) { toast('Apenas admin pode excluir a maleta ativa.'); return; }
   const nome = state.revNameMap[revId] || 'esta revendedora';
@@ -1487,25 +1487,41 @@ export async function excluirMaletaAdmin(revId) {
   if (!maleta) { toast('Não há maleta ativa para excluir.'); return; }
 
   const { data: pecas, error: cErr } = await sbQ(sb.from('consignados')
-    .select('id,quantidade_vendida').eq('maleta_id', maleta.id));
+    .select('id').eq('maleta_id', maleta.id));
   if (await handleSupabaseError(cErr, 'Erro ao buscar as peças da maleta')) return;
-  const vendidas = (pecas || []).reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
-  if (vendidas > 0) {
-    toast(`Não é possível excluir: esta maleta tem ${vendidas} peça(s) vendida(s). Estorne/finalize o mostruário antes, para não corromper o financeiro.`);
-    return;
-  }
+  const pecaIds = (pecas || []).map(p => p.id);
 
+  // Vendas do ciclo: por maleta_id (0035) E pelo vínculo das peças (legado sem
+  // maleta_id) — a união pega os dois casos.
+  const [vRes, viRes] = await Promise.all([
+    sbQ(sb.from('vendas').select('id').eq('maleta_id', maleta.id)),
+    pecaIds.length ? sbQ(sb.from('venda_itens').select('venda_id').in('consignado_id', pecaIds))
+                   : Promise.resolve({ data: [] }),
+  ]);
+  const vendaIds = [...new Set([
+    ...((vRes.data || []).map(v => v.id)),
+    ...((viRes.data || []).map(i => i.venda_id)),
+  ].filter(Boolean))];
+
+  const resumo = `${pecaIds.length} peça(s)`
+    + (vendaIds.length ? ` e ${vendaIds.length} venda(s) do ciclo (com recebimentos)` : '');
   confirmarAcao('⚠ Excluir maleta ativa',
-    `Excluir a maleta ATIVA de ${nome} (${(pecas || []).length} peças, nenhuma vendida)?\n\nAs peças serão removidas permanentemente. Esta ação não pode ser desfeita.`,
-    'Excluir maleta', async () => {
+    `Excluir a maleta ATIVA de ${nome}?\n\n${resumo} serão removidos permanentemente. Esta ação não pode ser desfeita.`,
+    'Excluir tudo', async () => {
       let error;
       try {
-        // escopo sempre por maleta_id — nunca por revendedora solta
-        ({ error } = await sb.from('consignados').delete().eq('maleta_id', maleta.id));
+        if (vendaIds.length) {
+          // Filhos antes da venda (não depende de ON DELETE CASCADE nas FKs).
+          await sbQ(sb.from('recebimentos').delete().in('venda_id', vendaIds));
+          await sbQ(sb.from('venda_itens').delete().in('venda_id', vendaIds));
+          ({ error } = await sbQ(sb.from('vendas').delete().in('id', vendaIds)));
+        }
+        // Escopo sempre por maleta_id — nunca por revendedora solta.
+        if (!error) ({ error } = await sb.from('consignados').delete().eq('maleta_id', maleta.id));
         if (!error) ({ error } = await sb.from('maletas').delete().eq('id', maleta.id));
       } catch (e) { error = e; }
       if (await handleSupabaseError(error, 'Erro ao excluir a maleta')) return;
-      toast(`Maleta ativa de ${nome} excluída`);
+      toast(`Maleta de ${nome} excluída${vendaIds.length ? ` (${vendaIds.length} venda(s) junto)` : ''}`);
       loadConsignados();
     });
 }
