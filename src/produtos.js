@@ -5,6 +5,7 @@ import { esc, toast, sbQ, fetchPaginado, fmtBRL, confirmarAcao, handleSupabaseEr
          maskMoneyBR, parseMoneyBR, moneyToInput } from './utils.js';
 import { cadastroCache, carregarCadastrosParaSelect, cadNovo } from './cadastros.js';
 import { carregarPrecificacao, calcularPrecificacao } from './precificacao.js';
+import { showPanel } from './nav.js';
 
 // ── Importação do Bling (Edge Function bling-produtos) ──
 const BLING_PRODUTOS_FN = `${SUPABASE_URL}/functions/v1/bling-produtos`;
@@ -1374,6 +1375,15 @@ export async function produtoEditar(id) {
   abrirForm(data);
 }
 export function produtoVoltarLista() { loadProdutos(); }
+
+// Abre direto no formulário de edição vindo de fora da tela (ex.: busca
+// global). Aguarda a lista carregar antes de trocar pro form — evita que o
+// loadProdutos disparado pela navegação sobrescreva o form já aberto.
+export async function produtoAbrirPorId(id) {
+  showPanel('produtos');
+  await loadProdutos();
+  await produtoEditar(id);
+}
 
 // ── Variações (client-side até salvar) ──
 async function carregarVariacoes(produtoId) {

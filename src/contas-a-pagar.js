@@ -8,11 +8,10 @@ import { state } from './state.js';
 import {
   esc, toast, sbQ, fmtBRL, formatDate,
   confirmarAcao, handleSupabaseError, maskMoneyBR, parseMoneyBR, moneyToInput,
+  hojeISO, mesLabel, mesRange, mesShift, MESES, REC_LABEL, somarPeriodo, rotuloUnidade,
 } from './utils.js';
 import { ehGestor, ehAdmin } from './auth.js';
 import { cadastroCache, cadNovo } from './cadastros.js';
-
-const hojeISO = () => new Date().toISOString().slice(0, 10);
 
 const FORMAS_PGTO = ['PIX', 'Boleto', 'Cartão de crédito', 'Cartão de débito',
   'Dinheiro', 'Transferência', 'Cheque', 'Outro'];
@@ -25,19 +24,6 @@ const GRUPOS = [
 ];
 const grupoDe = t => t.grupo || 'variavel';
 
-const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-const mesLabel = ym => { const [y, m] = ym.split('-'); return `${MESES[+m - 1].toUpperCase()} ${y}`; };
-const mesRange = ym => {
-  const [y, m] = ym.split('-').map(Number);
-  const ult = new Date(y, m, 0).getDate();
-  return { ini: `${ym}-01`, fim: `${ym}-${String(ult).padStart(2, '0')}` };
-};
-const mesShift = (ym, delta) => {
-  const [y, m] = ym.split('-').map(Number);
-  const d = new Date(y, m - 1 + delta, 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-};
 // dd do mês seguinte, com clamp p/ o último dia (31/01 → 28/02 etc.)
 const proximoMesVenc = iso => {
   const [y, m, d] = iso.split('-').map(Number);
@@ -49,26 +35,12 @@ const proximoMesVenc = iso => {
 
 const r2 = n => Math.round(n * 100) / 100;
 
-// Avança o vencimento em k períodos. Semanal = +7k dias; mensal/parcelado =
-// +k meses; anual = +12k meses. Mês/ano com clamp de fim de mês (31→28/30).
-const REC_LABEL = { mensal: 'Mensal', semanal: 'Semanal', anual: 'Anual', parcelado: 'Parcelado' };
-const somarPeriodo = (iso, tipo, k) => {
-  const [y, m, d] = iso.split('-').map(Number);
-  if (tipo === 'semanal') {
-    const base = new Date(y, m - 1, d);
-    base.setDate(base.getDate() + 7 * k);
-    return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
-  }
-  const meses = tipo === 'anual' ? 12 * k : k;
-  const alvo = new Date(y, m - 1 + meses, 1);
-  const ult = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
-  const dd = Math.min(d, ult);
-  return `${alvo.getFullYear()}-${String(alvo.getMonth() + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
-};
-
 // Status efetivo: aberto vencido vira "atrasado" só na exibição.
 const statusEfetivo = t =>
   t.status === 'aberto' && t.vencimento && t.vencimento < hojeISO() ? 'atrasado' : t.status;
+
+// "Vence hoje" é só cor (não mexe no status/KPIs) — sinaliza sem virar atraso.
+const venceHoje = t => t.status === 'aberto' && t.vencimento === hojeISO();
 
 const fornecedoresAtivos = () => (cadastroCache.fornecedores || []).filter(f => f.ativo !== false);
 const categoriasAtivas   = () => (cadastroCache.categorias_financeiras || [])
@@ -275,7 +247,7 @@ function capLinhaHtml(t) {
     : `<label class="cap-switch"><input type="checkbox" ${t.status === 'pago' ? 'checked' : ''} ${!ehGestor() ? 'disabled' : ''} onchange="capTogglePago('${t.id}',this.checked)"><span></span></label>`;
   return `<tr class="cap-row${cancel ? ' cap-cancelada' : ''}" data-id="${t.id}">
     <td class="ciclo-td" style="width:26px"><button class="cap-chevron${aberto ? ' aberto' : ''}" onclick="capToggleDetalhe('${t.id}')" title="Detalhes">${IC_CHEV}</button></td>
-    <td class="ciclo-td"><input type="date" class="cap-inp${ef === 'atrasado' ? ' cap-atrasada' : ''}" value="${esc(t.vencimento || '')}" ${dis} onchange="capCampoChange('${t.id}','vencimento',this)"></td>
+    <td class="ciclo-td"><input type="date" class="cap-inp${ef === 'atrasado' ? ' cap-atrasada' : venceHoje(t) ? ' cap-vence-hoje' : ''}" value="${esc(t.vencimento || '')}" ${dis} onchange="capCampoChange('${t.id}','vencimento',this)"></td>
     <td class="ciclo-td"><input type="text" class="cap-inp" style="min-width:130px" value="${esc(t.descricao || '')}" ${dis} onchange="capCampoChange('${t.id}','descricao',this)">${temDet ? '<span class="cap-dot" title="tem observação/boleto"></span>' : ''}${t.parcela_total ? `<span style="font-size:10px;color:var(--muted);margin-left:5px" title="${t.recorrencia === 'parcelado' ? 'parcela' : 'recorrência'} ${t.parcela_num}/${t.parcela_total}">${t.parcela_num}/${t.parcela_total}</span>` : ''}</td>
     <td class="ciclo-td"><select class="cap-inp" data-cap-sel="fornecedores" ${dis} onchange="capCampoChange('${t.id}','fornecedor_id',this)">${optsForn(t.fornecedor_id)}</select></td>
     <td class="ciclo-td"><select class="cap-inp" data-cap-sel="categorias_financeiras" ${dis} onchange="capCampoChange('${t.id}','categoria_id',this)">${optsCat(t.categoria_id)}</select></td>
@@ -309,7 +281,9 @@ function capRecCardHtml(t) {
   if (t.serie_id && t.parcela_total) {
     const lbl = t.recorrencia === 'parcelado'
       ? `Parcela ${t.parcela_num}/${t.parcela_total}`
-      : `${REC_LABEL[t.recorrencia] || t.recorrencia} · ${t.parcela_num}/${t.parcela_total}`;
+      : t.recorrencia === 'personalizada'
+        ? `A cada ${t.rec_intervalo || 1} ${rotuloUnidade(t.rec_unidade, t.rec_intervalo || 1)} · ${t.parcela_num}/${t.parcela_total}`
+        : `${REC_LABEL[t.recorrencia] || t.recorrencia} · ${t.parcela_num}/${t.parcela_total}`;
     return `<div><label class="form-label">Recorrência</label>
       <div style="font-size:13px;color:var(--plum)">${lbl}</div>
       <div style="font-size:11px;color:var(--muted)">Gerada por recorrência.</div></div>`;
@@ -323,6 +297,14 @@ function capRecCardHtml(t) {
         <option value="semanal">Semanal</option>
         <option value="anual">Anual</option>
         <option value="parcelado">Parcelado em X</option>
+        <option value="personalizada">Personalizada</option>
+      </select>
+      <input type="number" id="cap-rec-intervalo-${t.id}" class="form-control" style="max-width:70px;display:none" min="1" max="365" value="15" title="Intervalo">
+      <select id="cap-rec-unidade-${t.id}" class="form-control" style="max-width:110px;display:none">
+        <option value="dia">dia(s)</option>
+        <option value="semana">semana(s)</option>
+        <option value="mes">mês(es)</option>
+        <option value="ano">ano(s)</option>
       </select>
       <input type="number" id="cap-rec-n-${t.id}" class="form-control" style="max-width:80px;display:none" min="2" max="60" value="12">
       <button type="button" class="btn-secondary btn-sm" id="cap-rec-btn-${t.id}" style="display:none" onclick="capRecGerar('${t.id}')">Gerar</button>
@@ -370,6 +352,9 @@ function capAtualizarLinha(id) {
 // Navegação / filtros
 // ═══════════════════════════════════════════════════════════════════
 export function capMudarMes(delta) { capMes = mesShift(capMes, delta); capNovaAberta = false; capDetAbertos.clear(); loadContasAPagar(); }
+// Pula direto para um mês ('YYYY-MM') — usado pela busca global pra abrir a
+// tela já no mês do título encontrado (a grid é escopada por mês).
+export function capIrParaMes(ym) { capMes = ym; capNovaAberta = false; capDetAbertos.clear(); loadContasAPagar(); }
 export function capTrocarAba(grupo) { capAba = grupo; capFiltros.status = ''; capNovaAberta = false; capRenderAbas(); capRenderChips(); capRenderGrid(); }
 export function capChipStatus(st) { capFiltros.status = capFiltros.status === st ? '' : st; capRenderChips(); capRenderGrid(); }
 export function capBuscar(v) { capFiltros.busca = v; capRenderGrid(); }
@@ -435,6 +420,7 @@ export async function capCampoChange(id, campo, el) {
   if (campo === 'vencimento') {
     if (el.value.slice(0, 7) !== capMes) { toast('Movido para outro mês.'); capRenderGrid(); return; }
     el.classList.toggle('cap-atrasada', statusEfetivo(t) === 'atrasado');
+    el.classList.toggle('cap-vence-hoje', venceHoje(t));
   }
 }
 
@@ -575,17 +561,23 @@ export function capMenuSub(n) {
 export function capRecTipoChange(id) {
   const tipo = document.getElementById(`cap-rec-tipo-${id}`)?.value || '';
   const nEl = document.getElementById(`cap-rec-n-${id}`);
+  const intervaloEl = document.getElementById(`cap-rec-intervalo-${id}`);
+  const unidadeEl = document.getElementById(`cap-rec-unidade-${id}`);
   const btn = document.getElementById(`cap-rec-btn-${id}`);
   const hint = document.getElementById(`cap-rec-hint-${id}`);
   const on = !!tipo;
+  const personalizada = tipo === 'personalizada';
   if (nEl) {
     nEl.style.display = on ? '' : 'none';
     if (on) nEl.value = tipo === 'parcelado' ? '4' : '12';
   }
+  if (intervaloEl) intervaloEl.style.display = personalizada ? '' : 'none';
+  if (unidadeEl) unidadeEl.style.display = personalizada ? '' : 'none';
   if (btn) btn.style.display = on ? '' : 'none';
   if (hint) hint.textContent = !on ? ''
     : tipo === 'parcelado' ? 'Divide o valor do título em X parcelas mensais.'
-      : 'Repete o título N vezes (mesmo valor), no intervalo escolhido.';
+      : personalizada ? 'Repete o título N vezes (mesmo valor), a cada X dia(s)/semana(s)/mês(es)/ano(s).'
+        : 'Repete o título N vezes (mesmo valor), no intervalo escolhido.';
 }
 
 // Gera as ocorrências: parcelado divide o valor (última ajusta centavos);
@@ -601,13 +593,20 @@ export async function capRecGerar(id) {
   const N = Math.floor(Number(document.getElementById(`cap-rec-n-${id}`)?.value || 0));
   if (!(N >= 2 && N <= 60)) { toast('Informe a quantidade (2 a 60).'); return; }
 
+  const personalizada = tipo === 'personalizada';
+  const intervalo = personalizada ? Math.floor(Number(document.getElementById(`cap-rec-intervalo-${id}`)?.value || 0)) : null;
+  const unidade = personalizada ? (document.getElementById(`cap-rec-unidade-${id}`)?.value || 'mes') : null;
+  if (personalizada && !(intervalo >= 1)) { toast('Informe o intervalo (≥ 1).'); return; }
+  const opts = personalizada ? { intervalo, unidade } : {};
+
   const total = Number(t.valor || 0);
   const parcelaBase = tipo === 'parcelado' ? Math.floor(total / N * 100) / 100 : total;
   const ultima = tipo === 'parcelado' ? r2(total - parcelaBase * (N - 1)) : total;
-  const ultimoVenc = somarPeriodo(t.vencimento, tipo, N - 1);
+  const ultimoVenc = somarPeriodo(t.vencimento, tipo, N - 1, opts);
+  const rotuloTipo = personalizada ? `a cada ${intervalo} ${rotuloUnidade(unidade, intervalo)}` : REC_LABEL[tipo].toLowerCase();
   const resumo = tipo === 'parcelado'
     ? `Gerar ${N} parcelas de ${fmtBRL(parcelaBase)}${ultima !== parcelaBase ? ` (última ${fmtBRL(ultima)})` : ''} — total ${fmtBRL(total)}. Última vence em ${formatDate(ultimoVenc)}.`
-    : `Repetir este título ${N}× (${REC_LABEL[tipo].toLowerCase()}), ${fmtBRL(total)} cada. Última vence em ${formatDate(ultimoVenc)}.`;
+    : `Repetir este título ${N}× (${rotuloTipo}), ${fmtBRL(total)} cada. Última vence em ${formatDate(ultimoVenc)}.`;
 
   confirmarAcao('Gerar recorrência', resumo, 'Gerar', async () => {
     const serie = crypto.randomUUID();
@@ -617,24 +616,25 @@ export async function capRecGerar(id) {
       copias.push({
         status: 'aberto', grupo: grupoDe(t),
         fornecedor_id: t.fornecedor_id, fornecedor_nome: t.fornecedor_nome,
-        descricao: t.descricao, valor, vencimento: somarPeriodo(t.vencimento, tipo, k),
+        descricao: t.descricao, valor, vencimento: somarPeriodo(t.vencimento, tipo, k, opts),
         categoria_id: t.categoria_id, categoria_nome: t.categoria_nome,
         forma_pagamento: t.forma_pagamento, observacao: t.observacao,
         boleto_codigo: t.boleto_codigo, boleto_url: t.boleto_url,
         created_by: state.currentUser?.id || null,
         serie_id: serie, recorrencia: tipo, parcela_num: k + 1, parcela_total: N,
+        rec_intervalo: intervalo, rec_unidade: unidade,
       });
     }
     // 1) cria as cópias primeiro — se falhar, o título original fica intacto.
     const { error: eIns } = await sbQ(sb.from('contas_a_pagar').insert(copias));
     if (eIns) {
       console.error('Recorrência (cópias):', eIns);
-      const dica = /column|schema cache/i.test(eIns.message || '') ? ' Rode a migração 0034 no Supabase.' : '';
+      const dica = /column|schema cache/i.test(eIns.message || '') ? ' Rode as migrações 0034 e 0042 no Supabase.' : '';
       toast('Erro ao gerar: ' + eIns.message + dica);
       return;
     }
     // 2) marca o original como 1/N (parcelado também ajusta o valor).
-    const patchOrig = { serie_id: serie, recorrencia: tipo, parcela_num: 1, parcela_total: N };
+    const patchOrig = { serie_id: serie, recorrencia: tipo, parcela_num: 1, parcela_total: N, rec_intervalo: intervalo, rec_unidade: unidade };
     if (tipo === 'parcelado') patchOrig.valor = parcelaBase;
     const { error: eUpd } = await sbQ(sb.from('contas_a_pagar').update(patchOrig).eq('id', id));
     if (eUpd) { console.error('Recorrência (original):', eUpd); toast('Cópias criadas, mas erro ao atualizar o título original: ' + eUpd.message); }

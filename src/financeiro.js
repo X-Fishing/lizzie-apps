@@ -4,14 +4,15 @@
 // teste, mas nada é gravado em financeiro_lancamentos.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, toast, sbQ, fmtBRL, formatDate, openModal, closeModal, parseMoneyBR, moneyToInput, handleSupabaseError, ehRevTeste, confirmarAcao, telWa55 } from './utils.js';
+import { esc, toast, sbQ, fmtBRL, formatDate, openModal, closeModal, parseMoneyBR, moneyToInput, maskMoneyBR, handleSupabaseError, ehRevTeste, confirmarAcao, telWa55, hojeISO, mesLabel, mesRange, mesShift, REC_LABEL, somarPeriodo, rotuloUnidade } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 
 const podeEstornar = () => IS_ADMIN || PERMISSOES.has('acao_estornar_recebimento');
 
 const r2 = n => Math.round(n * 100) / 100;
-const hojeISO = () => new Date().toISOString().slice(0, 10);
 const idAbrev = id => String(id || '').slice(0, 8);
+const IC_PREV = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
+const IC_NEXT = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>';
 
 // Recebimento com MÚLTIPLOS pagamentos (ex.: 2-3 PIX de valores exatos para
 // bater na conciliação bancária). Cada linha vira 1 lançamento no financeiro.
@@ -327,24 +328,41 @@ async function insLanc(rows) {
 let finLancamentos = [];
 let finTelefones = {};   // pessoa_id -> telefone (para o WhatsApp de cobrança)
 let finChavePix = '';
+let finMes = hojeISO().slice(0, 7);   // 'YYYY-MM' — pendente por vencimento, recebido por data_recebimento
+
+export function finMudarMes(delta) { finMes = mesShift(finMes, delta); loadFinanceiro(); }
+// Pula direto para um mês ('YYYY-MM') — usado pela busca global pra abrir a
+// tela já no mês do lançamento encontrado (a lista é escopada por mês).
+export function finIrParaMes(ym) { finMes = ym; loadFinanceiro(); }
 
 export async function loadFinanceiro() {
   const panel = document.getElementById('panel-financeiro');
   panel.innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
-  const { data, error } = await sbQ(sb.from('financeiro_lancamentos')
-    .select('*').order('created_at', { ascending: false }).limit(300));
+  const { ini, fim } = mesRange(finMes);
+  // Pendente é escopado por vencimento; recebido/estornado por data_recebimento
+  // — cada seção "pertence" ao mês pelo campo de data que faz sentido pra ela.
+  // Isso também corrige o "vazamento": uma conta do mês seguinte não aparecia
+  // mais separada porque antes a tela lia TODAS as linhas de uma vez, sem filtro.
+  const [pendRes, recRes] = await Promise.all([
+    sbQ(sb.from('financeiro_lancamentos').select('*')
+      .eq('tipo', 'receber').eq('pago', false).eq('estornado', false)
+      .gte('vencimento', ini).lte('vencimento', fim)
+      .order('vencimento', { ascending: true }).limit(500)),
+    sbQ(sb.from('financeiro_lancamentos').select('*')
+      .or('pago.eq.true,estornado.eq.true')
+      .gte('data_recebimento', ini).lte('data_recebimento', fim)
+      .order('data_recebimento', { ascending: false }).limit(500)),
+  ]);
+  const error = pendRes.error || recRes.error;
   if (error) {
     const dica = /relation|schema cache/i.test(error.message || '') ? ' Rode a migração 0009 no Supabase.' : '';
     panel.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg></div><p>Erro ao carregar o financeiro.${dica}</p></div>`;
     return;
   }
-  finLancamentos = data || [];
-  const receb = finLancamentos.filter(l => l.tipo === 'receber');
-  // Estornados não são pendência nem contam em Recebido — ficam no
-  // histórico dos recebidos, riscados, para auditoria.
-  const pendentes = receb.filter(l => !l.pago && !l.estornado);
-  const recebidos = finLancamentos.filter(l => l.pago || l.estornado || l.tipo !== 'receber');
-  const totalRecebido = receb.filter(l => l.pago && !l.estornado).reduce((s, l) => s + Number(l.valor), 0);
+  const pendentes = pendRes.data || [];
+  const recebidos = recRes.data || [];
+  finLancamentos = [...pendentes, ...recebidos];
+  const totalRecebido = recebidos.filter(l => l.pago && !l.estornado).reduce((s, l) => s + Number(l.valor), 0);
   const totalAReceber = pendentes.reduce((s, l) => s + Number(l.valor), 0);
 
   // Telefones das revendedoras pendentes (WhatsApp) + chave PIX p/ mensagem.
@@ -364,14 +382,18 @@ export async function loadFinanceiro() {
 
   const rowsPend = pendentes.length ? pendentes.map(l => {
     const vencido = l.vencimento && l.vencimento < hoje;
+    const venceHoje = l.vencimento && l.vencimento === hoje;
+    const serieBadge = l.parcela_total ? `<span style="font-size:10px;color:var(--muted);margin-left:5px" title="${l.recorrencia === 'parcelado' ? 'parcela' : 'recorrência'} ${l.parcela_num}/${l.parcela_total}">${l.parcela_num}/${l.parcela_total}</span>` : '';
+    const podeRepetir = ehGestor() && l.origem === 'manual' && !l.serie_id;
     return `<tr class="ciclo-row">
-      <td class="ciclo-td"><span class="ciclo-desc">${esc(l.pessoa_nome || l.descricao)}</span>
+      <td class="ciclo-td"><span class="ciclo-desc">${esc(l.pessoa_nome || l.descricao)}</span>${serieBadge}
         <div style="font-size:11px;color:var(--muted)">${esc(l.categoria || '')} · ${refLinha(l)}</div></td>
       <td class="ciclo-td" style="text-align:right"><span class="ciclo-preco">${fmtBRL(l.valor)}</span></td>
-      <td class="ciclo-td" style="white-space:nowrap;${vencido ? 'color:var(--danger);font-weight:600' : ''}">
-        ${l.vencimento ? formatDate(l.vencimento) : '—'}${vencido ? ' ⚠ vencido' : ''}</td>
+      <td class="ciclo-td" style="white-space:nowrap;${vencido ? 'color:var(--danger);font-weight:600' : venceHoje ? 'color:var(--gold);font-weight:600' : ''}">
+        ${l.vencimento ? formatDate(l.vencimento) : '—'}${vencido ? ' ⚠ vencido' : venceHoje ? ' • vence hoje' : ''}</td>
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         ${ehGestor() && l.fechamento_id ? `<button class="btn-secondary btn-sm" onclick="abrirRecebimento('${l.fechamento_id}')">Registrar pagamento</button>` : ''}
+        ${podeRepetir ? `<button class="btn-secondary btn-sm" onclick="finRecAbrir('${l.id}')" title="Gerar recorrência a partir deste lançamento">Repetir</button>` : ''}
         ${finTelefones[l.pessoa_id] ? `<button class="btn-secondary btn-sm" style="border-color:#25D366;color:#128C7E" onclick="zapCobranca('${l.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> WhatsApp</button>` : ''}
         ${IS_ADMIN ? `<button class="btn-icon" title="Excluir lançamento" style="color:var(--danger)" onclick="excluirLancamento('${l.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>` : ''}
       </td>
@@ -402,7 +424,14 @@ export async function loadFinanceiro() {
         <h2>Lançamentos</h2>
         <div class="sub">Recebimentos das maletas (fase 1) · contas de teste não entram</div>
       </div>
-      <div class="acts">${ehGestor() ? `<button class="btn btn-outline" onclick="pixConfigAbrir()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> Config PIX</button>` : ''}</div>
+      <div class="acts">${ehGestor() ? `<button class="btn-primary btn-sm" style="width:auto" onclick="finNovaAbrir()">+ Nova conta a receber</button> <button class="btn btn-outline" onclick="pixConfigAbrir()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg> Config PIX</button>` : ''}</div>
+    </div>
+    <div class="cap-toolbar">
+      <div class="cap-mes-nav">
+        <button class="btn-icon" onclick="finMudarMes(-1)" title="Mês anterior">${IC_PREV}</button>
+        <span id="fin-mes-label">${mesLabel(finMes)}</span>
+        <button class="btn-icon" onclick="finMudarMes(1)" title="Próximo mês">${IC_NEXT}</button>
+      </div>
     </div>
     <div class="kpi-grid">
       <div class="kpi-card"><div class="kpi-top"><span class="kpi-label">Recebido</span><span class="kpi-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></span></div><div class="kpi-val" style="color:var(--success)">${fmtBRL(totalRecebido)}</div></div>
@@ -418,6 +447,163 @@ export async function loadFinanceiro() {
       <th class="pag-th">Data</th><th class="pag-th">Descrição</th><th class="pag-th">Pessoa</th>
       <th class="pag-th">Forma</th><th class="pag-th" style="text-align:right">Valor</th><th class="pag-th"></th>
     </tr></thead><tbody>${rowsRec}</tbody></table></div>`;
+}
+
+// ── Nova conta a receber (manual) ────────────────────────────────────
+// Só entram aqui lançamentos avulsos (origem='manual'); acerto de maleta
+// nasce automaticamente ao fechar o mostruário e não passa por este form.
+export function finNovaAbrir() {
+  if (!ehGestor()) return;
+  document.getElementById('cad-modal-titulo').textContent = 'Nova conta a receber';
+  document.getElementById('cad-modal-body').innerHTML = `
+    <div class="form-group"><label class="form-label">Descrição *</label>
+      <input type="text" id="fin-novo-desc" class="form-control" placeholder="Ex.: Acerto avulso, comissão extra..."></div>
+    <div class="form-group"><label class="form-label">Pessoa / cliente</label>
+      <input type="text" id="fin-novo-pessoa" class="form-control"></div>
+    <div class="form-group"><label class="form-label">Categoria</label>
+      <input type="text" id="fin-novo-categoria" class="form-control" placeholder="Ex.: Acerto de Vendas"></div>
+    <div class="form-group"><label class="form-label">Valor *</label>
+      <input type="text" id="fin-novo-valor" class="form-control" inputmode="numeric" oninput="maskMoneyBR(this)" placeholder="0,00"></div>
+    <div class="form-group"><label class="form-label">Vencimento *</label>
+      <input type="date" id="fin-novo-venc" class="form-control" value="${hojeISO()}"></div>
+    <div class="form-group"><label class="form-label">Forma de pagamento</label>
+      <select id="fin-novo-forma" class="form-control"><option value="">—</option>${REC_FORMAS.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('')}</select></div>`;
+  document.getElementById('cad-modal-salvar').setAttribute('onclick', 'finNovaSalvar()');
+  openModal('modal-cadastro');
+}
+
+export async function finNovaSalvar() {
+  const descricao = document.getElementById('fin-novo-desc').value.trim();
+  const pessoa_nome = document.getElementById('fin-novo-pessoa').value.trim() || null;
+  const categoria = document.getElementById('fin-novo-categoria').value.trim() || null;
+  const valor = parseMoneyBR(document.getElementById('fin-novo-valor').value);
+  const vencimento = document.getElementById('fin-novo-venc').value;
+  const forma_pagamento = document.getElementById('fin-novo-forma').value || null;
+  if (!descricao) { toast('Informe a descrição.'); return; }
+  if (!(valor > 0)) { toast('Valor inválido.'); return; }
+  if (!vencimento) { toast('Informe o vencimento.'); return; }
+  const { error } = await sbQ(sb.from('financeiro_lancamentos').insert({
+    tipo: 'receber', origem: 'manual', pago: false, estornado: false,
+    descricao, pessoa_nome, categoria, valor, vencimento, forma_pagamento,
+  }));
+  if (await handleSupabaseError(error, 'Erro ao criar')) return;
+  closeModal('modal-cadastro');
+  toast('Conta a receber criada!');
+  loadFinanceiro();
+}
+
+// ── Recorrência (contas manuais) — mesmo padrão do Contas a Pagar ───
+// Gera N-1 cópias + marca o original como 1/N. Parcelado divide o valor
+// (última ajusta centavos); os demais tipos repetem o mesmo valor.
+export function finRecAbrir(id) {
+  if (!ehGestor()) return;
+  const l = finLancamentos.find(x => String(x.id) === String(id));
+  if (!l) return;
+  if (l.origem !== 'manual') { toast('Só é possível repetir contas manuais (não acertos de maleta).'); return; }
+  if (l.serie_id) { toast('Este lançamento já faz parte de uma recorrência.'); return; }
+  document.getElementById('cad-modal-titulo').textContent = 'Repetir lançamento';
+  document.getElementById('cad-modal-body').innerHTML = `
+    <div style="font-size:13.5px;margin-bottom:12px">${esc(l.pessoa_nome || l.descricao)} · <b style="color:var(--rose)">${fmtBRL(l.valor)}</b></div>
+    <div class="form-group"><label class="form-label">Tipo de recorrência</label>
+      <select id="fin-rec-tipo" class="form-control" onchange="finRecTipoChange()">
+        <option value="">Selecione...</option>
+        <option value="mensal">Mensal</option>
+        <option value="semanal">Semanal</option>
+        <option value="anual">Anual</option>
+        <option value="parcelado">Parcelado em X</option>
+        <option value="personalizada">Personalizada</option>
+      </select></div>
+    <div id="fin-rec-campo-n" class="form-group" style="display:none">
+      <label class="form-label">Quantidade (2 a 60)</label>
+      <input type="number" id="fin-rec-n" class="form-control" min="2" max="60" value="12"></div>
+    <div id="fin-rec-campo-personalizada" class="form-group" style="display:none">
+      <label class="form-label">Intervalo</label>
+      <div style="display:flex;gap:6px">
+        <input type="number" id="fin-rec-intervalo" class="form-control" style="max-width:80px" min="1" max="365" value="15">
+        <select id="fin-rec-unidade" class="form-control">
+          <option value="dia">dia(s)</option>
+          <option value="semana">semana(s)</option>
+          <option value="mes">mês(es)</option>
+          <option value="ano">ano(s)</option>
+        </select>
+      </div></div>
+    <div id="fin-rec-hint" style="font-size:11px;color:var(--muted)"></div>`;
+  document.getElementById('cad-modal-salvar').setAttribute('onclick', `finRecGerar('${id}')`);
+  openModal('modal-cadastro');
+}
+
+export function finRecTipoChange() {
+  const tipo = document.getElementById('fin-rec-tipo')?.value || '';
+  const nBox = document.getElementById('fin-rec-campo-n');
+  const nEl = document.getElementById('fin-rec-n');
+  const persBox = document.getElementById('fin-rec-campo-personalizada');
+  const hint = document.getElementById('fin-rec-hint');
+  const on = !!tipo;
+  const personalizada = tipo === 'personalizada';
+  if (nBox) nBox.style.display = on ? '' : 'none';
+  if (nEl && on) nEl.value = tipo === 'parcelado' ? '4' : '12';
+  if (persBox) persBox.style.display = personalizada ? '' : 'none';
+  if (hint) hint.textContent = !on ? ''
+    : tipo === 'parcelado' ? 'Divide o valor em X parcelas mensais.'
+      : personalizada ? 'Repete N vezes (mesmo valor), a cada X dia(s)/semana(s)/mês(es)/ano(s).'
+        : 'Repete N vezes (mesmo valor), no intervalo escolhido.';
+}
+
+export async function finRecGerar(id) {
+  if (!ehGestor()) return;
+  const l = finLancamentos.find(x => String(x.id) === String(id));
+  if (!l) return;
+  if (l.serie_id) { toast('Este lançamento já faz parte de uma recorrência.'); return; }
+  const tipo = document.getElementById('fin-rec-tipo')?.value || '';
+  if (!tipo) { toast('Escolha o tipo de recorrência.'); return; }
+  const N = Math.floor(Number(document.getElementById('fin-rec-n')?.value || 0));
+  if (!(N >= 2 && N <= 60)) { toast('Informe a quantidade (2 a 60).'); return; }
+  const personalizada = tipo === 'personalizada';
+  const intervalo = personalizada ? Math.floor(Number(document.getElementById('fin-rec-intervalo')?.value || 0)) : null;
+  const unidade = personalizada ? (document.getElementById('fin-rec-unidade')?.value || 'mes') : null;
+  if (personalizada && !(intervalo >= 1)) { toast('Informe o intervalo (≥ 1).'); return; }
+  const opts = personalizada ? { intervalo, unidade } : {};
+
+  const total = Number(l.valor || 0);
+  const parcelaBase = tipo === 'parcelado' ? Math.floor(total / N * 100) / 100 : total;
+  const ultima = tipo === 'parcelado' ? r2(total - parcelaBase * (N - 1)) : total;
+  const ultimoVenc = somarPeriodo(l.vencimento, tipo, N - 1, opts);
+  const rotuloTipo = personalizada ? `a cada ${intervalo} ${rotuloUnidade(unidade, intervalo)}` : REC_LABEL[tipo].toLowerCase();
+  const resumo = tipo === 'parcelado'
+    ? `Gerar ${N} parcelas de ${fmtBRL(parcelaBase)}${ultima !== parcelaBase ? ` (última ${fmtBRL(ultima)})` : ''} — total ${fmtBRL(total)}. Última vence em ${formatDate(ultimoVenc)}.`
+    : `Repetir este lançamento ${N}× (${rotuloTipo}), ${fmtBRL(total)} cada. Última vence em ${formatDate(ultimoVenc)}.`;
+
+  closeModal('modal-cadastro');
+  confirmarAcao('Gerar recorrência', resumo, 'Gerar', async () => {
+    const serie = crypto.randomUUID();
+    const copias = [];
+    for (let k = 1; k < N; k++) {
+      const valor = (tipo === 'parcelado' && k === N - 1) ? ultima : parcelaBase;
+      copias.push({
+        tipo: 'receber', origem: 'manual', pago: false, estornado: false,
+        descricao: l.descricao, pessoa_nome: l.pessoa_nome, pessoa_id: l.pessoa_id,
+        categoria: l.categoria, forma_pagamento: l.forma_pagamento,
+        valor, vencimento: somarPeriodo(l.vencimento, tipo, k, opts),
+        serie_id: serie, recorrencia: tipo, parcela_num: k + 1, parcela_total: N,
+        rec_intervalo: intervalo, rec_unidade: unidade,
+      });
+    }
+    // 1) cria as cópias primeiro — se falhar, o lançamento original fica intacto.
+    const { error: eIns } = await sbQ(sb.from('financeiro_lancamentos').insert(copias));
+    if (eIns) {
+      console.error('Recorrência (cópias):', eIns);
+      const dica = /column|schema cache/i.test(eIns.message || '') ? ' Rode a migração 0043 no Supabase.' : '';
+      toast('Erro ao gerar: ' + eIns.message + dica);
+      return;
+    }
+    // 2) marca o original como 1/N (parcelado também ajusta o valor).
+    const patchOrig = { serie_id: serie, recorrencia: tipo, parcela_num: 1, parcela_total: N, rec_intervalo: intervalo, rec_unidade: unidade };
+    if (tipo === 'parcelado') patchOrig.valor = parcelaBase;
+    const { error: eUpd } = await sbQ(sb.from('financeiro_lancamentos').update(patchOrig).eq('id', id));
+    if (eUpd) { console.error('Recorrência (original):', eUpd); toast('Cópias criadas, mas erro ao atualizar o lançamento original: ' + eUpd.message); }
+    toast(tipo === 'parcelado' ? `${N} parcelas geradas.` : `Recorrência de ${N} lançamentos gerada.`);
+    loadFinanceiro();
+  });
 }
 
 // ── Estorno de recebimento (ação especial: admin ou permissão) ──────

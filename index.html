@@ -121,6 +121,7 @@
     <div class="topbar-logo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg> Lizzie</div>
     <div class="topbar-crumb" id="topbar-crumb"></div>
     <div class="topbar-right">
+      <button class="btn-icon" id="btn-busca-global" style="display:none" onclick="buscaGlobalAbrir()" title="Busca global (clientes, pedidos, produtos, contas)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></button>
       <div class="user-badge" id="user-badge">—</div>
       <button class="btn-icon" onclick="sb.auth.signOut().then(()=>location.reload())" title="Sair"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></button>
     </div>
@@ -259,6 +260,7 @@
     <!-- DASHBOARD PC (staff) — seções futuras -->
     <div id="panel-financeiro" style="display:none"></div>
     <div id="panel-contas-a-pagar" style="display:none"></div>
+    <div id="panel-conciliacao" style="display:none"></div>
     <div id="panel-calculadora" style="display:none"></div>
     <div id="panel-clientes" style="display:none"></div>
     <div id="panel-marketing" style="display:none"></div>
@@ -632,6 +634,22 @@
 <div class="modal-overlay" id="lightbox-foto" style="z-index:700;align-items:center">
   <button type="button" class="modal-close-x" aria-label="Fechar" style="position:absolute;top:18px;right:18px;margin:0;float:none;z-index:701" onclick="closeModal('lightbox-foto')">✕</button>
   <div id="lightbox-foto-body" style="max-width:92vw;max-height:82vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px"></div>
+</div>
+
+<!-- MODAL BUSCA GLOBAL (topbar — clientes, pedidos, produtos, contas) -->
+<div class="modal-overlay" id="modal-busca-global">
+  <div class="modal modal-fixa" style="max-width:640px">
+    <button type="button" class="modal-close-x" aria-label="Fechar" onclick="buscaGlobalFechar()">✕</button>
+    <div class="modal-handle"></div>
+    <div class="modal-title"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Busca global</div>
+    <input class="search-input" id="bg-search" placeholder="Cliente, pedido, produto ou conta..." autocomplete="off"
+      oninput="buscaGlobalInput()" onkeydown="buscaGlobalTeclas(event)">
+    <div id="bg-results" class="modal-body" style="margin-top:10px"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap">
+      <span style="font-size:11.5px;color:var(--muted)">↑/↓ navegar · Enter abrir · Esc fechar</span>
+      <button class="btn btn-outline" onclick="buscaGlobalFechar()">Fechar</button>
+    </div>
+  </div>
 </div>
 
 <!-- MODAL BUSCA DE PRODUTO (F3 — lançador de mostruário) -->

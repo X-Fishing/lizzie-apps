@@ -908,6 +908,7 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 .cap-inp:focus { border-color:var(--rose); background:#fff; outline:none; }
 .cap-inp.cap-valor { text-align:right; font-family:'Cormorant Garamond',serif; font-size:15px; }
 .cap-inp.cap-atrasada { color:var(--danger); font-weight:600; }
+.cap-inp.cap-vence-hoje { color:var(--gold); font-weight:600; }
 select.cap-inp { cursor:pointer; }
 .cap-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--rose); vertical-align:middle; margin-left:2px; }
 .cap-cancelada .cap-inp { opacity:.55; }

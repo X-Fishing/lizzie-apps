@@ -188,6 +188,75 @@ export function hojeBR() {
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
 
+// 'YYYY-MM-DD' de hoje em hora LOCAL (não UTC — evita o off-by-one perto da
+// meia-noite que `new Date().toISOString()` causa, já que o Brasil é UTC-3).
+export function hojeISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+
+export const MESES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+
+export function mesLabel(ym) { const [y, m] = ym.split('-'); return `${MESES[+m - 1].toUpperCase()} ${y}`; }
+
+export function mesRange(ym) {
+  const [y, m] = ym.split('-').map(Number);
+  const ult = new Date(y, m, 0).getDate();
+  return { ini: `${ym}-01`, fim: `${ym}-${String(ult).padStart(2, '0')}` };
+}
+
+export function mesShift(ym, delta) {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+// Avança uma data (ISO) em k períodos. Semanal = +7k dias; mensal/parcelado =
+// +k meses; anual = +12k meses (clamp de fim de mês, 31→28/30); personalizada
+// usa opts.intervalo (padrão 1) sobre opts.unidade ('dia'|'semana'|'mes'|'ano').
+export const REC_LABEL = { mensal: 'Mensal', semanal: 'Semanal', anual: 'Anual', parcelado: 'Parcelado', personalizada: 'Personalizada' };
+
+// Rótulo da unidade da recorrência personalizada, singular/plural pelo intervalo.
+const UNIDADE_LABEL = { dia: ['dia', 'dias'], semana: ['semana', 'semanas'], mes: ['mês', 'meses'], ano: ['ano', 'anos'] };
+export function rotuloUnidade(unidade, n) { const p = UNIDADE_LABEL[unidade]; return p ? p[n === 1 ? 0 : 1] : (unidade || ''); }
+
+export function somarPeriodo(iso, tipo, k, opts = {}) {
+  const [y, m, d] = iso.split('-').map(Number);
+  if (tipo === 'semanal') {
+    const base = new Date(y, m - 1, d);
+    base.setDate(base.getDate() + 7 * k);
+    return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
+  }
+  if (tipo === 'personalizada') {
+    const intervalo = Math.max(1, Number(opts.intervalo) || 1);
+    const passo = intervalo * k;
+    const unidade = opts.unidade || 'mes';
+    if (unidade === 'dia' || unidade === 'semana') {
+      const dias = unidade === 'semana' ? passo * 7 : passo;
+      const base = new Date(y, m - 1, d);
+      base.setDate(base.getDate() + dias);
+      return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
+    }
+    const meses = unidade === 'ano' ? passo * 12 : passo;
+    const alvo = new Date(y, m - 1 + meses, 1);
+    const ult = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
+    const dd = Math.min(d, ult);
+    return `${alvo.getFullYear()}-${String(alvo.getMonth() + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+  }
+  const meses = tipo === 'anual' ? 12 * k : k;
+  const alvo = new Date(y, m - 1 + meses, 1);
+  const ult = new Date(alvo.getFullYear(), alvo.getMonth() + 1, 0).getDate();
+  const dd = Math.min(d, ult);
+  return `${alvo.getFullYear()}-${String(alvo.getMonth() + 1).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
+}
+
+// Debounce simples para inputs de busca (~250ms).
+export function debounce(fn, ms) {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
 // CPF 000.000.000-00
 export function maskCpf(input) {
   let v = input.value.replace(/\D/g, '').slice(0, 11);

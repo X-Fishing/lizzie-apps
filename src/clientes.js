@@ -85,6 +85,16 @@ export function clienteBuscar(v) {
   if (tb) tb.innerHTML = linhasClientes(); else render();
 }
 
+// Abre o detalhe garantindo que o registro está no cache local (útil quando
+// vem de fora da tela, ex.: busca global — a lista pode ainda não ter carregado).
+export async function clienteAbrirPorId(id) {
+  if (!cache.some(c => String(c.id) === String(id))) {
+    const { data } = await sbQ(sb.from('clientes').select('*').eq('id', id).single());
+    if (data) cache.push(data);
+  }
+  clienteVer(id);
+}
+
 // ── Detalhe (modal) ────────────────────────────────────────────────
 export function clienteVer(id) {
   const c = cache.find(x => String(x.id) === String(id));
