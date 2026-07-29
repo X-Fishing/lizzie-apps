@@ -4,7 +4,7 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { esc, sbQ, toast, handleSupabaseError, isAuthError, confirmarAcao, openModal, closeModal, formatDate,
-         maskCpf, maskCep, cpfValido, buscarCep, maskDateBR, isoToBR, brToISO, hojeBR } from './utils.js';
+         maskCpf, maskCep, cpfValido, buscarCep, maskDateBR, isoToBR, brToISO, hojeBR, telWa55 } from './utils.js';
 import { ROLE_LABELS, maskTelBR } from './auth.js';
 import { carregarProximasTrocas, compararPorTroca, atualizarBadgesTroca } from './trocas.js';
 
@@ -327,6 +327,11 @@ function renderGestao(r) {
       <input type="checkbox" ${r.teste ? 'checked' : ''} style="width:auto" onchange="marcarRevTeste('${r.id}', this.checked)">
       Conta de teste (não afeta faturamento/estoque)
     </label>
+    ${ehAdmin() ? `<label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:10px">
+      <input type="checkbox" ${r.pode_completar_vendas ? 'checked' : ''} style="width:auto" onchange="marcarPodeCompletarVendas('${r.id}', this.checked)">
+      Pode completar dados da cliente em vendas antigas
+    </label>
+    <div style="font-size:11px;color:var(--muted);margin:-4px 0 0 26px">Ela poderá informar WhatsApp/nome/aniversário de vendas antigas dela — valores e peças continuam bloqueados.</div>` : ''}
     ${ehAdmin() ? renderControleAcesso(r) : ''}
     <div class="detail-actions" id="rev-actions" style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">
       ${!r.aprovada
@@ -504,10 +509,9 @@ function popupContratoStatus(id, r, doc) {
 export function enviarAcessoRev(btn) {
   const nome = btn.dataset.nome || '';
   const email = btn.dataset.email || '';
-  const d = (btn.dataset.tel || '').replace(/\D/g, '');
-  if (!d) { toast('Revendedora sem telefone.'); return; }
+  const num = telWa55(btn.dataset.tel);
+  if (!num) { toast('Revendedora com telefone inválido no cadastro.'); return; }
   if (!email) { toast('Revendedora sem e-mail — o acesso é vinculado por e-mail.'); return; }
-  const num = d.length <= 11 ? '55' + d : d;
   const url = location.origin + location.pathname;
   const primeiro = nome.split(' ')[0] || '';
   const msg = `Oi ${primeiro}! 💗 Seu cadastro na Lizzie Semijoias foi liberado.\n\n`
@@ -544,8 +548,7 @@ export async function criarAcessoRev(id, btn) {
   const recado = `Oi ${primeiro}! 💗 Seu acesso ao app da Lizzie Semijoias está pronto.\n\n`
     + `Endereço: ${url}\nE-mail: ${data.email}\nSenha provisória: ${data.senha}\n\n`
     + `É só entrar com esses dados (na aba "Entrar"). Qualquer dúvida, me chama! 🌸`;
-  const d = tel.replace(/\D/g, '');
-  const num = d ? (d.length <= 11 ? '55' + d : d) : '';
+  const num = telWa55(tel) || '';
 
   document.getElementById('cad-modal-titulo').textContent = data.criado ? 'Acesso criado!' : 'Senha redefinida!';
   document.getElementById('cad-modal-body').innerHTML = `
@@ -595,6 +598,25 @@ export async function marcarRevTeste(id, teste) {
   }
   if (teste) state.revTesteSet.add(String(id)); else state.revTesteSet.delete(String(id));
   toast(teste ? 'Marcada como conta de TESTE — fora dos totais.' : 'Conta voltou a contar nos totais.');
+}
+
+// Libera ESTA revendedora a completar os dados da cliente em vendas antigas
+// dela. Só admin: o sistema de perfis/permissões não alcança revendedora
+// (carregarPermissoes só roda para staff), por isso é um flag no profile.
+// O banco (trigger guard_profile_role, 0039) impede auto-concessão.
+export async function marcarPodeCompletarVendas(id, val) {
+  if (!ehAdmin()) { toast('Apenas admin libera essa permissão.'); return; }
+  const { error } = await sbQ(sb.from('profiles').update({ pode_completar_vendas: val }).eq('id', id));
+  if (error) {
+    console.error('pode_completar_vendas:', error);
+    if (/pode_completar_vendas/.test(error.message || '') && /column|schema cache/i.test(error.message || '')) {
+      toast('Coluna "pode_completar_vendas" não existe — rode a migração 0039 no Supabase.');
+    } else if (await handleSupabaseError(error, `Erro ao salvar: ${error.message}`)) { /* já avisou */ }
+    return;
+  }
+  const r = (state.aprovadasCache || []).find(x => String(x.id) === String(id));
+  if (r) r.pode_completar_vendas = val;
+  toast(val ? 'Liberada para completar vendas antigas.' : 'Permissão de completar vendas removida.');
 }
 
 export async function definirPapel(id, novoPapel) {

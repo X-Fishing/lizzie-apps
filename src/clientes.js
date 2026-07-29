@@ -4,7 +4,7 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { esc, sbQ, toast, confirmarAcao, openModal, closeModal, handleSupabaseError,
-         isoToBR, brToISO } from './utils.js';
+         isoToBR, brToISO, telFmt, telValido, telNormalizado } from './utils.js';
 // maskTelBR/maskDateBR são usados só em handlers inline (oninput=) via window.
 
 const IC_PLUS  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>';
@@ -17,9 +17,11 @@ let cache = [];
 let busca = '';
 
 const panel = () => document.getElementById('panel-clientes');
-const soDigitos = s => (s || '').replace(/\D/g, '');
-const telFmt = c => { const d = soDigitos(c); if (!d) return '—'; return d.length > 10 ? `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7,11)}` : `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6,10)}`; };
 const mesAtual = () => new Date().getMonth() + 1;
+// Telefone fora do padrão = cadastro suspeito: como o celular é a chave de
+// identidade, pode ter juntado mais de uma pessoa no mesmo registro.
+const BADGE_TEL_RUIM = '<span class="badge badge-pendente" style="margin-left:6px" title="Número fora do padrão brasileiro — pode ser um telefone inventado, e pessoas diferentes podem ter sido juntadas neste cadastro.">Telefone inválido</span>';
+const telRuim = c => !!c && !telValido(c);
 
 export async function loadClientes() {
   panel().innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
@@ -66,7 +68,7 @@ function linhasClientes() {
   return lista.length ? lista.map(c => `
     <tr class="pag-row" style="cursor:pointer" onclick="clienteVer('${c.id}')">
       <td class="pag-td"><span class="ciclo-desc">${esc(c.nome)}</span>${c.email ? `<div style="font-size:11px;color:var(--muted)">${esc(c.email)}</div>` : ''}</td>
-      <td class="pag-td">${esc(telFmt(c.celular))}</td>
+      <td class="pag-td">${esc(telFmt(c.celular))}${telRuim(c.celular) ? BADGE_TEL_RUIM : ''}</td>
       <td class="pag-td">${esc(c.cidade || '—')}</td>
       <td class="pag-td">${c.data_nascimento ? esc(isoToBR(c.data_nascimento)) : '—'}</td>
       <td class="pag-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
@@ -91,6 +93,7 @@ export function clienteVer(id) {
   document.getElementById('cad-modal-titulo').textContent = c.nome;
   document.getElementById('cad-modal-body').innerHTML = `
     ${c.created_at ? `<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Cliente desde ${esc(isoToBR(c.created_at))}</div>` : ''}
+    ${telRuim(c.celular) ? `<div style="font-size:12.5px;color:var(--danger);background:rgba(224,85,85,.10);border:1px solid var(--danger);border-radius:10px;padding:8px 12px;margin-bottom:12px">⚠ Telefone fora do padrão. Como o número é a chave do cadastro, este registro pode ter juntado mais de uma pessoa — confira antes de liberar prêmio de fidelidade.</div>` : ''}
     ${linha('Telefone', telFmt(c.celular))}
     ${linha('E-mail', c.email)}
     ${linha('Cidade', c.cidade)}
@@ -112,7 +115,7 @@ function abrirForm(c) {
     <div class="form-group"><label class="form-label">Nome *</label>
       <input type="text" id="cli-nome" class="form-control" value="${esc(r.nome || '')}"></div>
     <div class="form-group"><label class="form-label">Celular (com DDD)</label>
-      <input type="text" id="cli-cel" class="form-control" inputmode="numeric" placeholder="(00) 00000-0000" value="${esc(telFmt(r.celular) === '—' ? '' : telFmt(r.celular))}" oninput="maskTelBR(this)"></div>
+      <input type="text" id="cli-cel" class="form-control" inputmode="numeric" placeholder="(11) 98765-4321" value="${esc(telFmt(r.celular) === '—' ? '' : telFmt(r.celular))}" oninput="maskTelBR(this)"></div>
     <div class="form-group"><label class="form-label">E-mail</label>
       <input type="text" id="cli-email" class="form-control" inputmode="email" value="${esc(r.email || '')}"></div>
     <div class="form-group"><label class="form-label">Cidade</label>
@@ -131,10 +134,16 @@ export async function clienteSalvar(id) {
   const val = elId => (document.getElementById(elId)?.value || '').trim();
   const nome = val('cli-nome');
   if (!nome) { toast('Nome é obrigatório'); return; }
+  // Celular é a CHAVE de identidade da cliente (unique) e da cartela de
+  // fidelidade: número inventado funde pessoas diferentes. Vazio é permitido
+  // (fica null — a coluna é unique, mas nulos não colidem); preenchido tem de
+  // ser real. Mesma regra do banco (0038: tel_br_valido).
+  const cel = val('cli-cel');
+  if (cel && !telValido(cel)) { toast('Telefone inválido — informe um número real com DDD.'); return; }
   const nb = v => v || null;
   const payload = {
     nome,
-    celular: soDigitos(val('cli-cel')) || null,
+    celular: cel ? telNormalizado(cel) : null,
     email: nb(val('cli-email')),
     cidade: nb(val('cli-cidade')),
     data_nascimento: brToISO(val('cli-nasc')),

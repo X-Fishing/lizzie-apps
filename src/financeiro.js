@@ -4,7 +4,7 @@
 // teste, mas nada é gravado em financeiro_lancamentos.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, toast, sbQ, fmtBRL, formatDate, openModal, closeModal, parseMoneyBR, moneyToInput, handleSupabaseError, ehRevTeste, confirmarAcao } from './utils.js';
+import { esc, toast, sbQ, fmtBRL, formatDate, openModal, closeModal, parseMoneyBR, moneyToInput, handleSupabaseError, ehRevTeste, confirmarAcao, telWa55 } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 
 const podeEstornar = () => IS_ADMIN || PERMISSOES.has('acao_estornar_recebimento');
@@ -484,9 +484,8 @@ export async function estornarConfirmar(lancId) {
 export function zapCobranca(lancId) {
   const l = finLancamentos.find(x => String(x.id) === String(lancId));
   if (!l) return;
-  let tel = String(finTelefones[l.pessoa_id] || '').replace(/\D/g, '');
-  if (!tel) { toast('Revendedora sem telefone cadastrado.'); return; }
-  if (!tel.startsWith('55') || tel.length <= 11) tel = '55' + tel;
+  const tel = telWa55(finTelefones[l.pessoa_id]);
+  if (!tel) { toast('Revendedora com telefone inválido no cadastro.'); return; }
   const primeiro = (l.pessoa_nome || '').trim().split(' ')[0] || 'tudo bem';
   const hoje = hojeISO();
   const vencFmt = l.vencimento ? formatDate(l.vencimento) : '';

@@ -2,7 +2,7 @@
 // com ação "Avisar" via WhatsApp (deep link wa.me, sem API). O rastreio de
 // bônus enviado/valor (mockup) depende de infra futura — fora do escopo agora.
 import { sb } from './supabase.js';
-import { esc, sbQ, isoToBR } from './utils.js';
+import { esc, sbQ, isoToBR, waMeLink, telFmt } from './utils.js';
 
 const IC_CAKE = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3M12 8v3M17 8v3M7 4h.01M12 4h.01M17 4h.01"/></svg>';
 const IC_USER = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
@@ -13,7 +13,6 @@ let lista = [];        // { tipo, nome, telefone, nascimento(ISO) }
 let filtro = 'todos';  // todos | revendedora | cliente
 
 const panel = () => document.getElementById('panel-bonus');
-const soDigitos = s => (s || '').replace(/\D/g, '');
 const diaMes = iso => Number(iso.slice(8, 10));   // p/ ordenar por dia
 
 export async function loadBonus() {
@@ -45,11 +44,8 @@ export async function loadBonus() {
 export function bonusFiltro(f) { filtro = f; render(new Date().getMonth() + 1); }
 
 function waLink(tel, nome) {
-  const d = soDigitos(tel);
-  if (!d) return null;
-  const num = d.length <= 11 ? '55' + d : d;
   const msg = `Feliz aniversário, ${nome.split(' ')[0]}! A Lizzie Semijoias preparou um presente especial pra você. 🎁`;
-  return `https://wa.me/${num}?text=${encodeURIComponent(msg)}`;
+  return waMeLink(tel, msg);   // null se o telefone não for válido
 }
 
 function render(mes) {
@@ -68,10 +64,10 @@ function render(mes) {
       <td class="pag-td"><span class="ciclo-desc">${esc(x.nome)}</span></td>
       <td class="pag-td">${badge(x.tipo)}</td>
       <td class="pag-td">${esc(isoToBR(x.nascimento).slice(0, 5))}</td>
-      <td class="pag-td">${esc(x.telefone || '—')}</td>
+      <td class="pag-td">${esc(x.telefone ? telFmt(x.telefone) : '—')}</td>
       <td class="pag-td" style="text-align:right">${wa
         ? `<a href="${wa}" target="_blank" rel="noopener" class="btn-secondary btn-sm" style="text-decoration:none;border-color:#25d366;color:#1a7a44">${IC_WA} Avisar</a>`
-        : '<span style="font-size:11px;color:var(--muted)">sem telefone</span>'}</td>
+        : '<span style="font-size:11px;color:var(--muted)">sem telefone válido</span>'}</td>
     </tr>`;
   }).join('')
     : `<tr><td colspan="5"><div class="empty-state" style="padding:40px 0"><div class="empty-icon">${IC_CAKE}</div><p>Nenhum aniversariante ${filtro !== 'todos' ? 'nesse filtro ' : ''}em ${MESES[mes - 1]}</p></div></td></tr>`;

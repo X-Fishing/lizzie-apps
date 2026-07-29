@@ -1,7 +1,7 @@
 // Trocas: proximas trocas por revendedora (a partir de pedidos Bling) + painel.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, confirmarAcao } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, confirmarAcao, waMeLink } from './utils.js';
 import { fetchTodosBling, SITUACAO_ABERTO } from './bling.js';
 export async function carregarProximasTrocas(forcar = false) {
   if (state.proximaTrocaCarregado && !forcar) return true;
@@ -234,10 +234,7 @@ export function isoNoMesAtual(iso) {
 }
 
 export function whatsappLink(telefone, mensagem) {
-  const tel = (telefone || '').replace(/\D/g, '');
-  if (!tel) return null;
-  const cel = tel.startsWith('55') ? tel : '55' + tel;
-  return `https://wa.me/${cel}?text=${encodeURIComponent(mensagem)}`;
+  return waMeLink(telefone, mensagem);   // null se o telefone não for válido
 }
 
 export function mensagemTroca(nome, dataIso) {

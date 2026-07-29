@@ -1,8 +1,17 @@
 // Pagamentos: lista de vendas, detalhe, registrar pagamento, excluir.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, parseMoneyBR, moneyToInput, hojeBR, brToISO } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, parseMoneyBR, moneyToInput, hojeBR, brToISO, telValido, telFmt, telNormalizado, waMeLink } from './utils.js';
 import { enviarCertificado, gerarCertificadoGarantia, gerarVersoGarantia, numeroCertificado } from './certificado.js';
+import { IS_ADMIN, PERMISSOES } from './menu.js';
+
+// Quem pode completar os dados da cliente numa venda antiga: admin, staff com
+// a ação, ou a DONA da venda com o flag liberado pelo admin. A revendedora
+// nunca passa por carregarPermissoes(), então para ela vale o profile.
+const podeCompletarVenda = v => IS_ADMIN
+  || PERMISSOES.has('acao_completar_venda_antiga')
+  || (v.revendedora_id === state.currentUser?.id
+      && state.currentProfile?.pode_completar_vendas === true);
 
 // Nome da revendedora (vendedora) para o certificado: mapa de nomes já
 // carregado (consignados) ou o próprio usuário logado; senão omite.
@@ -82,7 +91,7 @@ export function filtrarPagamentos() {
       <td class="pag-td"><span class="pag-valor pag-valor-pago">R$ ${Number(v.valor_pago).toFixed(2)}</span></td>
       <td class="pag-td"><span class="pag-valor ${pendente>0?'pag-valor-pendente':''}">R$ ${pendente.toFixed(2)}</span></td>
       <td class="pag-td"><span class="badge ${statusBadge[v.status]}">${statusLabel[v.status]}</span></td>
-      <td class="pag-td" style="text-align:right">${pendente > 0 && v.telefone_cliente ? `<button class="btn-icon" title="Cobrar no WhatsApp" style="color:#128C7E" onclick="event.stopPropagation();zapCobrancaCliente('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg></button>` : ''}</td>
+      <td class="pag-td" style="text-align:right">${pendente > 0 && telValido(v.telefone_cliente) ? `<button class="btn-icon" title="Cobrar no WhatsApp" style="color:#128C7E" onclick="event.stopPropagation();zapCobrancaCliente('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg></button>` : ''}</td>
     </tr>`;
   }).join('');
 
@@ -151,13 +160,15 @@ export async function verVenda(id) {
       <div class="detail-row"><div class="detail-key">Total</div><div class="detail-val">R$ ${Number(v.valor_total).toFixed(2)}</div></div>
       <div class="detail-row"><div class="detail-key">Pago</div><div class="detail-val" style="color:var(--success)">R$ ${Number(v.valor_pago).toFixed(2)}</div></div>
       <div class="detail-row"><div class="detail-key">Pendente</div><div class="detail-val" style="color:var(--danger)">R$ ${restante.toFixed(2)}</div></div>
-      ${v.telefone_cliente ? `<div class="detail-row"><div class="detail-key">WhatsApp</div><div class="detail-val">${esc(v.telefone_cliente)}</div></div>` : ''}
+      ${v.telefone_cliente ? `<div class="detail-row"><div class="detail-key">WhatsApp</div><div class="detail-val"${telValido(v.telefone_cliente) ? '' : ' style="color:var(--danger)"'}>${esc(telFmt(v.telefone_cliente))}${telValido(v.telefone_cliente) ? '' : ' — número não confere'}</div></div>` : ''}
       ${v.nascimento_cliente ? `<div class="detail-row"><div class="detail-key">Aniversário</div><div class="detail-val">${formatDate(v.nascimento_cliente)}</div></div>` : ''}
       ${v.data_combinada ? `<div class="detail-row"><div class="detail-key">Data combinada</div><div class="detail-val"${(v.data_combinada < new Date().toISOString().slice(0,10) && restante > 0) ? ' style="color:var(--danger)"' : ''}>${(() => { const p = v.data_combinada.split('T')[0].split('-'); return `${p[2]}/${p[1]}`; })()}</div></div>` : ''}
       ${v.observacao ? `<div class="detail-row"><div class="detail-key">Obs.</div><div class="detail-val">${esc(v.observacao)}</div></div>` : ''}
+      ${v.atualizado_em ? `<div class="detail-row"><div class="detail-key">Dados corrigidos</div><div class="detail-val">${formatDate(v.atualizado_em)}${v.atualizacao_motivo ? ' · ' + esc(v.atualizacao_motivo) : ''}</div></div>` : ''}
     </div>
-    ${restante > 0 && v.telefone_cliente ? `<button class="btn-secondary" style="width:100%;margin-bottom:10px;border-color:#25D366;color:#128C7E" onclick="zapCobrancaCliente('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Cobrar no WhatsApp</button>` : ''}
-    ${v.telefone_cliente ? `<button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="reenviarGarantiaVenda('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg> Enviar certificado de garantia</button>` : ''}
+    ${!v.cliente_id && podeCompletarVenda(v) ? `<button class="btn-secondary" style="width:100%;margin-bottom:10px;border-color:var(--rose);color:var(--rose)" onclick="completarClienteVenda('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg> Completar dados da cliente</button>` : ''}
+    ${restante > 0 && telValido(v.telefone_cliente) ? `<button class="btn-secondary" style="width:100%;margin-bottom:10px;border-color:#25D366;color:#128C7E" onclick="zapCobrancaCliente('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Cobrar no WhatsApp</button>` : ''}
+    ${telValido(v.telefone_cliente) ? `<button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="reenviarGarantiaVenda('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg> Enviar certificado de garantia</button>` : ''}
     <button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="gerarCertificadoVenda('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg> Gerar certificado (baixar)</button>
     <div class="divider"></div>
     <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Itens da compra</div>
@@ -184,6 +195,72 @@ export async function verVenda(id) {
   openModal('modal-detalhe-venda');
 }
 
+// ── Completar os dados da cliente numa venda ANTIGA ─────────────────
+// Só identificação da cliente (+ garantia e selos que passam a valer).
+// Valores, peças, datas e forma de pagamento NÃO são editáveis aqui — a RPC
+// no banco também só toca nas colunas de cliente (migração 0039).
+export function completarClienteVenda(id) {
+  const v = state.allVendas.find(x => String(x.id) === String(id));
+  if (!v) { toast('Venda não encontrada'); return; }
+  if (!podeCompletarVenda(v)) { toast('Sem permissão para completar esta venda.'); return; }
+  const itens = state.vendaItensCache[id] || [];
+  document.getElementById('cad-modal-titulo').textContent = 'Completar dados da cliente';
+  document.getElementById('cad-modal-body').innerHTML = `
+    <div style="background:#faf7f2;border-radius:12px;padding:10px 14px;margin-bottom:12px;font-size:12.5px">
+      <div style="color:var(--plum);font-weight:600">Venda de ${formatDate(v.data_venda)} · ${fmtBRL(v.valor_total)} · ${esc(v.forma_pagamento || '')}</div>
+      ${itens.length ? `<div style="color:var(--muted);margin-top:4px">${itens.map(it => `${it.quantidade}× ${esc(it.descricao)}`).join(' · ')}</div>` : ''}
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">
+      Só dá para corrigir <b>quem é a cliente</b>. Valores, peças, datas e forma de pagamento <b>não podem ser alterados</b> aqui — se algum estiver errado, exclua a venda e refaça.
+    </div>
+    <div class="form-group"><label class="form-label">WhatsApp da cliente *</label>
+      <input type="tel" id="cv-tel" class="form-control" placeholder="(11) 98765-4321" maxlength="16" inputmode="numeric" value="${esc(v.telefone_cliente ? telFmt(v.telefone_cliente) : '')}" oninput="maskTelBR(this)"></div>
+    <div class="form-group"><label class="form-label">Nome da cliente *</label>
+      <input type="text" id="cv-nome" class="form-control" value="${esc(v.nome_cliente || '')}"></div>
+    <div class="form-group"><label class="form-label">Aniversário (opcional)</label>
+      <input type="text" id="cv-nasc" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" value="${esc(v.nascimento_cliente ? formatDate(v.nascimento_cliente) : '')}" oninput="maskDateBR(this)"></div>
+    <div class="form-group"><label class="form-label">Motivo (opcional)</label>
+      <textarea id="cv-motivo" class="form-control" rows="2" placeholder="Ex.: cliente informou o WhatsApp depois"></textarea></div>`;
+  const btn = document.getElementById('cad-modal-salvar');
+  btn.style.display = '';
+  btn.disabled = false;
+  btn.textContent = 'Salvar e vincular';
+  btn.setAttribute('onclick', `completarClienteVendaSalvar('${v.id}')`);
+  openModal('modal-cadastro');
+}
+
+export async function completarClienteVendaSalvar(id) {
+  const tel = (document.getElementById('cv-tel')?.value || '').trim();
+  const nome = (document.getElementById('cv-nome')?.value || '').trim();
+  const nasc = brToISO((document.getElementById('cv-nasc')?.value || '').trim());
+  const motivo = (document.getElementById('cv-motivo')?.value || '').trim() || null;
+
+  if (!nome) { toast('Informe o nome da cliente'); return; }
+  if (!telValido(tel)) { toast('Telefone inválido — informe um número real com DDD.'); return; }
+
+  const btn = document.getElementById('cad-modal-salvar');
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  const { data, error } = await sbQ(sb.rpc('completar_venda_cliente', {
+    p_venda_id: id, p_nome: nome, p_tel: telNormalizado(tel), p_nasc: nasc, p_motivo: motivo,
+  }));
+  btn.disabled = false; btn.textContent = 'Salvar e vincular';
+
+  if (error) {
+    console.error('completar_venda_cliente:', error);
+    toast(/does not exist|schema cache/i.test(error.message || '')
+      ? 'Função do banco não encontrada — rode a migração 0039 no Supabase.'
+      : (error.message || 'Não foi possível completar a venda'), 'erro');
+    return;
+  }
+  closeModal('modal-cadastro');
+  const ganhos = data?.fidelidade?.selos_ganhos || 0;
+  if (ganhos > 0) toast(`Cliente vinculada · +${ganhos} selo(s) creditados.`, 'erro');
+  // loadVendas zera o cache de itens — reabrir o detalhe repopula (senão o
+  // certificado sairia sem peças logo depois da correção).
+  await loadVendas();
+  verVenda(id);
+}
+
 // Regenera e reenvia o certificado de garantia de uma venda já registrada.
 export async function reenviarGarantiaVenda(id) {
   const v = state.allVendas.find(x => x.id === id);
@@ -195,7 +272,9 @@ export async function reenviarGarantiaVenda(id) {
     });
   } catch (e) {
     console.error('reenviarGarantiaVenda', e);
-    toast('Não foi possível enviar o certificado — tente de novo', 'erro');
+    toast(e?.message === 'sem-telefone'
+      ? 'Telefone da cliente inválido — corrija os dados da venda para enviar o certificado.'
+      : 'Não foi possível enviar o certificado — tente de novo', 'erro');
   }
 }
 
@@ -302,9 +381,7 @@ export async function registrarPagamento(id) {
 export function zapCobrancaCliente(vendaId) {
   const v = state.allVendas.find(x => String(x.id) === String(vendaId));
   if (!v) return;
-  let tel = String(v.telefone_cliente || '').replace(/\D/g, '');
-  if (!tel) { toast('Cliente sem WhatsApp cadastrado.'); return; }
-  if (!tel.startsWith('55') || tel.length <= 11) tel = '55' + tel;
+  if (!telValido(v.telefone_cliente)) { toast('Telefone da cliente inválido — corrija os dados da venda.'); return; }
   const pendente = Number(v.valor_total) - Number(v.valor_pago);
   if (pendente <= 0) { toast('Esta venda já está quitada.'); return; }
   const primeiro = (v.nome_cliente || '').trim().split(' ')[0] || 'tudo bem';
@@ -317,5 +394,5 @@ export function zapCobrancaCliente(vendaId) {
     : dc === hoje ? `combinamos para hoje (${dcFmt})`
     : `combinamos para ${dcFmt}`;
   const msg = `Oi ${primeiro}, tudo bem? 💗 Passando para lembrar com carinho do valor de ${fmtBRL(pendente)} da sua comprinha, que ${frase}. Qualquer dúvida estou à disposição! Obrigada 🌸`;
-  window.open(`https://wa.me/${tel}?text=${encodeURIComponent(msg)}`, '_blank');
+  window.open(waMeLink(v.telefone_cliente, msg), '_blank');
 }

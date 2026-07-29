@@ -1,8 +1,7 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste } from './utils.js';
-const soDigitos = s => (s || '').replace(/\D/g, '');
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 import { abrirModalPosVenda } from './pos-venda.js';
 export async function loadConsignados() {
@@ -1824,11 +1823,27 @@ export function abrirFinalizarVenda() {
   document.getElementById('f-combinada').value = '';
   document.getElementById('f-obs').value = '';
   document.getElementById('f-cliente-status').innerHTML = '';
+  const semZapEl = document.getElementById('f-sem-zap');
+  if (semZapEl) { semZapEl.checked = false; vendaSemZapToggle(); }
   state.vendaClienteId = null;
   ajustarValorPago();
   openModal('modal-finalizar');
   // Telefone é o gatilho do autocomplete → foca nele ao abrir.
   setTimeout(() => document.getElementById('f-tel')?.focus(), 120);
+}
+
+// "A cliente não quis informar o WhatsApp": desliga telefone/aniversário e a
+// venda segue SEM cliente vinculada (sem fidelidade, sem certificado).
+export function vendaSemZapToggle() {
+  const on = !!document.getElementById('f-sem-zap')?.checked;
+  const tel = document.getElementById('f-tel');
+  const nasc = document.getElementById('f-nasc');
+  const aviso = document.getElementById('f-sem-zap-aviso');
+  [tel, nasc].forEach(el => { if (el) { if (on) el.value = ''; el.disabled = on; } });
+  const status = document.getElementById('f-cliente-status');
+  if (status && on) status.innerHTML = '';
+  if (aviso) aviso.style.display = on ? 'block' : 'none';
+  if (on) state.vendaClienteId = null;
 }
 
 // ── Autocomplete da cliente pelo telefone (chave única) ────────────────
@@ -1838,6 +1853,7 @@ export function vendaTelefoneInput() {
   const tel = soDigitos(document.getElementById('f-tel').value);
   state.vendaClienteId = null;
   clearTimeout(_vendaTelTimer);
+  if (document.getElementById('f-sem-zap')?.checked) { if (status) status.innerHTML = ''; return; }
   if (tel.length < 10) { if (status) status.innerHTML = ''; return; }
   if (status) status.innerHTML = '<span style="color:var(--muted)">Buscando cliente…</span>';
   _vendaTelTimer = setTimeout(() => buscarClientePorTelefone(tel), 400);
@@ -1883,9 +1899,14 @@ export async function confirmarVendaCarrinho(btn) {
   const obs = document.getElementById('f-obs').value.trim();
   const combinada = forma === 'Fiado' ? diaMesParaISO(document.getElementById('f-combinada').value) : null;
 
+  // "Não quis informar" é a saída honesta: sem ela a revendedora inventava um
+  // número (00000000000), e como o telefone é a CHAVE da cliente isso fundia
+  // pessoas diferentes na mesma cartela de fidelidade.
+  const semZap = !!document.getElementById('f-sem-zap')?.checked;
+
   if (!cliente) { toast('Informe o nome da cliente'); return; }
-  if (tel.length < 10) { toast('Informe o WhatsApp da cliente com DDD'); return; }
-  if (!nasc) { toast('Informe o aniversário da cliente (dd/mm/aaaa)'); return; }
+  if (!semZap && !telValido(tel)) { toast('Telefone inválido — informe um número real com DDD.'); return; }
+  if (!semZap && !nasc) { toast('Informe o aniversário da cliente (dd/mm/aaaa)'); return; }
   if (!data) { toast('Data inválida (use dd/mm/aaaa)'); return; }
   if (forma === 'Fiado' && !combinada) { toast('Informe a data combinada de pagamento'); return; }
   if (!state.carrinhoVenda.length) { toast('Carrinho vazio'); return; }
@@ -1910,8 +1931,8 @@ export async function confirmarVendaCarrinho(btn) {
         p_pago: pago,
         p_status: status,
         p_obs: obs || null,
-        p_tel: tel,
-        p_nasc: nasc,
+        p_tel: semZap ? null : telNormalizado(tel),
+        p_nasc: semZap ? null : nasc,
         p_combinada: combinada,
         p_itens: state.carrinhoVenda.map(it => ({
           consignado_id: it.consignado_id,
@@ -1943,7 +1964,7 @@ export async function confirmarVendaCarrinho(btn) {
 
     // Snapshot da venda ANTES de zerar o carrinho (o modal pós-venda usa).
     const snapshot = {
-      cliente, tel, dataISO: data, total,
+      cliente, tel: semZap ? null : telNormalizado(tel), dataISO: data, total,
       itens: state.carrinhoVenda.map(i => ({ descricao: i.descricao, referencia: i.referencia || null, quantidade: i.quantidade })),
     };
     state.carrinhoVenda = [];

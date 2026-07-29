@@ -18,7 +18,16 @@ export function abrirModalPosVenda(ret, snapshot) {
   const fid = isObj ? ret.fidelidade : null;
   state.posVendaCtx = { ...snapshot, vendaId, fid };
 
-  const bloco = fid ? `
+  // Venda sem cliente vinculada (escape hatch "não quis informar o WhatsApp"):
+  // registrar_venda sempre devolve o agregado, então sem isto aparecia
+  // "+0 selos · 0/10" sem explicar por quê.
+  const semCliente = isObj && !ret.cliente_id;
+
+  const bloco = semCliente ? `
+    <div style="font-size:12.5px;color:var(--muted);text-align:center;margin:16px 0;background:var(--blush);border-radius:12px;padding:12px">
+      Venda registrada <b>sem WhatsApp</b>.<br>Esta compra não gera selos de fidelidade nem certificado de garantia.
+    </div>
+  ` : fid ? `
     <div style="text-align:center;margin:16px 0 4px">
       <div class="fid-progresso" style="font-size:20px">+${fid.selos_ganhos} selo${fid.selos_ganhos !== 1 ? 's' : ''} nesta compra</div>
       <div style="font-size:12px;color:var(--muted)">Cartela: ${fid.cartela_selos ?? 0}/10</div>
@@ -32,12 +41,13 @@ export function abrirModalPosVenda(ret, snapshot) {
     <div style="font-size:13px;color:var(--muted)">${esc(snapshot.cliente)} · ${fmtBRL(snapshot.total)}</div>
     ${bloco}
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:20px">
-      ${fid ? `<button class="btn-primary" style="width:100%" onclick="posVendaEnviarSelos()">Enviar selos no WhatsApp</button>` : ''}
-      <button class="btn-secondary" style="width:100%" id="pos-venda-garantia" onclick="posVendaEnviarGarantia()">Enviar certificado de garantia</button>
+      ${fid && !semCliente ? `<button class="btn-primary" style="width:100%" onclick="posVendaEnviarSelos()">Enviar selos no WhatsApp</button>` : ''}
+      ${semCliente ? '' : '<button class="btn-secondary" style="width:100%" id="pos-venda-garantia" onclick="posVendaEnviarGarantia()">Enviar certificado de garantia</button>'}
       <button class="btn-secondary" style="width:100%;border:none;color:var(--muted)" onclick="closeModalPosVenda()">Concluir</button>
     </div>`;
   openModal('modal-pos-venda');
-  prepararCertificado(state.posVendaCtx);   // pré-gera em background (clique fica síncrono)
+  // Sem cliente não há certificado a enviar — não gasta upload à toa.
+  if (!semCliente) prepararCertificado(state.posVendaCtx);
 }
 
 // Pré-gera o certificado logo após a venda; guarda o link no contexto.
@@ -82,6 +92,8 @@ export async function posVendaEnviarGarantia() {
     });
   } catch (e) {
     console.error('posVendaEnviarGarantia', e);
-    toast('Não foi possível enviar o certificado — use Reenviar no detalhe da venda', 'erro');
+    toast(e?.message === 'sem-telefone'
+      ? 'Telefone da cliente inválido — não dá para enviar o certificado.'
+      : 'Não foi possível enviar o certificado — use Reenviar no detalhe da venda', 'erro');
   }
 }

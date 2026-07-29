@@ -263,12 +263,84 @@ export function previewFoto(input, previewId, placeholderId) {
 }
 
 // ── Telefone / WhatsApp ────────────────────────────────────────────────
-// Só dígitos. telWa55 prefixa 55 quando o número vem sem DDI (10-11 dígitos).
+// ATENÇÃO: a MESMA regra vive no banco (migração 0038: tel_normalizado /
+// tel_br_valido). Mudou aqui, mude lá — o telefone é a CHAVE de identidade
+// da cliente (clientes.celular unique) e da cartela de fidelidade, então
+// telefone falso funde pessoas diferentes na mesma cartela.
 export function soDigitos(s) { return String(s || '').replace(/\D/g, ''); }
-export function telWa55(tel) {
+
+// DDDs válidos no Brasil (plano de numeração ANATEL).
+const DDDS_BR = new Set([
+  '11', '12', '13', '14', '15', '16', '17', '18', '19',
+  '21', '22', '24', '27', '28',
+  '31', '32', '33', '34', '35', '37', '38',
+  '41', '42', '43', '44', '45', '46', '47', '48', '49',
+  '51', '53', '54', '55',
+  '61', '62', '63', '64', '65', '66', '67', '68', '69',
+  '71', '73', '74', '75', '77', '79',
+  '81', '82', '83', '84', '85', '86', '87', '88', '89',
+  '91', '92', '93', '94', '95', '96', '97', '98', '99',
+]);
+
+// Desligue se algum número REAL da base for reprovado por causa da faixa móvel.
+const EXIGIR_FAIXA_MOVEL = true;
+
+// Formato canônico: só dígitos, sem DDI 55. É o ÚNICO formato que gravamos —
+// sem isso a mesma pessoa vira dois cadastros (um com 55, outro sem).
+export function telNormalizado(tel) {
   const d = soDigitos(tel);
-  if (d.length < 10) return null;
-  return d.length <= 11 ? '55' + d : d;
+  if (d.length === 12 || d.length === 13) {
+    if (d.slice(0, 2) === '55') return d.slice(2) || null;
+  }
+  return d || null;
+}
+
+const seqObvia = s => {
+  let cres = true, decr = true;
+  for (let i = 1; i < s.length; i++) {
+    if (s.charCodeAt(i) !== s.charCodeAt(i - 1) + 1) cres = false;
+    if (s.charCodeAt(i) !== s.charCodeAt(i - 1) - 1) decr = false;
+  }
+  return cres || decr;
+};
+
+// Telefone BR de verdade: 10 (fixo) ou 11 (celular) dígitos, DDD existente,
+// nono dígito no celular, e sem os padrões clássicos de número inventado.
+export function telValido(tel) {
+  const d = telNormalizado(tel);
+  if (!d || (d.length !== 10 && d.length !== 11)) return false;
+  if (/^(\d)\1+$/.test(d)) return false;                 // 00000000000
+  if (!DDDS_BR.has(d.slice(0, 2))) return false;         // DDD 00, 20, 23...
+
+  const num = d.slice(2);
+  let corpo;
+  if (num.length === 9) {
+    if (num[0] !== '9') return false;                    // nono dígito
+    if (EXIGIR_FAIXA_MOVEL && !'6789'.includes(num[1])) return false;
+    corpo = num.slice(1);
+  } else {
+    if (!'2345'.includes(num[0])) return false;          // fixo
+    corpo = num;
+  }
+  if (/^(\d)\1+$/.test(corpo)) return false;             // (11) 90000-0000
+  if (seqObvia(corpo)) return false;                     // (11) 91234-5678
+  return true;
+}
+
+// Formata a partir do canônico (antes quebrava com números com DDI).
+export function telFmt(tel) {
+  const d = telNormalizado(tel);
+  if (!d) return '—';
+  if (d.length === 11) return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+  return d;
+}
+
+// Número para o wa.me. Só devolve algo se o telefone for VÁLIDO — assim
+// waMeLink (e todo mundo que depende dele) para de gerar link quebrado.
+export function telWa55(tel) {
+  if (!telValido(tel)) return null;
+  return '55' + telNormalizado(tel);
 }
 export function waMeLink(tel, msg) {
   const n = telWa55(tel);

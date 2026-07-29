@@ -32,14 +32,22 @@ grant execute on function public.is_admin()  to authenticated;
 grant execute on function public.is_gestor() to authenticated;
 grant execute on function public.is_staff()  to authenticated;
 
--- ── Só admin altera o nível (role) OU a flag is_revendedora de um profile ─
+-- ── Só admin altera role / is_revendedora / pode_completar_vendas ────────
+--   Versão MESCLADA (0039): honra o selo app.allow_role_change da 0012 (sem
+--   ele fn_vincular_funcionario não consegue promover funcionária nova) E
+--   protege as flags de poder. ⚠ Mesmo texto da migração 0039.
 create or replace function public.guard_profile_role()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  if (new.role is distinct from old.role
-      or new.is_revendedora is distinct from old.is_revendedora)
+  if new.role is distinct from old.role
+     and not public.is_admin()
+     and current_setting('app.allow_role_change', true) is distinct from 'on' then
+    raise exception 'Apenas admin pode alterar o nivel de acesso';
+  end if;
+  if (new.is_revendedora        is distinct from old.is_revendedora
+   or new.pode_completar_vendas is distinct from old.pode_completar_vendas)
      and not public.is_admin() then
-    raise exception 'Apenas admin pode alterar o nivel de acesso ou a flag de revendedora';
+    raise exception 'Apenas admin altera a flag de revendedora ou a permissao de completar vendas';
   end if;
   return new;
 end; $$;
@@ -82,9 +90,10 @@ create policy profiles_update_own on public.profiles
   using ( id = auth.uid() )
   with check (
     id = auth.uid()
-    and role = (select role from public.profiles where id = auth.uid())
-    and aprovada = (select aprovada from public.profiles where id = auth.uid())
-    and is_revendedora = (select is_revendedora from public.profiles where id = auth.uid())
+    and role                  = (select role                  from public.profiles where id = auth.uid())
+    and aprovada              = (select aprovada              from public.profiles where id = auth.uid())
+    and is_revendedora        = (select is_revendedora        from public.profiles where id = auth.uid())
+    and pode_completar_vendas = (select pode_completar_vendas from public.profiles where id = auth.uid())
   );
 
 -- Qualquer funcionária (staff) atualiza profiles de revendedora (aprovar/revogar,

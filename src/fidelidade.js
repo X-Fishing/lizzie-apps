@@ -5,8 +5,9 @@
 // (a RLS 0028 faz o filtro — a MESMA query serve os dois papéis).
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, sbQ, toast, confirmarAcao, openModal, handleSupabaseError, fmtBRL, isoToBR } from './utils.js';
+import { esc, sbQ, toast, confirmarAcao, openModal, handleSupabaseError, fmtBRL, isoToBR, telFmt, telValido } from './utils.js';
 import { ehStaff, ehGestor } from './auth.js';
+import { IS_ADMIN } from './menu.js';
 
 const IC_CHECK = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
 const IC_GIFT  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>';
@@ -16,8 +17,9 @@ let cache = [];        // [{id, nome, celular, selos, premios}]
 let busca = '';
 
 const panel = () => document.getElementById('panel-fidelidade');
-const soDigitos = s => (s || '').replace(/\D/g, '');
-const telFmt = c => { const d = soDigitos(c); if (!d) return '—'; return d.length > 10 ? `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7,11)}` : `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6,10)}`; };
+// Telefone fora do padrão = a cartela pode misturar mais de uma pessoa
+// (o celular é a chave de identidade da cliente).
+const telRuim = c => !!c && !telValido(c);
 
 // Cartela visual de 10 casinhas (5×2). Exportada — o modal pós-venda reusa.
 export function renderCartelaFidelidade(selos) {
@@ -83,7 +85,7 @@ function linhas() {
   </tr></thead><tbody>${lista.map(c => `
     <tr class="pag-row" style="cursor:pointer" onclick="fidelidadeVerCliente('${c.id}')">
       <td class="pag-td"><span class="ciclo-desc">${esc(c.nome)}</span></td>
-      <td class="pag-td">${esc(telFmt(c.celular))}</td>
+      <td class="pag-td">${esc(telFmt(c.celular))}${telRuim(c.celular) ? '<span class="badge badge-pendente" style="margin-left:6px" title="Número fora do padrão — esta cartela pode misturar mais de uma pessoa.">Telefone inválido</span>' : ''}</td>
       <td class="pag-td" style="text-align:center"><span class="fid-progresso">${c.selos}/10</span></td>
       <td class="pag-td" style="text-align:right">${c.premios ? `<span class="badge badge-aberta" style="color:var(--gold);border-color:var(--gold)">${IC_GIFT} Prêmio</span>` : ''}</td>
     </tr>`).join('')}</tbody></table></div>`;
@@ -118,22 +120,78 @@ export async function fidelidadeVerCliente(id) {
       ${ehGestor() ? `<button class="btn-primary btn-sm" style="width:auto" onclick="fidelidadeResgatar('${p.id}')">Registrar resgate</button>` : ''}
     </div>`).join('');
 
+  // Ajuste manual entra com sinal (o "+" fixo renderizava "+-1") e ganha
+  // badge para não se confundir com selo vindo de venda.
   const extratoHtml = extrato.length ? extrato.map(e => `
-    <div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px">
-      <span style="color:var(--muted)">${esc(isoToBR((e.em || '').slice(0,10)))}${e.valor_venda ? ' · ' + fmtBRL(e.valor_venda) : ''}</span>
-      <span style="color:var(--plum);font-weight:600">+${e.quantidade} selo${e.quantidade !== 1 ? 's' : ''}</span>
+    <div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px">
+      <div style="display:flex;justify-content:space-between;gap:8px">
+        <span style="color:var(--muted)">${esc(isoToBR((e.em || '').slice(0,10)))}${e.valor_venda ? ' · ' + fmtBRL(e.valor_venda) : ''}
+          ${e.ajuste_manual ? '<span class="badge badge-pendente" style="margin-left:6px">ajuste manual</span>' : ''}
+          ${e.premio_cancelado ? '<span class="badge badge-pendente" style="margin-left:4px">prêmio cancelado</span>' : ''}</span>
+        <span style="color:${e.quantidade < 0 ? 'var(--danger)' : 'var(--plum)'};font-weight:600;white-space:nowrap">${e.quantidade > 0 ? '+' : ''}${e.quantidade} selo${Math.abs(e.quantidade) !== 1 ? 's' : ''}</span>
+      </div>
+      ${e.ajuste_manual ? `<div style="font-size:11.5px;color:var(--muted);margin-top:2px;font-style:italic">${e.motivo ? '“' + esc(e.motivo) + '”' : 'sem motivo informado'}${e.autor ? ' — ' + esc(e.autor) : ''}</div>` : ''}
     </div>`).join('') : '<div style="font-size:12px;color:var(--muted)">Sem selos ainda.</div>';
 
   body.innerHTML = `
+    ${telRuim(c.celular) ? `<div style="font-size:12.5px;color:var(--danger);background:rgba(224,85,85,.10);border:1px solid var(--danger);border-radius:10px;padding:8px 12px;margin-bottom:12px">⚠ Telefone fora do padrão. Esta cartela pode misturar mais de uma pessoa — confira o histórico antes de liberar o prêmio.</div>` : ''}
     <div style="text-align:center;margin-bottom:6px">
       <div class="fid-progresso" style="font-size:22px">${selos}/10 selos</div>
       <div style="font-size:12px;color:var(--muted)">${selos >= 10 ? 'Cartela completa!' : `Faltam ${10 - selos} para R$ 300 em peças`}</div>
     </div>
     ${renderCartelaFidelidade(selos)}
+    ${IS_ADMIN ? `<div id="fid-ajuste-box" style="display:flex;gap:8px;justify-content:center;margin-top:12px">
+      <button class="btn-secondary btn-sm" style="width:auto" onclick="fidelidadeAjustar('${id}',-1)">− 1 selo</button>
+      <button class="btn-secondary btn-sm" style="width:auto" onclick="fidelidadeAjustar('${id}',1)">+ 1 selo</button>
+    </div>` : ''}
     ${premiosHtml ? `<div style="margin:16px 0 6px">${premiosHtml}</div>` : ''}
     ${completas ? `<div style="font-size:12px;color:var(--muted);margin-top:10px">${completas} cartela${completas !== 1 ? 's' : ''} já completada${completas !== 1 ? 's' : ''}.</div>` : ''}
     <div style="font-family:'DM Sans',sans-serif;font-weight:600;font-size:13px;color:var(--plum);margin:18px 0 4px">Histórico de selos</div>
     ${extratoHtml}`;
+}
+
+// ── Ajuste manual de selos (SÓ admin — sem chave de permissão) ──────
+// O formulário é INLINE: o modal-cadastro já está ocupado pelo detalhe da
+// cliente, e abrir outro por cima destruiria o conteúdo.
+export function fidelidadeAjustar(id, delta) {
+  if (!IS_ADMIN) { toast('Apenas o administrador ajusta selos.'); return; }
+  const box = document.getElementById('fid-ajuste-box');
+  if (!box) return;
+  box.innerHTML = `
+    <div style="flex:1">
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Motivo (opcional)</label>
+        <textarea id="fid-ajuste-motivo" class="form-control" rows="2" placeholder="Ex.: selo lançado por engano, cortesia da Lizzie..."></textarea>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin:6px 0 10px">${delta > 0
+        ? 'Vai somar 1 selo na cartela em andamento.'
+        : 'Vai tirar 1 selo. Se a cartela estiver completa, ela é reaberta e o prêmio pendente é cancelado.'}</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-secondary btn-sm" style="flex:1" onclick="fidelidadeVerCliente('${id}')">Cancelar</button>
+        <button class="btn-primary btn-sm" style="flex:1" onclick="fidelidadeAjustarConfirmar('${id}',${delta})">Confirmar ${delta > 0 ? '+1' : '−1'}</button>
+      </div>
+    </div>`;
+}
+
+export async function fidelidadeAjustarConfirmar(id, delta) {
+  if (!IS_ADMIN) { toast('Apenas o administrador ajusta selos.'); return; }
+  const motivo = (document.getElementById('fid-ajuste-motivo')?.value || '').trim() || null;
+  const { data, error } = await sbQ(sb.rpc('fidelidade_ajustar_selo', {
+    p_cliente_id: id, p_delta: delta, p_motivo: motivo,
+  }));
+  if (error) {
+    console.error('fidelidade_ajustar_selo:', error);
+    // 'erro' é obrigatório: mensagens com "resgatado" seriam silenciadas.
+    toast(/does not exist|schema cache/i.test(error.message || '')
+      ? 'Rode a migração 0040 no Supabase para ativar o ajuste de selos.'
+      : (error.message || 'Não foi possível ajustar'), 'erro');
+    return;
+  }
+  cache = cache.map(c => String(c.id) === String(id) ? { ...c, selos: data?.cartela_selos ?? 0 } : c);
+  const el = document.getElementById('fid-lista');
+  if (el) el.innerHTML = linhas();
+  if (data?.premio_cancelado) toast('Prêmio pendente cancelado junto com o selo.', 'erro');
+  await fidelidadeVerCliente(id);   // relê o RPC: cartela, prêmios e extrato
 }
 
 export async function fidelidadeResgatar(premioId) {

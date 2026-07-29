@@ -514,8 +514,15 @@
     <div id="f-cart-list" style="margin-bottom:14px"></div>
     <div class="form-group">
       <label class="form-label">WhatsApp da cliente *</label>
-      <input type="tel" id="f-tel" class="form-control" placeholder="(00) 00000-0000" maxlength="16" inputmode="numeric" autocomplete="off" oninput="maskTelBR(this);vendaTelefoneInput()">
+      <input type="tel" id="f-tel" class="form-control" placeholder="(11) 98765-4321" maxlength="16" inputmode="numeric" autocomplete="off" oninput="maskTelBR(this);vendaTelefoneInput()">
       <div id="f-cliente-status" style="font-size:11.5px;margin-top:5px;min-height:16px"></div>
+      <label class="form-label" style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:400;text-transform:none;letter-spacing:0;margin-top:6px">
+        <input type="checkbox" id="f-sem-zap" style="width:auto" onchange="vendaSemZapToggle()">
+        A cliente não quis informar o WhatsApp
+      </label>
+      <div id="f-sem-zap-aviso" style="display:none;font-size:11.5px;color:var(--warning);margin-top:5px">
+        Sem WhatsApp esta venda <b>não gera selos de fidelidade</b>, não entra na base de clientes e o certificado de garantia não pode ser enviado.
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Nome da cliente *</label>

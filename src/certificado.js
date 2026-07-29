@@ -255,5 +255,7 @@ export async function enviarCertificado({ vendaId, cliente, tel, dataISO, itens,
   const url = publicUrl || await uploadCertificado(vendaId, b);
   const link = waMeLink(tel, `${mensagem}\n${url}`);
   if (link) { window.open(link, '_blank'); return true; }
-  return false;
+  // Sem telefone válido não há como enviar. Antes devolvia false em silêncio e
+  // os chamadores ignoravam — a usuária clicava e nada acontecia.
+  throw new Error('sem-telefone');
 }

@@ -84,6 +84,7 @@ export const MENU = [
 export const ACOES = [
   { chave: 'acao_editar_maleta_finalizada', label: 'Editar/corrigir maleta finalizada' },
   { chave: 'acao_estornar_recebimento',     label: 'Estornar recebimento (financeiro)' },
+  { chave: 'acao_completar_venda_antiga',   label: 'Completar dados da cliente em venda antiga' },
 ];
 
 function todosItens() {

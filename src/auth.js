@@ -1,7 +1,7 @@
 // Autenticacao, sessao, papeis de acesso e cadastro/recuperacao de senha.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { sbQ, showMsg, toast, handleSupabaseError, openModal, closeModal } from './utils.js';
+import { sbQ, showMsg, toast, handleSupabaseError, openModal, closeModal, telValido } from './utils.js';
 import { carregarPermissoes, renderSidebar } from './menu.js';
 import { iniciarRoteamento } from './nav.js';
 export function mostrarRecovery() {
@@ -130,7 +130,11 @@ function montarAppUI() {
 }
 
 export function maskTelBR(el) {
-  const v = el.value.replace(/\D/g, '').slice(0, 11);
+  // Tira o DDI ANTES de cortar: colar "+55 11 98765-4321" virava 55119876543
+  // (número corrompido, reprovado depois com erro incompreensível).
+  let d = el.value.replace(/\D/g, '');
+  if ((d.length === 12 || d.length === 13) && d.slice(0, 2) === '55') d = d.slice(2);
+  const v = d.slice(0, 11);
   if (v.length > 6)      el.value = `(${v.slice(0,2)}) ${v.slice(2,7)}-${v.slice(7)}`;
   else if (v.length > 2) el.value = `(${v.slice(0,2)}) ${v.slice(2)}`;
   else if (v.length > 0) el.value = `(${v}`;
@@ -146,7 +150,7 @@ export function abrirComplementoCadastro() {
 export async function salvarComplemento(btn) {
   const tel = document.getElementById('comp-tel').value.trim();
   const cidade = document.getElementById('comp-cidade').value.trim();
-  if (tel.replace(/\D/g, '').length < 10) { toast('Informe um WhatsApp válido com DDD'); return; }
+  if (!telValido(tel)) { toast('Telefone inválido — informe um número real com DDD.'); return; }
   btn.disabled = true; btn.textContent = 'Salvando...';
   const { error } = await sbQ(sb.from('profiles').update({ telefone: tel, cidade: cidade || null }).eq('id', state.currentUser.id));
   btn.disabled = false; btn.textContent = 'Salvar e continuar';

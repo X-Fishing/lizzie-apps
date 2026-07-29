@@ -1,7 +1,7 @@
 // Garantias: lista, cards, visao staff, criar/editar/status/excluir.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, formatDate, sbQ, fetchPaginado, handleSupabaseError, toast, confirmarAcao, openModal, closeModal, brToISO, isoToBR, hojeBR } from './utils.js';
+import { esc, formatDate, sbQ, fetchPaginado, handleSupabaseError, toast, confirmarAcao, openModal, closeModal, brToISO, isoToBR, hojeBR, telValido, telNormalizado } from './utils.js';
 export function calcPrazoGarantia() {
   const iso = brToISO(document.getElementById('g-entrada').value);
   const prazoEl = document.getElementById('g-prazo');
@@ -322,7 +322,7 @@ export async function salvarGarantia(btn) {
   // Revendedora: WhatsApp + aniversário obrigatórios (envio da garantia por
   // WhatsApp). Staff continua opcional — garantias de balcão/antigas sem o dado.
   if (!ehStaff()) {
-    if (telCliente.replace(/\D/g, '').length < 10) { toast('Informe o WhatsApp da cliente com DDD'); btn.disabled = false; return; }
+    if (!telValido(telCliente)) { toast('Telefone inválido — informe um número real com DDD.'); btn.disabled = false; return; }
     if (!nascCliente) { toast('Informe o aniversário da cliente (dd/mm/aaaa)'); btn.disabled = false; return; }
   }
 
@@ -345,7 +345,7 @@ export async function salvarGarantia(btn) {
   const payload = {
     descricao_item: desc,
     nome_cliente: cliente,
-    telefone_cliente: telCliente || null,
+    telefone_cliente: telNormalizado(telCliente),
     nascimento_cliente: nascCliente || null,
     problema_relatado: problema,
     data_entrada: brToISO(document.getElementById('g-entrada').value),
