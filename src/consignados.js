@@ -1855,6 +1855,12 @@ export function vendaTelefoneInput() {
   clearTimeout(_vendaTelTimer);
   if (document.getElementById('f-sem-zap')?.checked) { if (status) status.innerHTML = ''; return; }
   if (tel.length < 10) { if (status) status.innerHTML = ''; return; }
+  // Número inválido não busca: senão 00000000000 achava a cliente-lixo e
+  // preenchia o nome dela sozinho (inclusive de cliente de outra revendedora).
+  if (!telValido(tel)) {
+    if (status) status.innerHTML = '<span style="color:var(--danger)">Telefone inválido — confira o número.</span>';
+    return;
+  }
   if (status) status.innerHTML = '<span style="color:var(--muted)">Buscando cliente…</span>';
   _vendaTelTimer = setTimeout(() => buscarClientePorTelefone(tel), 400);
 }
