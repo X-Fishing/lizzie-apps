@@ -4,9 +4,10 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { esc, sbQ, toast, handleSupabaseError, isAuthError, confirmarAcao, openModal, closeModal, formatDate,
-         maskCpf, maskCep, cpfValido, buscarCep, maskDateBR, isoToBR, brToISO, hojeBR, telWa55 } from './utils.js';
+         maskCpf, maskCep, cpfValido, buscarCep, maskDateBR, isoToBR, brToISO, hojeBR, telWa55, fmtBRL } from './utils.js';
 import { ROLE_LABELS, maskTelBR } from './auth.js';
 import { carregarProximasTrocas, compararPorTroca, atualizarBadgesTroca } from './trocas.js';
+import { soEncerrados, ciclosEncerrados } from './consignados.js';
 
 const IC_PLUS = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>';
 
@@ -18,6 +19,15 @@ let revBusca = '', revFiltro = 'todas';
 // re-renderiza tudo (o foco não está na busca ao clicar num chip).
 export function revBuscar(v) { revBusca = v; const w = document.getElementById('rev-grid-wrap'); if (w) w.innerHTML = gridRevendedoras(); else renderAprovadas(); }
 export function revChip(k) { revFiltro = k; renderAprovadas(); }
+
+// Aba "Fechamentos" no cadastro (histórico de fechamento de maleta).
+// Self-contained: NÃO usa state.allConsignados/cicloRevSelecionada/
+// historicoCicloSel (são da tela de Controle de Vendas) para não vazar
+// estado entre as duas telas nem depender de #c-list (que não existe aqui).
+let revAbaAtual = 'identificacao';   // 'identificacao' | 'fechamentos'
+let revIdAtual = null;
+let revFechDados = null;             // cache: peças encerradas da revendedora aberta (null = ainda não carregou)
+let revFechCicloAberto = null;       // 'YYYY-MM-DD' do fechamento expandido, ou null = lista de cards
 
 // Cadastro considerado incompleto p/ contrato: falta CPF, nascimento ou endereço.
 function revIncompleta(r) {
@@ -195,6 +205,10 @@ export function novaRevendedora() { abrirFormRev(null); }
 
 export async function abrirFormRev(id) {
   if (id && !ehGestor()) { toast('Sem permissão'); return; }
+  revAbaAtual = 'identificacao';
+  revIdAtual = id;
+  revFechDados = null;
+  revFechCicloAberto = null;
   let r = {}, doc = {};
   if (id) {
     const [{ data: p }, { data: d }] = await Promise.all([
@@ -240,6 +254,12 @@ export async function abrirFormRev(id) {
       <div class="section-title" style="font-size:19px">${id ? 'Editar revendedora' : 'Nova revendedora'}</div>
     </div>
 
+    ${id ? `<div class="rev-tabs">
+      <button class="rev-tab active" data-aba="identificacao" onclick="revTrocarAba('identificacao')">Identificação</button>
+      <button class="rev-tab" data-aba="fechamentos" onclick="revTrocarAba('fechamentos')">Fechamentos</button>
+    </div>` : ''}
+
+    <div id="rev-tab-identificacao">
     ${secH('Identificação')}
     <div class="form-grid">
       <div class="form-group" style="grid-column:1/-1"><label class="form-label">Nome *</label>
@@ -271,10 +291,96 @@ export async function abrirFormRev(id) {
     ${id && gestor ? renderBotaoContrato(id, r, doc) : ''}
 
     ${id && gestor ? renderGestao(r) : ''}
-    ${id && gestor ? `${secH('Contratos')}<div id="rev-contratos"><div style="font-size:12px;color:var(--muted)">Carregando...</div></div>` : ''}`;
+    ${id && gestor ? `${secH('Contratos')}<div id="rev-contratos"><div style="font-size:12px;color:var(--muted)">Carregando...</div></div>` : ''}
+    </div>
+
+    ${id ? `<div id="rev-tab-fechamentos" style="display:none">
+      <div id="rev-fech-conteudo"><div class="loading" style="padding:24px 0"><div class="spinner">⟳</div></div></div>
+    </div>` : ''}`;
 
   if (id && gestor) carregarContratosEmissoes(id);
 }
+
+// ── Aba "Fechamentos" (histórico de fechamento de maleta) ───────────
+export function revTrocarAba(aba) {
+  revAbaAtual = aba;
+  const idEl = document.getElementById('rev-tab-identificacao');
+  const fechEl = document.getElementById('rev-tab-fechamentos');
+  if (idEl) idEl.style.display = aba === 'identificacao' ? '' : 'none';
+  if (fechEl) fechEl.style.display = aba === 'fechamentos' ? '' : 'none';
+  document.querySelectorAll('.rev-tab').forEach(b => b.classList.toggle('active', b.dataset.aba === aba));
+  if (aba === 'fechamentos' && revFechDados === null) carregarFechamentosRev();
+}
+
+async function carregarFechamentosRev() {
+  // Captura o id-alvo no momento do disparo: se o usuário fechar esta tela e
+  // abrir outra revendedora antes da resposta chegar, a query antiga não deve
+  // "vazar" pro cache/tela da revendedora nova (revIdAtual já terá mudado).
+  const idPedido = revIdAtual;
+  const { data, error } = await sbQ(sb.from('consignados').select('*')
+    .eq('revendedora_id', idPedido).eq('status', 'encerrado').order('encerrado_em', { ascending: false }));
+  if (idPedido !== revIdAtual) return; // a tela já mudou de revendedora — descarta
+  if (error) {
+    console.error('Fechamentos da revendedora:', error);
+    const el = document.getElementById('rev-fech-conteudo');
+    if (el) el.innerHTML = '<div class="empty-state"><p>Erro ao carregar o histórico de fechamentos.</p></div>';
+    return;
+  }
+  revFechDados = data || [];
+  renderFechamentosTab();
+}
+
+function renderFechamentosTab() {
+  const el = document.getElementById('rev-fech-conteudo');
+  if (!el) return;
+  if (revFechCicloAberto) { el.innerHTML = renderFechamentoDetalhe(revFechCicloAberto); return; }
+
+  const grupos = ciclosEncerrados(revFechDados); // [['YYYY-MM-DD', [pecas...]], ...]
+  if (!grupos.length) {
+    el.innerHTML = '<div class="empty-state"><p style="font-size:13px">Nenhum fechamento de maleta ainda.</p></div>';
+    return;
+  }
+  el.innerHTML = grupos.map(([data, pecas]) => {
+    const env  = pecas.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
+    const vend = pecas.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+    const recv = pecas.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
+    const dataFmt = data ? data.split('-').reverse().join('/') : 'sem data';
+    return `<div class="hist-ciclo-card" onclick="revFechamentoAbrir('${data}')"
+      style="cursor:pointer;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;padding:12px 14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center">
+        <span style="font-weight:600;color:var(--plum)">Fechado em ${dataFmt}</span>
+        <span style="font-size:12px;color:var(--muted)">${pecas.length} peça${pecas.length !== 1 ? 's' : ''} · ${vend}/${env} vendidas · <span style="color:var(--rose)">${fmtBRL(recv)}</span> <span style="color:var(--muted);margin-left:6px">›</span></span>
+      </div>`;
+  }).join('');
+}
+
+// Detalhe de um fechamento: tabela simples e SEM sort (é histórico, não precisa
+// ordenar por coluna — evita reusar cicloTableHtml, que depende de #c-list).
+function renderFechamentoDetalhe(chave) {
+  const pecas = soEncerrados(revFechDados).filter(c => (c.encerrado_em || c.created_at || '').slice(0, 10) === chave);
+  const env  = pecas.reduce((s, c) => s + (c.quantidade_enviada || 0), 0);
+  const vend = pecas.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+  const recv = pecas.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
+  const dataFmt = chave.split('-').reverse().join('/');
+  const linhas = pecas.map(c => `<tr>
+    <td style="padding:8px 10px">${esc(c.descricao || '')}</td>
+    <td style="padding:8px 10px">${esc(c.referencia || '—')}</td>
+    <td style="padding:8px 10px">${esc(c.categoria || '—')}</td>
+    <td style="padding:8px 10px;text-align:right">${c.quantidade_vendida || 0}/${c.quantidade_enviada || 0}</td>
+    <td style="padding:8px 10px;text-align:right">${fmtBRL(c.preco_venda || 0)}</td>
+  </tr>`).join('');
+  return `<button class="btn-voltar-ciclo" onclick="revFechamentoVoltar()" style="margin-bottom:14px">← Voltar</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="font-weight:600;color:var(--plum)">Fechado em ${dataFmt}</div>
+      <div style="font-size:13px;color:var(--muted)">${vend}/${env} vendidas · <b style="color:var(--rose)">${fmtBRL(recv)}</b></div>
+    </div>
+    <div class="pag-wrap"><table class="pag-table"><thead><tr>
+      <th class="pag-th">Descrição</th><th class="pag-th">SKU</th><th class="pag-th">Categoria</th>
+      <th class="pag-th" style="text-align:right">Vendidas/Enviadas</th><th class="pag-th" style="text-align:right">Preço</th>
+    </tr></thead><tbody>${linhas}</tbody></table></div>`;
+}
+
+export function revFechamentoAbrir(chave) { revFechCicloAberto = chave; renderFechamentosTab(); }
+export function revFechamentoVoltar()     { revFechCicloAberto = null;  renderFechamentosTab(); }
 
 // Histórico de emissões do contrato (checklist de conferência ao sair).
 async function carregarContratosEmissoes(revId) {
