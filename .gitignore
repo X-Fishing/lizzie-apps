@@ -21,6 +21,9 @@ service-account*.json
 # Supabase CLI (temporarios locais, nao versionar)
 supabase/.temp/
 
+# Config local do MCP (tooling da maquina; usa ${SUPABASE_ACCESS_TOKEN} do ambiente)
+.mcp.json
+
 # Sistema operacional
 .DS_Store
 Thumbs.db
