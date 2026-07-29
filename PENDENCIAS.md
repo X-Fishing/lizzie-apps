@@ -1,7 +1,7 @@
 # Pendências — App Lizzie
 
 > Arquivo de continuidade entre sessões. Atualizar conforme os itens forem resolvidos.
-> Última atualização: 16/07/2026
+> Última atualização: 29/07/2026
 
 ---
 
@@ -21,6 +21,21 @@ Precisa ser resolvido logo. Ainda **não está especificado** — na próxima se
 ---
 
 ## 🟡 Em andamento
+
+### 2-A. TESTE DE SEGURANÇA PENDENTE — auto-concessão de permissão (fidelidade/vendas)
+Migrações **0038–0041** e o código já estão **aplicados e em produção**. Falta **um** teste que não deu para fazer na sessão (não havia como logar como a Pamela — o login duplo exige desktop).
+
+**O que testar:** logada **como a Pamela** (a revendedora com `pode_completar_vendas = true`), no console do navegador:
+```js
+await sb.from('profiles').update({ pode_completar_vendas: true }).eq('id', '<id-da-pamela>')
+```
+Repetir também com `{ role: 'admin' }` e `{ is_revendedora: false }`.
+
+**Resultado esperado:** erro `Apenas admin altera a flag de revendedora ou a permissao de completar vendas` (ou, para role, `Apenas admin pode alterar o nivel de acesso`). Vem do trigger `guard_profile_role` (migração 0039).
+
+**Por que importa:** a policy `profiles_update_own` só congela `role`, `aprovada` e `is_revendedora` — **qualquer coluna nova é auto-editável pela própria dona via REST**. A proteção da flag nova está no trigger. Se o teste **passar** (update funcionar), qualquer revendedora consegue se dar a permissão de editar vendas — corrigir imediatamente.
+
+**Cuidado ao re-rodar o `RLS-policies.sql`:** o arquivo já está com o guard mesclado e a policy atualizada. Se alguém colar uma versão antiga por cima, a proteção some silenciosamente.
 
 ### 2. Merge local ↔ origin + push
 Divergência entre o agente local (7 commits: telas inteiras de conferência/fechamento, impressões repaginadas, recebimento com múltiplos pagamentos) e a `origin/main` (17 commits: fidelidade 0028–0033, certificado por WhatsApp, PWA auto-update, autocomplete por telefone, Contas a Pagar redesenhado, exclusão de maleta ativa).
