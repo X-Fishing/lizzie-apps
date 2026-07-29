@@ -69,7 +69,8 @@ export async function loadAdmin() {
   ]);
   if (e1 || e2) {
     const msg = (e1||e2).message === 'timeout' ? 'Conexão lenta. Tente novamente.' : 'Erro ao carregar revendedoras.';
-    document.getElementById('rev-list').innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
+    const revListEl = document.getElementById('rev-list');
+    if (revListEl) revListEl.innerHTML = `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>${msg}</p></div>`;
     return;
   }
 
@@ -80,7 +81,11 @@ export async function loadAdmin() {
   const pendentesRev = prep(pendentes);
 
   state.revPendentes = pendentesRev;
-  document.getElementById('pendentes-list').innerHTML = '';   // vão pro grid unificado (chip Pendentes)
+  // A tela pode ter navegado pra outro lugar enquanto essas queries estavam em
+  // voo (ex.: usuário já abriu uma revendedora) — guarda pra não estourar em
+  // elemento que não existe mais.
+  const pendList = document.getElementById('pendentes-list');
+  if (pendList) pendList.innerHTML = '';   // vão pro grid unificado (chip Pendentes)
   state.aprovadasCache = prep(aprovadas);
 
   // Possível cadastro DUPLICADO: ela entrou com outro e-mail (típico do Google)
