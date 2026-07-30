@@ -41,6 +41,23 @@ Os bloqueios vêm do trigger `guard_profile_role` (migração 0039). Detalhes ap
 
 **Cuidado permanente ao re-rodar o `RLS-policies.sql`:** o arquivo está com o guard mesclado e a policy `profiles_update_own` congelando `pode_completar_vendas`. Se alguém colar uma versão antiga por cima, a proteção some silenciosamente.
 
+### 2-B. `npm audit` — 5 vulnerabilidades pré-existentes (investigar)
+Levantado em 29/07/2026, **sem relação** com `pg`/`playwright` (que entraram limpos). Todas são **transitivas de build/dev**, nenhuma no código do app:
+
+| Pacote | Problema | Onde entra |
+|---|---|---|
+| `brace-expansion` ≤5.0.7 | DoS (expansão exponencial / OOM) | transitiva do eslint/filelist |
+| `dompurify` ≤3.4.11 | — | transitiva do **jspdf** (certificado/PDF) |
+| `esbuild` 0.27.3–0.28.0 | leitura arbitrária de arquivo **no dev server, Windows** | transitiva do **vite** |
+| `fast-uri` 3.0.0–3.1.3 | host confusion | transitiva |
+| `postcss` ≤8.5.17 | — | transitiva do vite |
+
+`npm audit fix` promete resolver todas. **Não rodar às cegas:** o `esbuild`/`postcss` sobem junto com o Vite e podem quebrar o build; o `dompurify` vem do jspdf, que gera o certificado de garantia e o PDF do mostruário — testar os dois depois.
+
+O `esbuild` é o único com impacto prático plausível: afeta **quem roda `npm run dev` no Windows** (a máquina de vocês). Não afeta produção, porque o dev server não vai para o Netlify.
+
+**Como atacar:** rodar `npm audit fix` numa branch, conferir `npm run build` + gerar certificado + PDF do fechamento, e só então mesclar. Respeitar o protocolo de dependências (versões exatas, cooldown de 7 dias).
+
 ### 2. Merge local ↔ origin + push
 Divergência entre o agente local (7 commits: telas inteiras de conferência/fechamento, impressões repaginadas, recebimento com múltiplos pagamentos) e a `origin/main` (17 commits: fidelidade 0028–0033, certificado por WhatsApp, PWA auto-update, autocomplete por telefone, Contas a Pagar redesenhado, exclusão de maleta ativa).
 
