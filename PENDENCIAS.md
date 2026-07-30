@@ -22,20 +22,24 @@ Precisa ser resolvido logo. Ainda **não está especificado** — na próxima se
 
 ## 🟡 Em andamento
 
-### 2-A. TESTE DE SEGURANÇA PENDENTE — auto-concessão de permissão (fidelidade/vendas)
-Migrações **0038–0041** e o código já estão **aplicados e em produção**. Falta **um** teste que não deu para fazer na sessão (não havia como logar como a Pamela — o login duplo exige desktop).
+### 2-A. ✅ RESOLVIDO (29/07/2026) — teste de escalada de privilégio
+Testado autenticando como a revendedora de teste **"Claude Testes"** (`role=revendedora`, conta de teste, zero dados) via API REST. **Resultado: APROVADO.**
 
-**O que testar:** logada **como a Pamela** (a revendedora com `pode_completar_vendas = true`), no console do navegador:
-```js
-await sb.from('profiles').update({ pode_completar_vendas: true }).eq('id', '<id-da-pamela>')
-```
-Repetir também com `{ role: 'admin' }` e `{ is_revendedora: false }`.
+| Tentativa | Resultado |
+|---|---|
+| `pode_completar_vendas: true → false` | bloqueado — `P0001 Apenas admin altera a flag de revendedora...` |
+| `role: revendedora → admin` | bloqueado — `P0001 Apenas admin pode alterar o nivel de acesso` |
+| `is_revendedora: true → false` | bloqueado |
+| alterar perfil de terceiro | 0 linhas afetadas (RLS filtrou) |
+| perfil relido depois | **intacto** |
 
-**Resultado esperado:** erro `Apenas admin altera a flag de revendedora ou a permissao de completar vendas` (ou, para role, `Apenas admin pode alterar o nivel de acesso`). Vem do trigger `guard_profile_role` (migração 0039).
+Os bloqueios vêm do trigger `guard_profile_role` (migração 0039). Detalhes aprendidos, para não repetir erro em testes futuros:
+- **O guard só dispara quando o valor MUDA** (`is distinct from`). Setar a flag para o valor que ela já tem é no-op e não gera erro — parece furo e não é. Sempre **inverter** o valor no teste.
+- **Não testar com conta `role=admin`**: o guard legitimamente permite admin, e todas as tentativas "passam" (falso positivo). Pior, `is_revendedora=false` funcionaria de verdade e quebraria dado real.
+- **`aprovada` não é protegida pelo guard** de propósito: `profiles_update_staff` permite que staff aprove revendedora. Sucesso ali é correto, não furo.
+- Update sem permissão volta **HTTP 200 com lista vazia** (RLS filtra em silêncio), não erro — confira o dado, não só o status.
 
-**Por que importa:** a policy `profiles_update_own` só congela `role`, `aprovada` e `is_revendedora` — **qualquer coluna nova é auto-editável pela própria dona via REST**. A proteção da flag nova está no trigger. Se o teste **passar** (update funcionar), qualquer revendedora consegue se dar a permissão de editar vendas — corrigir imediatamente.
-
-**Cuidado ao re-rodar o `RLS-policies.sql`:** o arquivo já está com o guard mesclado e a policy atualizada. Se alguém colar uma versão antiga por cima, a proteção some silenciosamente.
+**Cuidado permanente ao re-rodar o `RLS-policies.sql`:** o arquivo está com o guard mesclado e a policy `profiles_update_own` congelando `pode_completar_vendas`. Se alguém colar uma versão antiga por cima, a proteção some silenciosamente.
 
 ### 2. Merge local ↔ origin + push
 Divergência entre o agente local (7 commits: telas inteiras de conferência/fechamento, impressões repaginadas, recebimento com múltiplos pagamentos) e a `origin/main` (17 commits: fidelidade 0028–0033, certificado por WhatsApp, PWA auto-update, autocomplete por telefone, Contas a Pagar redesenhado, exclusão de maleta ativa).
