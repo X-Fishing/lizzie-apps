@@ -1886,6 +1886,55 @@ async function buscarClientePorTelefone(tel) {
   }
 }
 
+// ── Sugestão de nome (clientes SEM telefone repetem compra e a revendedora
+// acaba cadastrando a mesma pessoa com nomes levemente diferentes a cada
+// venda — como não há celular, não há como achar por telefone). Busca só
+// nas vendas da PRÓPRIA revendedora (RLS já restringe) por nome parecido.
+let _vendaNomeTimer = null;
+export function vendaNomeInput(valor) {
+  clearTimeout(_vendaNomeTimer);
+  const termo = (valor || '').trim();
+  if (termo.length < 2) { document.getElementById('f-cliente-sugestoes').innerHTML = ''; return; }
+  _vendaNomeTimer = setTimeout(() => buscarNomesSugeridos(termo), 300);
+}
+
+async function buscarNomesSugeridos(termo) {
+  const el = document.getElementById('f-cliente-sugestoes');
+  const { data, error } = await sbQ(sb.from('vendas')
+    .select('nome_cliente')
+    .eq('revendedora_id', state.currentUser.id)
+    .ilike('nome_cliente', `%${termo}%`)
+    .order('data_venda', { ascending: false })
+    .limit(40));
+  if (!el) return;
+  if (document.getElementById('f-cliente').value.trim() !== termo) return; // digitou mais enquanto buscava
+  if (error || !data?.length) { el.innerHTML = ''; return; }
+  const vistos = new Set();
+  const nomes = [];
+  for (const v of data) {
+    const nome = (v.nome_cliente || '').trim();
+    const chave = nome.toLowerCase();
+    if (!nome || vistos.has(chave) || chave === termo.toLowerCase()) continue;
+    vistos.add(chave);
+    nomes.push(nome);
+    if (nomes.length >= 6) break;
+  }
+  el.innerHTML = nomes.length
+    ? `<div class="nome-sugestoes">${nomes.map(n =>
+        `<button type="button" class="nome-sugestao-item" onmousedown="event.preventDefault();vendaNomeEscolher('${n.replace(/'/g, "\\'")}')">${esc(n)}</button>`).join('')}</div>`
+    : '';
+}
+
+export function vendaNomeEscolher(nome) {
+  document.getElementById('f-cliente').value = nome;
+  document.getElementById('f-cliente-sugestoes').innerHTML = '';
+}
+
+// Fecha a lista ao sair do campo (onmousedown na sugestão já capturou o clique antes).
+export function vendaNomeBlur() {
+  setTimeout(() => { const el = document.getElementById('f-cliente-sugestoes'); if (el) el.innerHTML = ''; }, 150);
+}
+
 export function ajustarValorPago() {
   const total = state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
   const forma = document.getElementById('f-forma').value;

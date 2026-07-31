@@ -524,9 +524,11 @@
         Sem WhatsApp esta venda <b>não gera selos de fidelidade</b>, não entra na base de clientes e o certificado de garantia não pode ser enviado.
       </div>
     </div>
-    <div class="form-group">
+    <div class="form-group" style="position:relative">
       <label class="form-label">Nome da cliente *</label>
-      <input type="text" id="f-cliente" class="form-control" placeholder="Nome completo da cliente">
+      <input type="text" id="f-cliente" class="form-control" placeholder="Nome completo da cliente" autocomplete="off"
+        oninput="vendaNomeInput(this.value)" onblur="vendaNomeBlur()">
+      <div id="f-cliente-sugestoes"></div>
     </div>
     <div class="form-row">
       <div class="form-group">
