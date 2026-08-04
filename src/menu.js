@@ -31,6 +31,7 @@ const IC = {
   package:   '<svg class="ico" viewBox="0 0 24 24"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>',
   gift:      '<svg class="ico" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>',
   star:      '<svg class="ico" viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+  printer:   '<svg class="ico" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>',
 };
 
 // ── Registry (fonte única do menu lateral) ─────────────────────────
@@ -76,6 +77,7 @@ export const MENU = [
       { chave: 'cad_funcionarios',    panel: 'funcionarios',    label: 'Funcionários',        icon: IC.crachaFunc, admin_only: true },
       { chave: 'cad_perfis',          panel: 'perfis',          label: 'Perfis & Permissões', icon: IC.shield, admin_only: true },
       { chave: 'cad_faixas_comissao', panel: 'faixas-comissao', label: 'Faixas de Comissão',  icon: IC.percent },
+      { chave: 'cad_etiquetas',       panel: 'etiquetas-config', label: 'Impressora de Etiquetas', icon: IC.printer },
   ]},
 ];
 

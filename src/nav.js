@@ -9,7 +9,7 @@ import { registrar, navegar, iniciar } from './router.js';
 // 'fidelidade' NÃO está aqui de propósito: a revendedora também acessa (a RLS
 // filtra as clientes dela). O acesso do staff continua controlado pela permissão
 // do menu (marketing_fidelidade), via podeAcessarPanel.
-export const PANEIS_STAFF = ['financeiro','contas-a-pagar','calculadora','clientes','bonus','funcionarios','perfis','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','faixas-comissao','config-raspadinha','precificacao','entrada-mercadoria','lancador'];
+export const PANEIS_STAFF = ['financeiro','contas-a-pagar','calculadora','clientes','bonus','funcionarios','perfis','formas-pagamento','categorias-financeiras','produtos','categorias','colecoes','fornecedores','faixas-comissao','config-raspadinha','precificacao','entrada-mercadoria','lancador','etiquetas-config'];
 
 // hash "bonito" p/ dashboard e revendedoras; demais = proprio nome do painel.
 function hashDePanel(name) {
@@ -66,6 +66,7 @@ function aplicarTela(name) {
   if (name === 'colecoes') loadColecoes();
   if (name === 'fornecedores') loadFornecedores();
   if (name === 'faixas-comissao') loadFaixasComissao();
+  if (name === 'etiquetas-config') loadEtiquetasConfig();
   if (name === 'config-raspadinha') loadConfigRaspadinha();
   if (name === 'precificacao') loadPrecificacao();
   if (name === 'entrada-mercadoria') loadEntradaMercadoria();

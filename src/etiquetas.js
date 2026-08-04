@@ -16,6 +16,7 @@
 // pelo driver do Windows que normalmente cuidaria disso sozinho.
 // ═══════════════════════════════════════════════════════════════════
 import { esc, fmtBRL, toast, openModal, closeModal } from './utils.js';
+import { showPanel } from './nav.js';
 
 const dotsPorMm = dpi => dpi / 25.4;
 const mm = (valorMm, dpi) => Math.round(valorMm * dotsPorMm(dpi));
@@ -52,19 +53,37 @@ function calibracao(dpi) {
     SKU_FONTE: 20,               // altura/largura da fonte (dots)
     PRECO_Y: mm(13.8, dpi),
     PRECO_FONTE: 26,
+    // Etiqueta de texto livre (sem barra) — fonte grande, centralizada,
+    // quebra em até 3 linhas. Ponto de partida, mesma lógica de calibração.
+    TEXTO_Y: mm(6, dpi),
+    TEXTO_FONTE: 28,
+    TEXTO_LINHAS: 3,
   };
 }
 
+// ZPL usa ^ e ~ como caracteres de controle — tira do conteúdo antes de
+// jogar num campo ^FD, senão um texto digitado com um desses quebra o
+// comando (mais relevante na etiqueta de texto livre, digitada à mão).
+const zplSafe = s => String(s || '').replace(/[\^~]/g, '');
+
 // Campos ZPL de UMA etiqueta (sem ^XA/^PW/^LL/^XZ) — usado sozinho
 // (gerarZPL) e lado a lado em uma linha com várias colunas (gerarZPLLinha).
-// offsetXdots desloca tudo pra direita (coluna 2, 3...).
+// offsetXdots desloca tudo pra direita (coluna 2, 3...). Se `produto.texto`
+// existir, é etiqueta de TEXTO LIVRE (sem barra/SKU/preço) — ex.: "Pedra
+// Ametista", nome de revendedora.
 function camposEtiqueta(produto, offsetXdots, larguraColDots, dpi) {
   const c = calibracao(dpi);
   const x = offsetXdots + c.MARGEM_X;
-  const barcode = String(produto.codigo_barras || produto.sku || '').trim();
-  const sku = String(produto.sku || '').trim();
-  const preco = fmtBRL(produto.preco_venda);
   const larguraUtil = larguraColDots - 2 * c.MARGEM_X;
+
+  if (produto.texto != null) {
+    const texto = zplSafe(produto.texto).trim() || ' ';
+    return `^FO${x},${c.TEXTO_Y}^A0N,${c.TEXTO_FONTE},${c.TEXTO_FONTE}^FB${larguraUtil},${c.TEXTO_LINHAS},2,C^FD${texto}^FS`;
+  }
+
+  const barcode = zplSafe(produto.codigo_barras || produto.sku || '').trim();
+  const sku = zplSafe(produto.sku || '').trim();
+  const preco = fmtBRL(produto.preco_venda);
   return [
     `^FO${x},${c.BARRA_Y}^BY${c.BARRA_MODULO}`,
     `^BCN,${c.BARRA_ALTURA},N,N,N`,
@@ -165,88 +184,91 @@ export function salvarCfgImpressora(cfg) {
   localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
 }
 
+const IC_X = '<svg class="ico" viewBox="0 0 24 24" width="16" height="16"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+
 // ═══════════════════════════════════════════════════════════════════
-// MODAL DE IMPRESSÃO (#modal-etiquetas, index.html) — chamado tanto da
-// Entrada de Mercadoria (lote inteiro) quanto de Produtos (peça avulsa).
+// MODAL DE IMPRESSÃO (#modal-etiquetas, index.html) — chamado da Entrada
+// de Mercadoria (lote inteiro), de Produtos (peça avulsa) e da tela de
+// Configurações (etiqueta personalizada, ver mais abaixo). A configuração
+// de impressora NÃO mora mais aqui — fica em Configurações → Impressora de
+// Etiquetas, configurada uma vez e valendo pra tudo até ser mudada lá.
 // ═══════════════════════════════════════════════════════════════════
 let etqProdutos = [];
-let etqView = 'lista'; // 'lista' | 'config'
 let etqImpressoras = [];
 
-// produtos: [{ sku, nome, preco_venda, codigo_barras, qtd }]
-export function abrirImpressaoEtiquetas(produtos) {
-  if (!produtos || !produtos.length) { toast('Nada para imprimir.'); return; }
-  etqProdutos = produtos.map(p => ({
+function normalizarItem(p) {
+  if (p.texto != null) {
+    return { texto: String(p.texto || ''), qtd: Math.max(1, parseInt(p.qtd, 10) || 1) };
+  }
+  return {
     sku: p.sku || '',
     nome: p.nome || '',
     preco_venda: Number(p.preco_venda) || 0,
     codigo_barras: p.codigo_barras || null,
     qtd: Math.max(1, parseInt(p.qtd, 10) || 1),
-  }));
-  etqView = 'lista';
+  };
+}
+
+// produtos: [{ sku, nome, preco_venda, codigo_barras, qtd }] — itens de
+// texto livre (etiqueta personalizada) usam { texto, qtd } em vez disso.
+export function abrirImpressaoEtiquetas(produtos) {
+  if (!produtos || !produtos.length) { toast('Nada para imprimir.'); return; }
+  etqProdutos = produtos.map(normalizarItem);
   renderEtiquetas();
   openModal('modal-etiquetas');
+}
+
+// Abre o modal já com uma etiqueta de texto livre em branco — atalho pra
+// imprimir algo avulso ("Pedra Ametista", nome de revendedora) sem
+// depender de nenhum produto do catálogo.
+export function abrirEtiquetaPersonalizada() {
+  abrirImpressaoEtiquetas([{ texto: '', qtd: 1 }]);
 }
 
 function renderEtiquetas() {
   const body = document.getElementById('etiquetas-body');
   if (!body) return;
-  body.innerHTML = etqView === 'config' ? renderEtiquetasConfig() : renderEtiquetasLista();
+  body.innerHTML = renderEtiquetasLista();
+}
+
+function itemLinhaHtml(p, i) {
+  const campo = p.texto != null
+    ? `<input type="text" id="etq-item-${i}" class="form-control" style="flex:1" placeholder="Texto da etiqueta (ex.: Pedra Ametista)"
+        value="${esc(p.texto)}" oninput="etiquetasTextoChange(${i}, this.value)">`
+    : `<div style="flex:1;min-width:0">
+        <div style="font-weight:600;color:var(--plum);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.sku || '(sem SKU)')}</div>
+        <div style="font-size:12px;color:var(--muted)">${esc(p.nome)} · R$ ${p.preco_venda.toFixed(2)}</div>
+        ${!p.codigo_barras ? '<div style="font-size:11px;color:var(--warning)">⚠ sem código de barras próprio — usando o SKU</div>' : ''}
+      </div>`;
+  return `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      ${campo}
+      <input type="number" min="1" value="${p.qtd}" style="width:56px;flex-shrink:0" class="form-control"
+        onchange="etiquetasQtdChange(${i}, this.value)">
+      <button type="button" class="btn-icon" title="Remover" onclick="etiquetasRemoverItem(${i})">${IC_X}</button>
+    </div>`;
 }
 
 function renderEtiquetasLista() {
   const cfg = carregarCfgImpressora();
   const totalEtiquetas = etqProdutos.reduce((s, p) => s + p.qtd, 0);
-  const linhas = etqProdutos.map((p, i) => `
-    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)">
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:600;color:var(--plum);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.sku || '(sem SKU)')}</div>
-        <div style="font-size:12px;color:var(--muted)">${esc(p.nome)} · R$ ${p.preco_venda.toFixed(2)}</div>
-        ${!p.codigo_barras ? '<div style="font-size:11px;color:var(--warning)">⚠ sem código de barras próprio — usando o SKU</div>' : ''}
-      </div>
-      <input type="number" min="1" value="${p.qtd}" style="width:64px" class="form-control"
-        onchange="etiquetasQtdChange(${i}, this.value)">
-    </div>`).join('');
+  const linhas = etqProdutos.map(itemLinhaHtml).join('');
+  const temConfig = !!cfg?.deviceName;
 
   const statusImpressora = !temBrowserPrint()
     ? '<div style="font-size:12.5px;color:var(--warning);margin-bottom:10px">Zebra Browser Print não detectado neste computador. Use "Baixar .zpl" e envie manualmente, ou instale o Browser Print.</div>'
-    : cfg?.deviceName
+    : temConfig
       ? `<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Impressora: <b>${esc(cfg.deviceName)}</b> (${cfg.dpi} dpi · ${cfg.colunas || 1} coluna${(cfg.colunas || 1) === 1 ? '' : 's'})</div>`
-      : '<div style="font-size:12.5px;color:var(--warning);margin-bottom:10px">Nenhuma impressora configurada.</div>';
+      : `<div style="font-size:12.5px;color:var(--warning);margin-bottom:10px">Nenhuma impressora configurada. <a href="#" onclick="event.preventDefault();closeModal('modal-etiquetas');showPanel('etiquetas-config')">Configurar agora</a>, ou use "Baixar .zpl".</div>`;
 
   return `
-    <div style="max-height:44vh;overflow-y:auto;margin-bottom:10px">${linhas}</div>
+    <div style="max-height:40vh;overflow-y:auto;margin-bottom:10px">${linhas || '<div style="padding:8px 0;color:var(--muted);font-size:13px">Nenhuma etiqueta na lista.</div>'}</div>
+    <button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="etiquetasAdicionarPersonalizada()">+ Adicionar etiqueta personalizada</button>
     ${statusImpressora}
-    <button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="etiquetasConfigAbrir()">Configurar impressora</button>
     <div style="display:flex;gap:10px">
       <button class="btn-secondary" style="flex:1" onclick="etiquetasBaixarZpl()">Baixar .zpl</button>
-      <button class="btn-primary" style="flex:1" onclick="etiquetasImprimir()">Imprimir ${totalEtiquetas} etiqueta${totalEtiquetas === 1 ? '' : 's'}</button>
+      <button class="btn-primary" style="flex:1" ${temConfig ? '' : 'disabled'} onclick="etiquetasImprimir()">Imprimir ${totalEtiquetas} etiqueta${totalEtiquetas === 1 ? '' : 's'}</button>
     </div>`;
-}
-
-function renderEtiquetasConfig() {
-  const cfg = carregarCfgImpressora();
-  const opcoes = etqImpressoras.length
-    ? etqImpressoras.map(d => `<option value="${esc(d.name)}" ${cfg?.deviceName === d.name ? 'selected' : ''}>${esc(d.name)}</option>`).join('')
-    : '<option value="">Nenhuma encontrada — clique em Atualizar</option>';
-  return `
-    <div class="form-group"><label class="form-label">Impressora</label>
-      <select id="etq-cfg-dev" class="form-control">${opcoes}</select></div>
-    <div class="form-group"><label class="form-label">Resolução (DPI)</label>
-      <select id="etq-cfg-dpi" class="form-control">
-        <option value="203" ${!cfg || cfg.dpi === 203 ? 'selected' : ''}>203 dpi</option>
-        <option value="300" ${cfg?.dpi === 300 ? 'selected' : ''}>300 dpi</option>
-      </select></div>
-    <div class="form-group"><label class="form-label">Colunas no rolo</label>
-      <select id="etq-cfg-colunas" class="form-control">
-        ${[1, 2, 3, 4].map(n => `<option value="${n}" ${(cfg?.colunas || 1) === n ? 'selected' : ''}>${n}${n === 1 ? ' (rolo comum, 1 etiqueta por vez)' : ` (rolo com ${n} etiquetas lado a lado)`}</option>`).join('')}
-      </select></div>
-    <button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="etiquetasListarImpressoras()">Atualizar lista</button>
-    <div style="display:flex;gap:10px;margin-bottom:10px">
-      <button class="btn-secondary" style="flex:1" onclick="etiquetasConfigVoltar()">Voltar</button>
-      <button class="btn-primary" style="flex:1" onclick="etiquetasConfigSalvar()">Salvar</button>
-    </div>
-    <button class="btn-secondary" style="width:100%" onclick="etiquetasTeste()">Imprimir etiqueta de teste</button>`;
 }
 
 export function etiquetasQtdChange(i, valor) {
@@ -255,21 +277,70 @@ export function etiquetasQtdChange(i, valor) {
   renderEtiquetas(); // atualiza o total no botão de imprimir
 }
 
+export function etiquetasTextoChange(i, valor) {
+  if (etqProdutos[i]) etqProdutos[i].texto = valor; // sem re-render: não perde o foco do campo
+}
+
+export function etiquetasRemoverItem(i) {
+  etqProdutos.splice(i, 1);
+  renderEtiquetas();
+}
+
+export function etiquetasAdicionarPersonalizada() {
+  etqProdutos.push({ texto: '', qtd: 1 });
+  renderEtiquetas();
+  document.getElementById(`etq-item-${etqProdutos.length - 1}`)?.focus();
+}
+
 export async function etiquetasListarImpressoras() {
   try { etqImpressoras = await listarImpressoras(); }
   catch (e) { etqImpressoras = []; toast(e.message, 'erro'); }
-  renderEtiquetas();
+  renderConfigPanel();
 }
 
-export async function etiquetasConfigAbrir() {
-  etqView = 'config';
-  renderEtiquetas();
+// ═══════════════════════════════════════════════════════════════════
+// TELA DE CONFIGURAÇÕES (#panel-etiquetas-config, index.html) — impressora,
+// DPI e colunas do rolo, salvos no localStorage deste computador (ver
+// carregarCfgImpressora/salvarCfgImpressora acima). Configura uma vez aqui,
+// vale pra toda impressão até mudar de novo.
+// ═══════════════════════════════════════════════════════════════════
+export async function loadEtiquetasConfig() {
+  renderConfigPanel();
   await etiquetasListarImpressoras();
 }
 
-export function etiquetasConfigVoltar() {
-  etqView = 'lista';
-  renderEtiquetas();
+function renderConfigPanel() {
+  const panel = document.getElementById('panel-etiquetas-config');
+  if (!panel) return;
+  const cfg = carregarCfgImpressora();
+  const opcoes = etqImpressoras.length
+    ? etqImpressoras.map(d => `<option value="${esc(d.name)}" ${cfg?.deviceName === d.name ? 'selected' : ''}>${esc(d.name)}</option>`).join('')
+    : '<option value="">Nenhuma encontrada — clique em Atualizar</option>';
+  panel.innerHTML = `
+    <div class="page-head"><div>
+      <h2>Impressora de Etiquetas</h2>
+      <div class="sub">Configuração deste computador — vale pra toda impressão de etiqueta até você mudar aqui.</div>
+    </div></div>
+    <div class="card" style="max-width:420px">
+      ${!temBrowserPrint() ? '<div style="font-size:12.5px;color:var(--warning);margin-bottom:12px">Zebra Browser Print não detectado neste computador. Instale o serviço (zebra.com/browserprint) pra imprimir direto — enquanto isso dá pra usar "Baixar .zpl" na tela de impressão.</div>' : ''}
+      <div class="form-group"><label class="form-label">Impressora</label>
+        <select id="etq-cfg-dev" class="form-control">${opcoes}</select></div>
+      <div class="form-group"><label class="form-label">Resolução (DPI)</label>
+        <select id="etq-cfg-dpi" class="form-control">
+          <option value="203" ${!cfg || cfg.dpi === 203 ? 'selected' : ''}>203 dpi</option>
+          <option value="300" ${cfg?.dpi === 300 ? 'selected' : ''}>300 dpi</option>
+        </select></div>
+      <div class="form-group"><label class="form-label">Colunas no rolo</label>
+        <select id="etq-cfg-colunas" class="form-control">
+          ${[1, 2, 3, 4].map(n => `<option value="${n}" ${(cfg?.colunas || 1) === n ? 'selected' : ''}>${n}${n === 1 ? ' (rolo comum, 1 etiqueta por vez)' : ` (rolo com ${n} etiquetas lado a lado)`}</option>`).join('')}
+        </select></div>
+      <button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="etiquetasListarImpressoras()">Atualizar lista</button>
+      <button class="btn-primary" style="width:100%;margin-bottom:10px" onclick="etiquetasConfigSalvar()">Salvar</button>
+      <div style="display:flex;gap:10px">
+        <button class="btn-secondary" style="flex:1" onclick="etiquetasTeste()">Imprimir etiqueta de teste</button>
+        <button class="btn-secondary" style="flex:1" onclick="abrirEtiquetaPersonalizada()">Etiqueta personalizada</button>
+      </div>
+    </div>`;
 }
 
 export function etiquetasConfigSalvar() {
@@ -279,8 +350,6 @@ export function etiquetasConfigSalvar() {
   if (!deviceName) { toast('Selecione uma impressora.', 'erro'); return; }
   salvarCfgImpressora({ deviceName, dpi, colunas });
   toast('Impressora configurada.', 'erro');
-  etqView = 'lista';
-  renderEtiquetas();
 }
 
 async function dispositivoConfigurado() {
@@ -312,11 +381,16 @@ export async function etiquetasTeste() {
   }
 }
 
+function temTextoVazio() {
+  return etqProdutos.some(p => p.texto != null && !p.texto.trim());
+}
+
 export async function etiquetasImprimir() {
   if (!temBrowserPrint()) {
     toast('Browser Print não detectado — use "Baixar .zpl".', 'erro');
     return;
   }
+  if (temTextoVazio()) { toast('Preencha o texto da etiqueta personalizada (ou remova a linha).', 'erro'); return; }
   try {
     const { device, dpi, colunas } = await dispositivoConfigurado();
     const zpl = gerarZPLLote(etqProdutos, { dpi, colunas });
@@ -330,6 +404,7 @@ export async function etiquetasImprimir() {
 }
 
 export function etiquetasBaixarZpl() {
+  if (temTextoVazio()) { toast('Preencha o texto da etiqueta personalizada (ou remova a linha).', 'erro'); return; }
   const cfg = carregarCfgImpressora();
   const zpl = gerarZPLLote(etqProdutos, { dpi: cfg?.dpi || 203, colunas: cfg?.colunas || 1 });
   baixarZPL(`etiquetas-${Date.now()}`, zpl);
