@@ -23,25 +23,31 @@ const mm = (valorMm, dpi) => Math.round(valorMm * dotsPorMm(dpi));
 // X/Y do texto quase sempre precisam de ajuste fino na etiqueta física, na
 // impressora real. Isso não é bug — é calibração de hardware.
 export function gerarZPL(produto, opts = {}) {
-  const { dpi = 203, larguraMm = 30, alturaMm = 15, qtd = 1 } = opts;
+  // Rev. 4 (teste físico 3): a foto do teste 2 mostrou MUITO mais sobra
+  // embaixo do preço do que 15mm de altura permitiriam por conta (só 0.8mm
+  // de folga na rev.3) — forte indício de que a etiqueta física real não é
+  // 15mm, e sim ~20mm. Ajustado o default aqui; se a próxima impressão
+  // ainda sobrar/faltar espaço, me diga a altura exata impressa na bobina/
+  // caixa da etiqueta que eu calibro certo (sem ficar tentando por foto).
+  const { dpi = 203, larguraMm = 30, alturaMm = 20, qtd = 1 } = opts;
   const w = mm(larguraMm, dpi);
   const h = mm(alturaMm, dpi);
 
   // ── Calibração (ajustar aqui na etiqueta real) ──
-  // Rev. 3 (teste físico 2): a largura da BARRA (Code128) não era limitada
-  // pela margem — só o texto do preço era. SKU real (mais longo que o
-  // "TESTE-001" do botão de teste) alarga a barra e estoura a direita,
-  // MESMO com MARGEM_X maior. Módulo mais fino (2→1) reduz a largura da
-  // barra pra qualquer SKU — se ficar difícil de ler no leitor, volte pra 2
-  // e reduza o tamanho da fonte do SKU/preço em vez disso (dá menos espaço
-  // ao código de barras).
+  // Rev. 3: a largura da BARRA (Code128) não era limitada pela margem — só
+  // o texto do preço era. SKU real (mais longo que o "TESTE-001" do botão
+  // de teste) alarga a barra e estoura a direita, MESMO com MARGEM_X maior.
+  // Módulo mais fino (2→1) reduz a largura da barra pra qualquer SKU — se
+  // ficar difícil de ler no leitor, volte pra 2 e reduza a fonte do
+  // SKU/preço em vez disso (dá menos espaço ao código de barras).
+  // Rev. 4: desceu tudo ~3mm (pedido do teste 2) dentro da altura nova.
   const MARGEM_X = mm(2.5, dpi);      // margem esquerda/direita
-  const BARRA_Y = mm(1.5, dpi);       // topo da etiqueta
+  const BARRA_Y = mm(4.5, dpi);       // topo da etiqueta
   const BARRA_ALTURA = mm(5.5, dpi);  // altura das barras
   const BARRA_MODULO = 1;             // ^BY — largura do módulo (1 = mais fino)
-  const SKU_Y = mm(8, dpi);           // logo abaixo da barra
+  const SKU_Y = mm(11, dpi);          // logo abaixo da barra
   const SKU_FONTE = 20;               // altura/largura da fonte (dots)
-  const PRECO_Y = mm(11, dpi);
+  const PRECO_Y = mm(14, dpi);
   const PRECO_FONTE = 26;
 
   const barcode = String(produto.codigo_barras || produto.sku || '').trim();
