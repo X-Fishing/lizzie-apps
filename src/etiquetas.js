@@ -41,13 +41,16 @@ export function gerarZPL(produto, opts = {}) {
   // ficar difícil de ler no leitor, volte pra 2 e reduza a fonte do
   // SKU/preço em vez disso (dá menos espaço ao código de barras).
   // Rev. 4: desceu tudo ~3mm (pedido do teste 2) dentro da altura nova.
+  // Rev. 5 (teste físico 3): "código de barras muito pequeno" — aumentada
+  // a ALTURA da barra (não o módulo/largura: isso manteria a folga lateral
+  // conquistada na rev.3 e evita voltar a estourar a margem com SKU longo).
   const MARGEM_X = mm(2.5, dpi);      // margem esquerda/direita
   const BARRA_Y = mm(4.5, dpi);       // topo da etiqueta
-  const BARRA_ALTURA = mm(5.5, dpi);  // altura das barras
+  const BARRA_ALTURA = mm(7, dpi);    // altura das barras
   const BARRA_MODULO = 1;             // ^BY — largura do módulo (1 = mais fino)
-  const SKU_Y = mm(11, dpi);          // logo abaixo da barra
+  const SKU_Y = mm(12.5, dpi);        // logo abaixo da barra
   const SKU_FONTE = 20;               // altura/largura da fonte (dots)
-  const PRECO_Y = mm(14, dpi);
+  const PRECO_Y = mm(15.5, dpi);
   const PRECO_FONTE = 26;
 
   const barcode = String(produto.codigo_barras || produto.sku || '').trim();
