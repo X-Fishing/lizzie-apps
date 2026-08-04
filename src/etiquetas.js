@@ -7,83 +7,113 @@
 // exato em milímetros; o jeito confiável é gerar ZPL e mandar direto pra
 // impressora, sem passar pela caixa de diálogo de impressão do navegador.
 //
-// Etiqueta padrão: 30×15mm — código de barras (Code128) + SKU + preço.
-// Sem nome/banho (não cabe). Barcode = codigo_barras do produto, ou o SKU
-// quando não houver (a Entrada de Mercadoria em lote nunca grava
-// codigo_barras — todo lote cai no fallback do SKU).
+// Etiqueta padrão: 30×20mm (calibrado na prática, ver histórico de revisões
+// abaixo) — código de barras (Code128) + SKU + preço. Sem nome/banho (não
+// cabe). Barcode = codigo_barras do produto, ou o SKU quando não houver (a
+// Entrada de Mercadoria em lote nunca grava codigo_barras — todo lote cai
+// no fallback do SKU). Suporta rolos com várias etiquetas lado a lado
+// (config "Colunas no rolo") — o Browser Print manda ZPL cru, sem passar
+// pelo driver do Windows que normalmente cuidaria disso sozinho.
 // ═══════════════════════════════════════════════════════════════════
 import { esc, fmtBRL, toast, openModal, closeModal } from './utils.js';
 
 const dotsPorMm = dpi => dpi / 25.4;
 const mm = (valorMm, dpi) => Math.round(valorMm * dotsPorMm(dpi));
 
-// Gera o ZPL de UMA etiqueta (produto + quantas cópias, via ^PQ). As
-// constantes de layout ficam aqui — são um PONTO DE PARTIDA. 30×15mm é
-// apertado (barra + 2 linhas de texto): módulo/altura da barra e a posição
-// X/Y do texto quase sempre precisam de ajuste fino na etiqueta física, na
-// impressora real. Isso não é bug — é calibração de hardware.
-export function gerarZPL(produto, opts = {}) {
-  // Rev. 4 (teste físico 3): a foto do teste 2 mostrou MUITO mais sobra
-  // embaixo do preço do que 15mm de altura permitiriam por conta (só 0.8mm
-  // de folga na rev.3) — forte indício de que a etiqueta física real não é
-  // 15mm, e sim ~20mm. Ajustado o default aqui; se a próxima impressão
-  // ainda sobrar/faltar espaço, me diga a altura exata impressa na bobina/
-  // caixa da etiqueta que eu calibro certo (sem ficar tentando por foto).
-  const { dpi = 203, larguraMm = 30, alturaMm = 20, qtd = 1 } = opts;
-  const w = mm(larguraMm, dpi);
-  const h = mm(alturaMm, dpi);
+// Constantes de calibração (em dots, computadas pro dpi da vez). PONTO DE
+// PARTIDA — 30×20mm é apertado (barra + 2 linhas de texto): quase sempre
+// precisa de ajuste fino na etiqueta física, na impressora real. Isso não é
+// bug — é calibração de hardware. Histórico das revisões:
+// Rev. 3: a largura da BARRA (Code128) não era limitada pela margem — só o
+// texto do preço era. SKU real (mais longo que o "TESTE-001" do botão de
+// teste) alarga a barra e estoura a direita, MESMO com MARGEM_X maior.
+// Módulo mais fino (2→1) reduz a largura da barra pra qualquer SKU — se
+// ficar difícil de ler no leitor, volte pra 2 e reduza a fonte do SKU/preço
+// em vez disso (dá menos espaço ao código de barras).
+// Rev. 4: a foto do teste 2 mostrou muito mais sobra embaixo do preço do
+// que 15mm de altura permitiriam (só 0.8mm de folga na rev.3) — forte
+// indício de que a etiqueta física real não é 15mm, e sim ~20mm. Desceu
+// tudo ~3mm dentro da altura nova.
+// Rev. 5: "código de barras muito pequeno" — aumentada a ALTURA da barra
+// (não o módulo/largura: mantém a folga lateral da rev.3). Foi longe demais
+// (7mm) e cortou o preço embaixo.
+// Rev. 6: recuou pra dentro da faixa comprovada segura (a rev.4, terminando
+// em 17.2mm, NÃO cortou; a rev.5, em 18.7mm, cortou — a altura real está
+// entre essas duas). Barra fica 6mm (ganho parcial sobre o original 5.5mm).
+// Aumentar a LARGURA (módulo) não é seguro pro SKU real; avisar quando
+// confirmar a largura física real da etiqueta.
+function calibracao(dpi) {
+  return {
+    MARGEM_X: mm(2.5, dpi),      // margem esquerda/direita
+    BARRA_Y: mm(4.5, dpi),       // topo da etiqueta
+    BARRA_ALTURA: mm(6, dpi),    // altura das barras
+    BARRA_MODULO: 1,             // ^BY — largura do módulo (1 = mais fino)
+    SKU_Y: mm(11, dpi),          // logo abaixo da barra
+    SKU_FONTE: 20,               // altura/largura da fonte (dots)
+    PRECO_Y: mm(13.8, dpi),
+    PRECO_FONTE: 26,
+  };
+}
 
-  // ── Calibração (ajustar aqui na etiqueta real) ──
-  // Rev. 3: a largura da BARRA (Code128) não era limitada pela margem — só
-  // o texto do preço era. SKU real (mais longo que o "TESTE-001" do botão
-  // de teste) alarga a barra e estoura a direita, MESMO com MARGEM_X maior.
-  // Módulo mais fino (2→1) reduz a largura da barra pra qualquer SKU — se
-  // ficar difícil de ler no leitor, volte pra 2 e reduza a fonte do
-  // SKU/preço em vez disso (dá menos espaço ao código de barras).
-  // Rev. 4: desceu tudo ~3mm (pedido do teste 2) dentro da altura nova.
-  // Rev. 5: "código de barras muito pequeno" — aumentada a ALTURA da barra
-  // (não o módulo/largura: mantém a folga lateral da rev.3 e evita voltar a
-  // estourar a margem com SKU longo). Foi longe demais (7mm) e cortou o
-  // preço embaixo.
-  // Rev. 6 (teste físico 4): recuou pra dentro da faixa comprovada segura
-  // (a rev.4, terminando em 17.2mm, NÃO cortou; a rev.5, em 18.7mm, cortou
-  // — a altura real da etiqueta está entre essas duas). Barra fica 6mm
-  // (ganho parcial sobre o original 5.5mm, sem repetir o corte). Aumentar a
-  // LARGURA (módulo) não é seguro pro SKU real — ver comentário da rev.3;
-  // avisar quando confirmar a largura física real da etiqueta.
-  const MARGEM_X = mm(2.5, dpi);      // margem esquerda/direita
-  const BARRA_Y = mm(4.5, dpi);       // topo da etiqueta
-  const BARRA_ALTURA = mm(6, dpi);    // altura das barras
-  const BARRA_MODULO = 1;             // ^BY — largura do módulo (1 = mais fino)
-  const SKU_Y = mm(11, dpi);          // logo abaixo da barra
-  const SKU_FONTE = 20;               // altura/largura da fonte (dots)
-  const PRECO_Y = mm(13.8, dpi);
-  const PRECO_FONTE = 26;
-
+// Campos ZPL de UMA etiqueta (sem ^XA/^PW/^LL/^XZ) — usado sozinho
+// (gerarZPL) e lado a lado em uma linha com várias colunas (gerarZPLLinha).
+// offsetXdots desloca tudo pra direita (coluna 2, 3...).
+function camposEtiqueta(produto, offsetXdots, larguraColDots, dpi) {
+  const c = calibracao(dpi);
+  const x = offsetXdots + c.MARGEM_X;
   const barcode = String(produto.codigo_barras || produto.sku || '').trim();
   const sku = String(produto.sku || '').trim();
   const preco = fmtBRL(produto.preco_venda);
-  const larguraUtil = w - 2 * MARGEM_X;
-
+  const larguraUtil = larguraColDots - 2 * c.MARGEM_X;
   return [
-    '^XA',
-    `^PW${w}`,
-    `^LL${h}`,
-    '^CI28',
-    `^FO${MARGEM_X},${BARRA_Y}^BY${BARRA_MODULO}`,
-    `^BCN,${BARRA_ALTURA},N,N,N`,
+    `^FO${x},${c.BARRA_Y}^BY${c.BARRA_MODULO}`,
+    `^BCN,${c.BARRA_ALTURA},N,N,N`,
     `^FD${barcode}^FS`,
-    `^FO${MARGEM_X},${SKU_Y}^A0N,${SKU_FONTE},${SKU_FONTE}^FD${sku}^FS`,
-    `^FO${MARGEM_X},${PRECO_Y}^A0N,${PRECO_FONTE},${PRECO_FONTE}^FB${larguraUtil},1,0,R^FD${preco}^FS`,
-    `^PQ${qtd}`,
-    '^XZ',
+    `^FO${x},${c.SKU_Y}^A0N,${c.SKU_FONTE},${c.SKU_FONTE}^FD${sku}^FS`,
+    `^FO${x},${c.PRECO_Y}^A0N,${c.PRECO_FONTE},${c.PRECO_FONTE}^FB${larguraUtil},1,0,R^FD${preco}^FS`,
   ].join('\n');
 }
 
-// Concatena o ZPL de vários produtos numa única transmissão (cada um com
-// sua própria ^PQ — a impressora imprime tudo em sequência).
+// Gera o ZPL de UMA etiqueta sozinha (produto + quantas cópias, via ^PQ).
+export function gerarZPL(produto, opts = {}) {
+  const { dpi = 203, larguraMm = 30, alturaMm = 20, qtd = 1 } = opts;
+  const w = mm(larguraMm, dpi);
+  const h = mm(alturaMm, dpi);
+  return ['^XA', `^PW${w}`, `^LL${h}`, '^CI28', camposEtiqueta(produto, 0, w, dpi), `^PQ${qtd}`, '^XZ'].join('\n');
+}
+
+// Uma LINHA física com até `colunas` etiquetas lado a lado — rolo com N
+// colunas. O Browser Print manda ZPL cru direto pra impressora, sem passar
+// pelo driver do Windows (que normalmente cuidaria do multi-coluna), então
+// o layout tem que ser desenhado aqui, à mão. `itens` com menos de
+// `colunas` posições deixa o resto da linha em branco.
+function gerarZPLLinha(itens, opts) {
+  const { dpi = 203, larguraMm = 30, alturaMm = 20, colunas = 1, gapMm = 2 } = opts;
+  const larguraColDots = mm(larguraMm, dpi);
+  const gapDots = mm(gapMm, dpi);
+  const w = larguraColDots * colunas + gapDots * (colunas - 1);
+  const h = mm(alturaMm, dpi);
+  const campos = itens
+    .map((p, i) => p ? camposEtiqueta(p, i * (larguraColDots + gapDots), larguraColDots, dpi) : '')
+    .filter(Boolean)
+    .join('\n');
+  return ['^XA', `^PW${w}`, `^LL${h}`, '^CI28', campos, '^PQ1', '^XZ'].join('\n');
+}
+
+// Concatena o ZPL de vários produtos numa única transmissão. Com 1 coluna
+// (padrão) mantém o formato de sempre — 1 ^XA por SKU distinto, com ^PQ pra
+// repetir. Com 2+ colunas, "estoura" as quantidades em etiquetas
+// individuais e desenha linha por linha, `colunas` por vez.
 export function gerarZPLLote(produtos, opts = {}) {
-  return produtos.map(p => gerarZPL(p, { ...opts, qtd: p.qtd || 1 })).join('\n');
+  const colunas = opts.colunas || 1;
+  if (colunas <= 1) {
+    return produtos.map(p => gerarZPL(p, { ...opts, qtd: p.qtd || 1 })).join('\n');
+  }
+  const flat = [];
+  produtos.forEach(p => { for (let k = 0; k < (p.qtd || 1); k++) flat.push(p); });
+  const linhas = [];
+  for (let i = 0; i < flat.length; i += colunas) linhas.push(flat.slice(i, i + colunas));
+  return linhas.map(row => gerarZPLLinha(row, opts)).join('\n');
 }
 
 // ── Zebra Browser Print (SDK vendorizado — ver index.html + public/vendor) ──
@@ -181,7 +211,7 @@ function renderEtiquetasLista() {
   const statusImpressora = !temBrowserPrint()
     ? '<div style="font-size:12.5px;color:var(--warning);margin-bottom:10px">Zebra Browser Print não detectado neste computador. Use "Baixar .zpl" e envie manualmente, ou instale o Browser Print.</div>'
     : cfg?.deviceName
-      ? `<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Impressora: <b>${esc(cfg.deviceName)}</b> (${cfg.dpi} dpi)</div>`
+      ? `<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Impressora: <b>${esc(cfg.deviceName)}</b> (${cfg.dpi} dpi · ${cfg.colunas || 1} coluna${(cfg.colunas || 1) === 1 ? '' : 's'})</div>`
       : '<div style="font-size:12.5px;color:var(--warning);margin-bottom:10px">Nenhuma impressora configurada.</div>';
 
   return `
@@ -206,6 +236,10 @@ function renderEtiquetasConfig() {
       <select id="etq-cfg-dpi" class="form-control">
         <option value="203" ${!cfg || cfg.dpi === 203 ? 'selected' : ''}>203 dpi</option>
         <option value="300" ${cfg?.dpi === 300 ? 'selected' : ''}>300 dpi</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Colunas no rolo</label>
+      <select id="etq-cfg-colunas" class="form-control">
+        ${[1, 2, 3, 4].map(n => `<option value="${n}" ${(cfg?.colunas || 1) === n ? 'selected' : ''}>${n}${n === 1 ? ' (rolo comum, 1 etiqueta por vez)' : ` (rolo com ${n} etiquetas lado a lado)`}</option>`).join('')}
       </select></div>
     <button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="etiquetasListarImpressoras()">Atualizar lista</button>
     <div style="display:flex;gap:10px;margin-bottom:10px">
@@ -241,8 +275,9 @@ export function etiquetasConfigVoltar() {
 export function etiquetasConfigSalvar() {
   const deviceName = document.getElementById('etq-cfg-dev')?.value || '';
   const dpi = Number(document.getElementById('etq-cfg-dpi')?.value) || 203;
+  const colunas = Number(document.getElementById('etq-cfg-colunas')?.value) || 1;
   if (!deviceName) { toast('Selecione uma impressora.', 'erro'); return; }
-  salvarCfgImpressora({ deviceName, dpi });
+  salvarCfgImpressora({ deviceName, dpi, colunas });
   toast('Impressora configurada.', 'erro');
   etqView = 'lista';
   renderEtiquetas();
@@ -254,18 +289,21 @@ async function dispositivoConfigurado() {
   const lista = etqImpressoras.length ? etqImpressoras : await listarImpressoras();
   const device = lista.find(d => d.name === cfg.deviceName);
   if (!device) throw new Error('Impressora configurada não foi encontrada — reconfigure.');
-  return { device, dpi: cfg.dpi };
+  return { device, dpi: cfg.dpi, colunas: cfg.colunas || 1 };
 }
 
 export async function etiquetasTeste() {
   try {
     const deviceName = document.getElementById('etq-cfg-dev')?.value;
     const dpi = Number(document.getElementById('etq-cfg-dpi')?.value) || 203;
+    const colunas = Number(document.getElementById('etq-cfg-colunas')?.value) || 1;
     if (!deviceName) { toast('Selecione uma impressora.', 'erro'); return; }
     const lista = etqImpressoras.length ? etqImpressoras : await listarImpressoras();
     const device = lista.find(d => d.name === deviceName);
     if (!device) { toast('Impressora não encontrada.', 'erro'); return; }
-    const zpl = gerarZPL({ sku: 'TESTE-001', nome: 'Etiqueta de teste', preco_venda: 9.9, codigo_barras: null }, { dpi, qtd: 1 });
+    // Testa com `colunas` cópias — valida o layout lado a lado de uma vez.
+    const testes = Array.from({ length: colunas }, () => ({ sku: 'TESTE-001', nome: 'Etiqueta de teste', preco_venda: 9.9, codigo_barras: null }));
+    const zpl = gerarZPLLote(testes, { dpi, colunas });
     await enviarParaImpressora(device, zpl);
     toast('Etiqueta de teste enviada!', 'erro');
   } catch (e) {
@@ -280,8 +318,8 @@ export async function etiquetasImprimir() {
     return;
   }
   try {
-    const { device, dpi } = await dispositivoConfigurado();
-    const zpl = gerarZPLLote(etqProdutos, { dpi });
+    const { device, dpi, colunas } = await dispositivoConfigurado();
+    const zpl = gerarZPLLote(etqProdutos, { dpi, colunas });
     await enviarParaImpressora(device, zpl);
     toast('Etiquetas enviadas para a impressora!', 'erro');
     closeModal('modal-etiquetas');
@@ -293,7 +331,7 @@ export async function etiquetasImprimir() {
 
 export function etiquetasBaixarZpl() {
   const cfg = carregarCfgImpressora();
-  const zpl = gerarZPLLote(etqProdutos, { dpi: cfg?.dpi || 203 });
+  const zpl = gerarZPLLote(etqProdutos, { dpi: cfg?.dpi || 203, colunas: cfg?.colunas || 1 });
   baixarZPL(`etiquetas-${Date.now()}`, zpl);
   toast('Arquivo .zpl baixado.', 'erro');
 }
