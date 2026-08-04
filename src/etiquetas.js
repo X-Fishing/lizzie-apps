@@ -28,9 +28,12 @@ export function gerarZPL(produto, opts = {}) {
   const h = mm(alturaMm, dpi);
 
   // ── Calibração (ajustar aqui na etiqueta real) ──
-  const MARGEM_X = mm(1.5, dpi);      // margem esquerda
-  const BARRA_Y = mm(1, dpi);         // topo da etiqueta
-  const BARRA_ALTURA = mm(6, dpi);    // altura das barras
+  // Rev. 2 (teste físico 1): barra estava muito colada no topo e nas
+  // margens — desceu a barra (mantendo o mesmo fim em Y, pra não bater no
+  // SKU) e abriu a margem lateral de 1.5mm pra 2.5mm.
+  const MARGEM_X = mm(2.5, dpi);      // margem esquerda/direita
+  const BARRA_Y = mm(1.5, dpi);       // topo da etiqueta
+  const BARRA_ALTURA = mm(5.5, dpi);  // altura das barras
   const BARRA_MODULO = 2;             // ^BY — largura do módulo (2 = fino)
   const SKU_Y = mm(8, dpi);           // logo abaixo da barra
   const SKU_FONTE = 20;               // altura/largura da fonte (dots)
