@@ -125,7 +125,10 @@ alter table public.consignados
   add column if not exists produto_id uuid references public.produtos(id) on delete set null;
 
 -- ════════════════════════════════════════════════════════════════════
--- RLS — staff lê tudo; gestor/admin gerencia (insert/update/delete)
+-- RLS — staff lê tudo; gestor/admin cadastra e edita; só ADMIN exclui
+-- (excluir produto é exclusividade do admin — ver 0043_produtos_delete_admin.sql;
+-- mantido igual aqui pra um re-run deste arquivo não reabrir o delete pro
+-- func_completo em silêncio)
 -- ════════════════════════════════════════════════════════════════════
 do $$
 declare r record;
@@ -152,8 +155,10 @@ begin
                    t||'_insert', t);
     execute format($f$create policy %I on public.%I for update to authenticated using ( public.is_gestor() ) with check ( public.is_gestor() )$f$,
                    t||'_update', t);
-    execute format($f$create policy %I on public.%I for delete to authenticated using ( public.is_gestor() )$f$,
-                   t||'_delete', t);
+    -- delete só pro admin nos produtos; nos cadastros de apoio segue no gestor
+    execute format($f$create policy %I on public.%I for delete to authenticated using ( %s )$f$,
+                   t||'_delete', t,
+                   case when t in ('produtos','produto_variacoes') then 'public.is_admin()' else 'public.is_gestor()' end);
   end loop;
 end $$;
 

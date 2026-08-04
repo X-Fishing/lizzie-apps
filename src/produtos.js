@@ -2,7 +2,8 @@
 // etapas (numa página rolável) no padrão visual do app. Só gestor/admin grava.
 import { sb, SUPABASE_URL, SUPABASE_KEY } from './supabase.js';
 import { esc, toast, sbQ, fetchPaginado, fmtBRL, confirmarAcao, handleSupabaseError,
-         maskMoneyBR, parseMoneyBR, moneyToInput } from './utils.js';
+         maskMoneyBR, parseMoneyBR, moneyToInput, openModal, closeModal } from './utils.js';
+import { ehAdmin } from './auth.js';
 import { cadastroCache, carregarCadastrosParaSelect, cadNovo } from './cadastros.js';
 import { carregarPrecificacao, calcularPrecificacao } from './precificacao.js';
 import { abrirImpressaoEtiquetas } from './etiquetas.js';
@@ -113,7 +114,12 @@ const IC_PRINT = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyl
 const IC_SHEET = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>';
 const IC_DOWN  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>';
 
+const IC_COPY  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+
 let produtosCache = [];
+// Seleção em massa da grid — ids de produto. Sobrevive a troca de filtro/página
+// de propósito (dá pra ir juntando de vários filtros antes de agir).
+const selecionados = new Set();
 let filtroProdutos = '';
 let filtroColecao = '';      // id da coleção selecionada no filtro ('' = todas)
 let filtroCategoria = '';    // id da categoria ('' = todas)
@@ -121,16 +127,22 @@ let filtroFornecedor = '';   // id do fornecedor ('' = todos)
 let filtroCaract = '';       // característica: com/sem foto, sem descrição, sem preço... ('' = todas)
 
 // Filtros de "estado" do produto — úteis pra achar o que falta completar
-// (ex.: "sem foto" antes de usar o importador de fotos em lote).
+// (ex.: "sem foto" antes de usar o importador de fotos em lote). Ordem e
+// nomes espelham o filtro de Características do Zimlax, tirando o que não
+// existe aqui (avaria, Full/Armazém são conceitos de marketplace).
 const CARACT_FILTROS = {
-  com_foto:      { label: 'Com foto',            teste: p => !!p.foto_url },
-  sem_foto:      { label: 'Sem foto',            teste: p => !p.foto_url },
-  sem_descricao: { label: 'Sem descrição',       teste: p => !(p.descricao_curta || '').trim() },
-  sem_custo:     { label: 'Sem preço de custo',  teste: p => !(Number(p.custo_compra) > 0) },
-  sem_venda:     { label: 'Sem preço de venda',  teste: p => !(Number(p.preco_venda) > 0) },
-  sem_sku:       { label: 'Sem SKU',             teste: p => !(p.sku || '').trim() },
-  sem_barras:    { label: 'Sem código de barras', teste: p => !(p.codigo_barras || '').trim() },
-  sem_estoque:   { label: 'Sem estoque',         teste: p => !(Number(p.estoque_qtd) > 0) },
+  com_foto:       { label: 'Com foto',             teste: p => !!p.foto_url },
+  sem_foto:       { label: 'Sem foto',             teste: p => !p.foto_url },
+  sem_custo:      { label: 'Sem custo',            teste: p => !(Number(p.custo_compra) > 0) },
+  sem_venda:      { label: 'Sem preço',            teste: p => !(Number(p.preco_venda) > 0) },
+  sem_descricao:  { label: 'Sem descrição',        teste: p => !(p.descricao_curta || '').trim() },
+  saldo_positivo: { label: 'Com saldo positivo',   teste: p => Number(p.estoque_qtd) > 0 },
+  saldo_negativo: { label: 'Com saldo negativo',   teste: p => Number(p.estoque_qtd) < 0 },
+  saldo_zero:     { label: 'Com saldo zero',       teste: p => Number(p.estoque_qtd || 0) === 0 },
+  sem_estoque:    { label: 'Sem estoque',          teste: p => !(Number(p.estoque_qtd) > 0) },
+  sem_sku:        { label: 'Sem SKU',              teste: p => !(p.sku || '').trim() },
+  sem_barras:     { label: 'Sem código de barras', teste: p => !(p.codigo_barras || '').trim() },
+  inativos:       { label: 'Inativos',             teste: p => p.ativo === false },
 };
 let paginaAtual = 1;         // paginação client-side da grid
 const POR_PAGINA = 50;
@@ -211,24 +223,43 @@ function grupoAnel(nome) {
   return m ? { base: `Anel ${m[2].trim()}`, tamanho: m[1] } : null;
 }
 
+// Célula de seleção. `ids` = produtos que a caixa marca (1 na linha comum,
+// vários na linha-cabeçalho de grupo).
+function tdCheck(ids, extraStyle = '') {
+  const marcados = ids.length && ids.every(id => selecionados.has(String(id)));
+  return `<td class="ciclo-td" style="width:34px;text-align:center${extraStyle}" onclick="event.stopPropagation()">
+    <input type="checkbox" data-ids="${ids.join(',')}" ${marcados ? 'checked' : ''}
+      onchange="produtoSelToggle(this)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--rose)"></td>`;
+}
+
+// Ações da linha. Excluir só aparece pro admin (pedido do dono) — funcionário
+// com acesso a Produtos edita e clona, mas não apaga.
+function acoesProdutoHTML(id) {
+  return `
+    <button class="btn-icon" title="Editar" onclick="produtoEditar('${id}')" style="color:var(--rose)">${IC_EDIT}</button>
+    <button class="btn-icon" title="Clonar (abre já preenchido)" onclick="produtoClonar('${id}')" style="color:var(--plum)">${IC_COPY}</button>
+    ${ehAdmin() ? `<button class="btn-icon" title="Excluir" onclick="produtoExcluir('${id}')" style="color:var(--danger)">${IC_TRASH}</button>` : ''}`;
+}
+
+const badgeInativo = p => p.ativo === false
+  ? '<span class="ciclo-badge" style="margin-left:6px;background:var(--border);color:var(--muted)">inativo</span>' : '';
+
 // Linha padrão de produto (sub=true = membro de grupo, com recuo)
 function linhaProdutoHTML(p, sub = false) {
   return `
     <tr class="ciclo-row"${sub ? ' style="background:rgba(201,116,138,0.045)"' : ''}>
+      ${tdCheck([p.id])}
       <td class="ciclo-td"${sub ? ' style="padding-left:34px"' : ''}>
         <div style="display:flex;align-items:center;gap:10px">
           ${thumbHTML(p.foto_url)}
-          <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}</div>
+          <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}${badgeInativo(p)}</div>
           ${p.codigo_barras ? `<div style="font-size:11px;color:var(--muted)">${esc(p.codigo_barras)}</div>` : ''}</div>
         </div>
       </td>
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${p.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(p.preco_venda)}</span></td>
-      <td class="ciclo-td" style="text-align:right;white-space:nowrap">
-        <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
-        <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
-      </td>
+      <td class="ciclo-td" style="text-align:right;white-space:nowrap">${acoesProdutoHTML(p.id)}</td>
     </tr>`;
 }
 
@@ -236,6 +267,7 @@ function linhaProdutoHTML(p, sub = false) {
 function linhaVariacaoHTML(p, v) {
   return `
     <tr class="ciclo-row" style="background:rgba(201,116,138,0.045)">
+      <td class="ciclo-td"></td>
       <td class="ciclo-td" style="padding-left:34px">
         <div class="ciclo-desc" style="font-size:13px">${esc(p.nome)} — ${esc(v.atributo)}: <b>${esc(v.valor)}</b></div>
         ${v.codigo_barras ? `<div style="font-size:11px;color:var(--muted)">${esc(v.codigo_barras)}</div>` : ''}
@@ -257,21 +289,19 @@ function linhaVarProdHTML(p, vars, aberto) {
   const preco = pMin === pMax ? fmtBRL(pMin) : `${fmtBRL(pMin)} – ${fmtBRL(pMax)}`;
   return `
     <tr class="ciclo-row" style="cursor:pointer" onclick="produtoToggleGrupo('${encodeURIComponent('var:' + p.id)}')">
+      ${tdCheck([p.id])}
       <td class="ciclo-td">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="width:14px;color:var(--rose);font-size:12px">${aberto ? '▾' : '▸'}</span>
           ${thumbHTML(p.foto_url)}
-          <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}</div>
+          <div><div class="ciclo-desc">${esc(p.nome)}${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}${badgeInativo(p)}</div>
           <div style="font-size:11px;color:var(--muted)">${vars.length} variaç${vars.length !== 1 ? 'ões' : 'ão'}: ${vars.map(v => esc(v.valor)).join(' · ')}</div></div>
         </div>
       </td>
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
-      <td class="ciclo-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
-        <button class="btn-icon" title="Editar" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
-        <button class="btn-icon" title="Excluir" onclick="produtoExcluir('${p.id}')" style="color:var(--danger)">${IC_TRASH}</button>
-      </td>
+      <td class="ciclo-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">${acoesProdutoHTML(p.id)}</td>
     </tr>`;
 }
 
@@ -286,6 +316,7 @@ function linhaGrupoHTML(g, aberto) {
   const chave = encodeURIComponent(g.base);
   return `
     <tr class="ciclo-row" style="cursor:pointer" onclick="produtoToggleGrupo('${chave}')">
+      ${tdCheck(g.membros.map(m => m.p.id))}
       <td class="ciclo-td">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="width:14px;color:var(--rose);font-size:12px">${aberto ? '▾' : '▸'}</span>
@@ -304,7 +335,7 @@ function linhaGrupoHTML(g, aberto) {
 // Monta SÓ a tabela + pager (parte que muda com filtro/página). Manter separado
 // da toolbar: re-renderizar o painel inteiro a cada tecla destruía o input de
 // busca e derrubava o foco do teclado.
-function tabelaHTML() {
+function listaFiltrada() {
   const f = filtroProdutos.trim().toLowerCase();
   let lista = produtosCache;
   if (filtroColecao) lista = lista.filter(p => String(p.colecao_id) === String(filtroColecao));
@@ -318,6 +349,12 @@ function tabelaHTML() {
     const vs = variacoesPorProduto.get(String(p.id)) || [];
     return vs.some(v => [v.sku, v.codigo_barras, v.valor].some(x => (x || '').toLowerCase().includes(f)));
   });
+  return lista;
+}
+
+function tabelaHTML() {
+  const f = filtroProdutos.trim().toLowerCase();
+  const lista = listaFiltrada();
 
   // Unidades de exibição: produto com variações e anéis do mesmo modelo
   // colapsam em linhas expansíveis; resto é avulso
@@ -362,7 +399,7 @@ function tabelaHTML() {
       .map(m => linhaProdutoHTML(m.p, true)).join('');
     return html;
   }).join('') :
-    `<tr><td colspan="5"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor || filtroCaract) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
+    `<tr><td colspan="6"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor || filtroCaract) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
 
   const pager = totalFiltrado > POR_PAGINA ? `
     <div style="display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px">
@@ -371,8 +408,18 @@ function tabelaHTML() {
       <button class="btn-secondary btn-sm" ${paginaAtual >= totalPaginas ? 'disabled style="opacity:.4"' : ''} onclick="produtoPagina(1)">Próxima ›</button>
     </div>` : '';
 
+  // Ids de produto visíveis nesta página (grupo conta todos os aros dele) —
+  // alvo do "marcar tudo" do cabeçalho.
+  const idsPagina = pagina.flatMap(u => u.tipo === 'grupo' ? u.membros.map(m => m.p.id) : [u.p.id]);
+  const pagInteiraMarcada = idsPagina.length > 0 && idsPagina.every(id => selecionados.has(String(id)));
+
   return `
+    ${barraMassaHTML(idsPagina, pagInteiraMarcada, lista)}
     <div class="pag-wrap"><table class="pag-table"><thead><tr>
+      <th class="pag-th" style="width:34px;text-align:center">
+        <input type="checkbox" data-ids="${idsPagina.join(',')}" ${pagInteiraMarcada ? 'checked' : ''}
+          title="Marcar todos desta página" onchange="produtoSelToggle(this)"
+          style="width:16px;height:16px;cursor:pointer;accent-color:var(--rose)"></th>
       <th class="pag-th">Produto</th>
       <th class="pag-th">SKU</th>
       <th class="pag-th" style="text-align:center">Estoque</th>
@@ -380,6 +427,31 @@ function tabelaHTML() {
       <th class="pag-th" style="text-align:right">Ações</th>
     </tr></thead><tbody>${linhas}</tbody></table></div>
     ${pager}`;
+}
+
+// ── Ações em massa ──────────────────────────────────────────────────
+// Barra que só aparece com algo marcado. Excluir fica fora do alcance de
+// quem não é admin (pedido do dono) — a RLS não distingue, então a trava
+// aqui é de UI: o botão nem é montado.
+function barraMassaHTML(idsPagina, pagInteiraMarcada, listaAtual) {
+  const n = selecionados.size;
+  if (!n) return '';
+  // Atalho estilo Gmail: marcou a página inteira mas o filtro tem mais.
+  const totalFiltrado = listaAtual.length;
+  const podeTudo = pagInteiraMarcada && totalFiltrado > idsPagina.length && n < totalFiltrado;
+  return `
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:10px 12px;border:1px solid var(--rose);border-radius:12px;background:var(--blush)">
+      <b style="color:var(--plum);font-size:13px">${n} selecionado${n !== 1 ? 's' : ''}</b>
+      ${podeTudo ? `<button class="btn-secondary btn-sm" onclick="produtoSelTodosFiltrados()">Selecionar os ${totalFiltrado} filtrados</button>` : ''}
+      <span style="flex:1"></span>
+      <button class="btn-secondary btn-sm" onclick="produtoMassaEtiquetas()">${IC_PRINT} Etiquetas</button>
+      <button class="btn-secondary btn-sm" onclick="produtoMassaDefinir('categorias')">Definir categoria</button>
+      <button class="btn-secondary btn-sm" onclick="produtoMassaDefinir('fornecedores')">Definir fornecedor</button>
+      <button class="btn-secondary btn-sm" onclick="produtoMassaAtivo(true)">Ativar</button>
+      <button class="btn-secondary btn-sm" onclick="produtoMassaAtivo(false)">Inativar</button>
+      ${ehAdmin() ? `<button class="btn-secondary btn-sm" style="color:var(--danger)" onclick="produtoMassaExcluir()">${IC_TRASH} Excluir</button>` : ''}
+      <button class="btn-secondary btn-sm" onclick="produtoSelLimpar()">Limpar</button>
+    </div>`;
 }
 
 // Atualiza SÓ a região da tabela (preserva toolbar e o foco do input de busca)
@@ -439,6 +511,107 @@ export function produtoFiltrarColecao(v) { filtroColecao = v; paginaAtual = 1; r
 export function produtoFiltrarCategoria(v) { filtroCategoria = v; paginaAtual = 1; renderTabela(); }
 export function produtoFiltrarFornecedor(v) { filtroFornecedor = v; paginaAtual = 1; renderTabela(); }
 export function produtoFiltrarCaracteristica(v) { filtroCaract = v; paginaAtual = 1; renderTabela(); }
+
+// ── Seleção em massa ────────────────────────────────────────────────
+// Recebe o próprio <input> (padrão data-* em vez de interpolar ids soltos
+// dentro do onclick) — uma caixa pode representar vários produtos.
+export function produtoSelToggle(el) {
+  const ids = (el.dataset.ids || '').split(',').filter(Boolean);
+  ids.forEach(id => el.checked ? selecionados.add(String(id)) : selecionados.delete(String(id)));
+  renderTabela();
+}
+
+export function produtoSelTodosFiltrados() {
+  listaFiltrada().forEach(p => selecionados.add(String(p.id)));
+  renderTabela();
+}
+
+export function produtoSelLimpar() { selecionados.clear(); renderTabela(); }
+
+// Produtos marcados que ainda existem no cache (filtro não interfere).
+function produtosSelecionados() {
+  return produtosCache.filter(p => selecionados.has(String(p.id)));
+}
+
+export function produtoMassaEtiquetas() {
+  const sel = produtosSelecionados();
+  if (!sel.length) { toast('Nada selecionado.', 'erro'); return; }
+  abrirImpressaoEtiquetas(sel.map(p => ({
+    sku: p.sku || '', nome: p.nome, preco_venda: p.preco_venda,
+    codigo_barras: p.codigo_barras || null, qtd: 1,
+  })));
+}
+
+export function produtoMassaAtivo(ativo) {
+  const sel = produtosSelecionados();
+  if (!sel.length) { toast('Nada selecionado.', 'erro'); return; }
+  const verbo = ativo ? 'Ativar' : 'Inativar';
+  confirmarAcao(`${verbo} produtos`, `${verbo} ${sel.length} produto(s) selecionado(s)?`, verbo, async () => {
+    await aplicarEmMassa(sel, { ativo }, `${sel.length} produto(s) ${ativo ? 'ativado(s)' : 'inativado(s)'}.`);
+  });
+}
+
+export function produtoMassaExcluir() {
+  if (!ehAdmin()) { toast('Só o admin pode excluir produtos.', 'erro'); return; }
+  const sel = produtosSelecionados();
+  if (!sel.length) { toast('Nada selecionado.', 'erro'); return; }
+  confirmarAcao('Excluir produtos', `Excluir ${sel.length} produto(s)? Isso não pode ser desfeito.`, 'Excluir', async () => {
+    const ids = sel.map(p => p.id);
+    const { error } = await sb.from('produtos').delete().in('id', ids);
+    if (error) {
+      // Produto já usado em maleta trava por FK — a operação é tudo-ou-nada,
+      // então o recado tem que dizer que NADA foi excluído.
+      if (/foreign key|violates/i.test(error.message || '')) {
+        toast('Nenhum excluído: algum produto da seleção está vinculado a maletas.', 'erro'); return;
+      }
+      if (await handleSupabaseError(error, 'Erro ao excluir')) return;
+      toast('Erro ao excluir: ' + (error.message || ''), 'erro'); return;
+    }
+    selecionados.clear();
+    toast(`${ids.length} produto(s) excluído(s).`, 'erro');
+    loadProdutos();
+  });
+}
+
+async function aplicarEmMassa(sel, payload, msgOk) {
+  const ids = sel.map(p => p.id);
+  const { error } = await sb.from('produtos').update(payload).in('id', ids);
+  if (error) {
+    if (await handleSupabaseError(error, 'Erro ao atualizar produtos')) return;
+    toast('Erro: ' + (error.message || 'tente de novo'), 'erro'); return;
+  }
+  // Mantém a seleção: é comum encadear ações (definir categoria, depois inativar).
+  toast(msgOk, 'erro');
+  loadProdutos();
+}
+
+// Definir categoria/fornecedor em massa — modal com o select do cadastro.
+let massaTabela = null;
+export function produtoMassaDefinir(tabela) {
+  const sel = produtosSelecionados();
+  if (!sel.length) { toast('Nada selecionado.', 'erro'); return; }
+  massaTabela = tabela;
+  const label = tabela === 'categorias' ? 'categoria' : 'fornecedor';
+  const opcoes = (cadastroCache[tabela] || []).map(c => `<option value="${c.id}">${esc(c.nome)}</option>`).join('');
+  document.getElementById('prod-massa-titulo').textContent = `Definir ${label}`;
+  document.getElementById('prod-massa-body').innerHTML = `
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">${sel.length} produto(s) selecionado(s).</div>
+    <div class="form-group"><label class="form-label">${label[0].toUpperCase() + label.slice(1)}</label>
+      <select id="prod-massa-valor" class="form-control">
+        <option value="">— limpar (deixar sem ${label}) —</option>${opcoes}
+      </select></div>
+    <button class="btn-primary" style="width:100%" onclick="produtoMassaDefinirSalvar()">Aplicar</button>`;
+  openModal('modal-prod-massa');
+}
+
+export async function produtoMassaDefinirSalvar() {
+  const sel = produtosSelecionados();
+  if (!sel.length || !massaTabela) { closeModal('modal-prod-massa'); return; }
+  const valor = document.getElementById('prod-massa-valor')?.value || null;
+  const campo = massaTabela === 'categorias' ? 'categoria_id' : 'fornecedor_id';
+  closeModal('modal-prod-massa');
+  await aplicarEmMassa(sel, { [campo]: valor }, `${sel.length} produto(s) atualizado(s).`);
+}
 
 // ── Custo editável inline na grid (só admin) ──
 export function produtoPagina(delta) { paginaAtual += delta; renderTabela(); }
@@ -1119,10 +1292,13 @@ function secHeader(txt, badge) {
 
 let precifCfg = null; // parâmetros/cotações p/ o preview do formulário
 
-async function abrirForm(p) {
+// opts.clonarDe = id do produto de origem: o form abre preenchido, mas salva
+// como produto NOVO (e puxa as variações da origem).
+async function abrirForm(p, opts = {}) {
   await carregarCadastrosParaSelect();
   precifCfg = await carregarPrecificacao(); // null = migração 0013 ausente
-  const editando = !!p;
+  const clonando = !!opts.clonarDe;
+  const editando = !!p && !clonando;
   p = p || {};
   formVariacoes = []; // carregadas depois se editando
   // imagens: array novo (imagens[1] = principal) com fallback pro foto_url legado
@@ -1132,8 +1308,9 @@ async function abrirForm(p) {
   panel().innerHTML = `
     <div class="section-header" style="display:flex;align-items:center;gap:10px">
       <button class="btn-voltar-ciclo" onclick="produtoVoltarLista()">← Voltar</button>
-      <div class="section-title" style="font-size:19px">${editando ? 'Editar produto' : 'Cadastrar novo produto'}</div>
+      <div class="section-title" style="font-size:19px">${clonando ? 'Clonar produto' : editando ? 'Editar produto' : 'Cadastrar novo produto'}</div>
     </div>
+    ${clonando ? '<div style="font-size:12.5px;color:var(--muted);margin:-4px 0 12px">Cópia de um produto existente — preencha o SKU e o código de barras (ficam em branco porque são únicos) e salve como produto novo.</div>' : ''}
 
     ${secHeader('Dados básicos')}
     <div class="form-grid">
@@ -1247,6 +1424,7 @@ async function abrirForm(p) {
   renderImagens();
   produtoPrecifPreview();
   if (editando) carregarVariacoes(p.id);
+  else if (clonando) carregarVariacoes(opts.clonarDe, true);
 }
 
 // ── Preview de precificação no formulário (motor em precificacao.js) ──
@@ -1378,10 +1556,31 @@ export async function produtoEditar(id) {
 }
 export function produtoVoltarLista() { loadProdutos(); }
 
+// Clonar: abre o form já preenchido, salvando como produto novo. SKU e código
+// de barras saem em branco (são únicos) e o estoque zera — o resto (preço,
+// custo, categoria, fornecedor, fotos, precificação) vem junto, que é o ponto
+// de clonar: cadastrar uma variação do mesmo modelo sem redigitar tudo.
+export async function produtoClonar(id) {
+  const { data, error } = await sbQ(sb.from('produtos').select('*').eq('id', id).single());
+  if (error || !data) { toast('Erro ao abrir o produto para clonar', 'erro'); return; }
+  const copia = { ...data, nome: `${data.nome || ''} (cópia)`, sku: '', codigo_barras: '', estoque_qtd: 0 };
+  delete copia.id;
+  delete copia.created_at;
+  abrirForm(copia, { clonarDe: id });
+}
+
 // ── Variações (client-side até salvar) ──
-async function carregarVariacoes(produtoId) {
+// clonando: zera SKU/código de barras/estoque das variações — são únicos por
+// peça, copiar direto colidiria no insert.
+async function carregarVariacoes(produtoId, clonando = false) {
   const { data } = await sbQ(sb.from('produto_variacoes').select('*').eq('produto_id', produtoId).order('created_at'));
-  formVariacoes = (data || []).map(v => ({ atributo: v.atributo, valor: v.valor, sku: v.sku || '', codigo_barras: v.codigo_barras || '', preco_venda: v.preco_venda, estoque_qtd: v.estoque_qtd || 0 }));
+  formVariacoes = (data || []).map(v => ({
+    atributo: v.atributo, valor: v.valor,
+    sku: clonando ? '' : (v.sku || ''),
+    codigo_barras: clonando ? '' : (v.codigo_barras || ''),
+    preco_venda: v.preco_venda,
+    estoque_qtd: clonando ? 0 : (v.estoque_qtd || 0),
+  }));
   renderVariacoes();
 }
 
