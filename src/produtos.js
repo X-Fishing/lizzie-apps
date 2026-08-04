@@ -5,6 +5,7 @@ import { esc, toast, sbQ, fetchPaginado, fmtBRL, confirmarAcao, handleSupabaseEr
          maskMoneyBR, parseMoneyBR, moneyToInput } from './utils.js';
 import { cadastroCache, carregarCadastrosParaSelect, cadNovo } from './cadastros.js';
 import { carregarPrecificacao, calcularPrecificacao } from './precificacao.js';
+import { abrirImpressaoEtiquetas } from './etiquetas.js';
 
 // ── Importação do Bling (Edge Function bling-produtos) ──
 const BLING_PRODUTOS_FN = `${SUPABASE_URL}/functions/v1/bling-produtos`;
@@ -108,6 +109,7 @@ const IC_TRASH = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path 
 const IC_GEM   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg>';
 const IC_BARCODE = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></svg>';
 const IC_CAM   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>';
+const IC_PRINT = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></svg>';
 const IC_SHEET = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3v18"/><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/></svg>';
 const IC_DOWN  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>';
 
@@ -1157,6 +1159,7 @@ async function abrirForm(p) {
         <div style="display:flex;gap:8px">
           <input type="text" id="p-codbarras" class="form-control" value="${esc(p.codigo_barras || '')}" placeholder="Bipe ou digite">
           <button type="button" class="btn-secondary btn-sm" title="Bipar com a câmera" onclick="scanBarcodeInto('p-codbarras')">${IC_CAM}</button>
+          <button type="button" class="btn-secondary btn-sm" title="Imprimir etiqueta" onclick="produtoImprimirEtiqueta()">${IC_PRINT}</button>
         </div></div>
       <div class="form-group" style="grid-column:1/-1"><label class="form-label">Descrição curta</label>
         <textarea id="p-descricao" class="form-control" rows="2">${esc(p.descricao_curta || '')}</textarea></div>
@@ -1443,6 +1446,17 @@ window.addEventListener('cadastro-salvo', (e) => {
 });
 
 export function maskMoneyProduto(input) { maskMoneyBR(input); }
+
+// Reimpressão avulsa (peça a peça) — usa o que está no form AGORA, não
+// depende de salvar antes (útil pra reimprimir sem alterar nada).
+export function produtoImprimirEtiqueta() {
+  const sku = document.getElementById('p-sku').value.trim();
+  const nome = document.getElementById('p-nome').value.trim();
+  const codigo_barras = document.getElementById('p-codbarras').value.trim() || null;
+  const preco_venda = parseMoneyBR(document.getElementById('p-venda').value) || 0;
+  if (!sku) { toast('Informe o SKU antes de imprimir a etiqueta.'); return; }
+  abrirImpressaoEtiquetas([{ sku, nome, preco_venda, codigo_barras, qtd: 1 }]);
+}
 
 // ── Salvar ──
 export async function produtoSalvar(id) {
