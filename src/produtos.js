@@ -4,6 +4,7 @@ import { sb, SUPABASE_URL, SUPABASE_KEY } from './supabase.js';
 import { esc, toast, sbQ, fetchPaginado, fmtBRL, confirmarAcao, handleSupabaseError,
          maskMoneyBR, parseMoneyBR, moneyToInput, openModal, closeModal } from './utils.js';
 import { ehAdmin } from './auth.js';
+import { criarOrdenacao, alternarOrdenacao, thOrd, ordenarPor, pagerHTML, paginaValida } from './grid.js';
 import { cadastroCache, carregarCadastrosParaSelect, cadNovo } from './cadastros.js';
 import { carregarPrecificacao, calcularPrecificacao } from './precificacao.js';
 import { abrirImpressaoEtiquetas } from './etiquetas.js';
@@ -146,6 +147,7 @@ const CARACT_FILTROS = {
 };
 let paginaAtual = 1;         // paginação client-side da grid
 const POR_PAGINA = 50;
+const ordProdutos = criarOrdenacao('nome');   // ordenação por clique no cabeçalho
 let formVariacoes = [];   // variações em edição no formulário (client-side)
 let formImagens = [];     // imagens em edição: [{url|null, file|null, preview}] — a 1ª é a principal
 const MAX_IMAGENS = 5;
@@ -352,12 +354,10 @@ function listaFiltrada() {
   return lista;
 }
 
-function tabelaHTML() {
-  const f = filtroProdutos.trim().toLowerCase();
-  const lista = listaFiltrada();
-
-  // Unidades de exibição: produto com variações e anéis do mesmo modelo
-  // colapsam em linhas expansíveis; resto é avulso
+// Unidades de exibição JÁ ordenadas: produto com variações e anéis do mesmo
+// modelo colapsam em linhas expansíveis; resto é avulso. Grupo conta como 1
+// linha — é isso que a paginação enxerga.
+function listaUnidades(lista = listaFiltrada()) {
   const porBase = new Map();
   const unidades = [];
   for (const p of lista) {
@@ -374,7 +374,26 @@ function tabelaHTML() {
   }
   // Grupo de 1 membro só não tem cara de grupo — vira linha normal
   const units = unidades.map(u => (u.tipo === 'grupo' && u.membros.length === 1) ? { tipo: 'prod', p: u.membros[0].p } : u);
-  units.sort((a, b) => (a.tipo === 'grupo' ? a.base : a.p.nome).localeCompare(b.tipo === 'grupo' ? b.base : b.p.nome));
+  // Ordenação por clique no cabeçalho. Grupo/variação são UMA linha, então
+  // ordenam pelo valor consolidado (estoque somado, menor preço) — é o mesmo
+  // número que a linha mostra, senão a ordem não bateria com o que se vê.
+  ordenarPor(units, ordProdutos, {
+    nome:    u => u.tipo === 'grupo' ? u.base : u.p.nome,
+    sku:     u => u.tipo === 'grupo' ? '' : u.p.sku,
+    estoque: u => u.tipo === 'grupo' ? u.membros.reduce((s, m) => s + (Number(m.p.estoque_qtd) || 0), 0)
+           : u.tipo === 'varprod' ? u.vars.reduce((s, v) => s + (Number(v.estoque_qtd) || 0), 0)
+           : (Number(u.p.estoque_qtd) || 0),
+    preco:   u => u.tipo === 'grupo' ? Math.min(...u.membros.map(m => Number(m.p.preco_venda) || 0))
+           : u.tipo === 'varprod' ? Math.min(...u.vars.map(v => Number(v.preco_venda ?? u.p.preco_venda) || 0))
+           : (Number(u.p.preco_venda) || 0),
+  });
+  return units;
+}
+
+function tabelaHTML() {
+  const f = filtroProdutos.trim().toLowerCase();
+  const lista = listaFiltrada();
+  const units = listaUnidades(lista);
 
   // Paginação client-side sobre unidades (grupo conta como 1)
   const totalFiltrado = units.length;
@@ -401,12 +420,7 @@ function tabelaHTML() {
   }).join('') :
     `<tr><td colspan="6"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor || filtroCaract) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
 
-  const pager = totalFiltrado > POR_PAGINA ? `
-    <div style="display:flex;justify-content:center;align-items:center;gap:14px;margin-top:14px">
-      <button class="btn-secondary btn-sm" ${paginaAtual <= 1 ? 'disabled style="opacity:.4"' : ''} onclick="produtoPagina(-1)">‹ Anterior</button>
-      <span style="font-size:12px;color:var(--muted)">Página <b>${paginaAtual}</b> de <b>${totalPaginas}</b> · ${totalFiltrado} ite${totalFiltrado !== 1 ? 'ns' : 'm'}</span>
-      <button class="btn-secondary btn-sm" ${paginaAtual >= totalPaginas ? 'disabled style="opacity:.4"' : ''} onclick="produtoPagina(1)">Próxima ›</button>
-    </div>` : '';
+  const pager = pagerHTML(paginaAtual, totalPaginas, totalFiltrado, 'produtoPagina');
 
   // Ids de produto visíveis nesta página (grupo conta todos os aros dele) —
   // alvo do "marcar tudo" do cabeçalho.
@@ -420,10 +434,10 @@ function tabelaHTML() {
         <input type="checkbox" data-ids="${idsPagina.join(',')}" ${pagInteiraMarcada ? 'checked' : ''}
           title="Marcar todos desta página" onchange="produtoSelToggle(this)"
           style="width:16px;height:16px;cursor:pointer;accent-color:var(--rose)"></th>
-      <th class="pag-th">Produto</th>
-      <th class="pag-th">SKU</th>
-      <th class="pag-th" style="text-align:center">Estoque</th>
-      <th class="pag-th">Preço</th>
+      ${thOrd(ordProdutos, 'nome', 'Produto', 'produtoOrdenar')}
+      ${thOrd(ordProdutos, 'sku', 'SKU', 'produtoOrdenar')}
+      ${thOrd(ordProdutos, 'estoque', 'Estoque', 'produtoOrdenar', 'text-align:center')}
+      ${thOrd(ordProdutos, 'preco', 'Preço', 'produtoOrdenar')}
       <th class="pag-th" style="text-align:right">Ações</th>
     </tr></thead><tbody>${linhas}</tbody></table></div>
     ${pager}`;
@@ -613,8 +627,18 @@ export async function produtoMassaDefinirSalvar() {
   await aplicarEmMassa(sel, { [campo]: valor }, `${sel.length} produto(s) atualizado(s).`);
 }
 
-// ── Custo editável inline na grid (só admin) ──
-export function produtoPagina(delta) { paginaAtual += delta; renderTabela(); }
+// Recebe o NÚMERO da página (o rodapé manda tanto do salto quanto das setas).
+export function produtoPagina(pagina) {
+  const total = Math.max(1, Math.ceil(listaUnidades().length / POR_PAGINA));
+  paginaAtual = paginaValida(pagina, total);
+  renderTabela();
+}
+
+export function produtoOrdenar(col) {
+  alternarOrdenacao(ordProdutos, col);
+  paginaAtual = 1;   // trocar de critério com a página 7 aberta desorienta
+  renderTabela();
+}
 export function produtoToggleGrupo(chave) {
   const base = decodeURIComponent(chave);
   if (gruposAbertos.has(base)) gruposAbertos.delete(base);
