@@ -9,6 +9,7 @@
 import { sb } from './supabase.js';
 import { esc, toast, sbQ, fmtBRL, handleSupabaseError, parseMoneyBR, moneyToInput, fetchPaginado, maskMoneyBR, openModal, closeModal, confirmarAcao } from './utils.js';
 import { cadastroCache, carregarCadastrosParaSelect } from './cadastros.js';
+import { abrirImpressaoEtiquetas } from './etiquetas.js';
 
 const r2 = n => Math.round(n * 100) / 100;
 
@@ -619,13 +620,19 @@ export async function loteLancar(btn) {
     if (/duplicate key|unique/i.test(error.message || '')) { toast('SKU já existente no catálogo — confira os códigos.'); return; }
     if (await handleSupabaseError(error, `Erro ao lançar: ${error.message}`)) return;
   }
-  // TODO etiquetas: quando a impressão (Zebra/Argox) existir, oferecer aqui
-  // "Imprimir etiquetas do lote" com os produtos recém-lançados.
+  // Etiquetas do lote recém-lançado — payloads já traz sku/nome/preço/qtd;
+  // o lote nunca grava codigo_barras, então a etiqueta cai no fallback do
+  // SKU (o modal avisa isso por produto).
+  const impressos = payloads.map(p => ({
+    sku: p.sku, nome: p.nome, preco_venda: p.preco_venda,
+    codigo_barras: null, qtd: p.estoque_qtd,
+  }));
   toast(`${payloads.length} produto${payloads.length > 1 ? 's' : ''} lançado${payloads.length > 1 ? 's' : ''} no catálogo!`);
   loteRows = [];
   rascunhoLimpar();
   await loteCarregarProximoSku();
   loteRender();
+  abrirImpressaoEtiquetas(impressos);
 }
 
 export function calcularSimulacao() {
