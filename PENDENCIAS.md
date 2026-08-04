@@ -1,22 +1,21 @@
 # Pendências — App Lizzie
 
 > Arquivo de continuidade entre sessões. Atualizar conforme os itens forem resolvidos.
-> Última atualização: 29/07/2026
+> Última atualização: 04/08/2026
 
 ---
 
 ## 🔴 URGENTE — próxima sessão
 
-### 1. Impressão de etiqueta de produto
-Precisa ser resolvido logo. Ainda **não está especificado** — na próxima sessão, definir antes de gerar o prompt:
+### 1. ✅ ESPECIFICADO (04/08/2026) — Impressão de etiqueta de produto
+Especificação fechada com o Rondon. Prompt gerado: **`PROMPT-ETIQUETAS-ZEBRA.md`** — falta só rodar no VS Code.
 
-- **Qual etiqueta?** Etiqueta de preço da peça (a que vai pendurada no produto, com código e preço) ou etiqueta de envio/identificação?
-- **O que sai impresso?** Código/SKU, preço, nome da peça, código de barras (o app já usa `codigo_barras`), banho/categoria, logo Lizzie?
-- **Impressora e formato:** térmica (Zebra/Elgin, etiqueta pequena em rolo) ou folha A4 com várias etiquetas por página? Dimensão da etiqueta (mm)?
-- **De onde parte?** Da tela de Produtos (uma peça / seleção múltipla), da Entrada de Mercadoria (lote inteiro que acabou de entrar), ou do Lançar Mostruário?
-- **Volume:** imprime 1 por vez ou o lote todo (ex.: os 134 produtos novos)?
-
-**Contexto já existente no código** (não começar do zero): a palavra "etiqueta" já aparece em `src/produtos.js`, `src/precificacao.js` e `src/admin.js` — verificar o que já existe antes de implementar. O app também já tem dois padrões de impressão prontos para reaproveitar: `window.print()` com CSS `@media print` (usado no fechamento/conferência/contrato) e **jsPDF + autotable** (usado no PDF do mostruário).
+- **Impressora:** Zebra, via SDK **Zebra Browser Print** (cobre USB local hoje e rede depois com a mesma integração). Pré-requisito de máquina: instalar o Zebra Browser Print no PC que vai imprimir (fora do código).
+- **Tamanho:** 30 x 15mm.
+- **Conteúdo:** código de barras (Code128, usa `codigo_barras` ou cai no SKU se vazio) + SKU em texto + preço.
+- **De onde parte:** dos dois — Entrada de Mercadoria (lote inteiro, resolve o TODO que já existia em `precificacao.js` linha 622) e tela de Produtos (peça avulsa).
+- **Achado no código:** já existe o TODO `// TODO etiquetas: quando a impressão (Zebra/Argox) existir...` em `precificacao.js`, e o campo `codigo_barras` já existe em `produtos`. Não é `window.print()` (padrão usado no resto do app) — etiqueta térmica precisa de ZPL nativo, ver prompt para o porquê.
+- **Atenção física:** 30x15mm é apertado; o prompt já avisa que vai precisar de calibração na impressora real antes de ir pra produção.
 
 ---
 
@@ -87,3 +86,12 @@ Edge Function retorna `INVALID_CREDENTIALS` no portão do Supabase. Hipótese: *
 
 ### 7. Processo
 Dois agentes empurrando para a mesma `main` gerou a divergência atual. Combinar: **um agente por vez na `main`**, ou cada um em branch com PR.
+
+### 8. Fornecedores misturados — financeiro × peças (04/08/2026)
+Reportado pelo Rondon: o dropdown "Fornecedor do lote" da **Entrada de Mercadoria** mistura fornecedores de **peça** de verdade (Adonai, Ana Maria, Araujo Brutos, Boa Vista, Fabiana Brutos...) com beneficiários do **financeiro** (Claro, Estacionamento, INSS, Imobiliaria, Loreto Contabilidade, "Casa do Bolo"...). Precisamos de duas listas separadas — poucos fornecedores de peça devem aparecer nos dois menus.
+
+**Causa raiz:** uma única tabela `fornecedores` alimenta dois selects diferentes:
+- Entrada de Mercadoria / Produtos / Precificação (fornecedor de **peça**).
+- Contas a Pagar, via quick-add (`cadNovo('fornecedores')` em `contas-a-pagar.js`) — deixa cadastrar **qualquer** beneficiário de conta a pagar (aluguel, telefone, contador...) direto nessa mesma tabela.
+
+**Caminho mais barato (evita mexer nas FKs):** adicionar uma coluna `tipo` (ou `categoria`) em `fornecedores` com valores `peca` | `financeiro` | `ambos`, e cada tela filtra pelo tipo dela. Resolve "poucos aparecem nos dois" com `ambos`, sem precisar migrar dados nem duplicar `fornecedor_id` em `produtos`/`contas_a_pagar` (que hoje apontam pra mesma tabela). Alternativa mais invasiva: tabela nova `fornecedores_financeiro` separada — mais trabalho de migração, só vale se um dia precisar de campos bem diferentes entre os dois tipos.
