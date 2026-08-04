@@ -1,28 +1,32 @@
 # Zebra Browser Print SDK
 
-O app referencia este script em `index.html`:
+Arquivo vendorizado aqui: **`BrowserPrint-3.1.250.min.js`** (referenciado
+direto no `index.html`).
+
+## De onde veio
+
+Não é um download separado — **já vem junto do instalador** do serviço
+Zebra Browser Print (o `.exe` que se instala no Windows, baixado em
+zebra.com/browserprint → "Browser Print For Windows PC").
+
+Depois de instalar o serviço, o SDK fica em:
 
 ```
-/vendor/zebra-browserprint/BrowserPrint-3.x.min.js
+C:\Program Files (x86)\Zebra Technologies\Zebra Browser Print\Documentation\BrowserPrint.js-<versão>\BrowserPrint-<versão>.min.js
 ```
 
-## Como instalar
+Foi copiado de lá pra cá sem modificação.
 
-1. Baixe o SDK oficial em **zebra.com/browserprint** (é gratuito, mas é
-   download direto do site da Zebra — este agente não pode baixar arquivos
-   licenciados de terceiros).
-2. Copie o arquivo `BrowserPrint-3.x.x.min.js` (a versão que vier) para esta
-   pasta, **renomeando para `BrowserPrint-3.x.min.js`** (o nome que o
-   `index.html` já referencia) — ou ajuste o `src` do `<script>` no
-   `index.html` para o nome exato do arquivo baixado.
-3. Também é preciso instalar o **serviço Zebra Browser Print** no Windows do
-   computador que vai imprimir (mesmo site) — ele é quem conversa com a
-   impressora (USB ou de rede já cadastrada nele). Isso é setup de máquina,
-   não faz parte do código.
+## Se atualizar a versão do Browser Print
+
+1. Reinstale/atualize o Browser Print normalmente.
+2. Copie o novo `BrowserPrint-<versão>.min.js` da pasta `Documentation\...`
+   pra esta pasta (`public/vendor/zebra-browserprint/`).
+3. Atualize o `<script src="...">` no `index.html` pro novo nome de arquivo.
 
 ## Sem o SDK
 
-Enquanto este arquivo não existir, o app funciona normalmente — a tela de
-etiquetas detecta a ausência do Browser Print e mostra só o botão
-**"Baixar .zpl"** (gera o arquivo com os comandos ZPL para enviar manualmente
-pelo Zebra Setup Utility ou outra ferramenta).
+Se este arquivo não existir (ex.: outro computador sem o Browser Print
+instalado), o app funciona normalmente — a tela de etiquetas detecta a
+ausência e mostra só o botão **"Baixar .zpl"** (gera o arquivo com os
+comandos ZPL pra enviar manualmente).
