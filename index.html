@@ -783,6 +783,16 @@
   </div>
 </div>
 
+<!-- Impressão de etiquetas (Zebra/ZPL) — Entrada de Mercadoria (lote) e Produtos (avulsa) -->
+<div class="modal-overlay" id="modal-etiquetas">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Imprimir etiquetas</div>
+    <div id="etiquetas-body"></div>
+    <button class="btn-secondary" style="width:100%;margin-top:10px" onclick="closeModal('modal-etiquetas')">Fechar</button>
+  </div>
+</div>
+
 <!-- PWA install UI -->
 <button id="install-btn" type="button" aria-label="Instalar app">
   <span style="font-size:16px"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></span><span>Instalar app</span>
@@ -803,6 +813,10 @@
   </div>
 </div>
 
+<!-- Zebra Browser Print SDK (baixar em zebra.com/browserprint e colocar em
+     public/vendor/zebra-browserprint/ — ver README lá). Opcional: sem ele,
+     a impressão de etiquetas cai no fallback "Baixar .zpl". -->
+<script src="/vendor/zebra-browserprint/BrowserPrint-3.x.min.js"></script>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>
