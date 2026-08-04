@@ -126,7 +126,7 @@ alter table public.consignados
 
 -- ════════════════════════════════════════════════════════════════════
 -- RLS — staff lê tudo; gestor/admin cadastra e edita; só ADMIN exclui
--- (excluir produto é exclusividade do admin — ver 0043_produtos_delete_admin.sql;
+-- (excluir produto é exclusividade do admin — ver 0047_produtos_delete_admin.sql;
 -- mantido igual aqui pra um re-run deste arquivo não reabrir o delete pro
 -- func_completo em silêncio)
 -- ════════════════════════════════════════════════════════════════════

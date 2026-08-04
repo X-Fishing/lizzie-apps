@@ -1,4 +1,8 @@
--- 0043 — Excluir produto passa a ser exclusividade do ADMIN.
+-- 0047 — Excluir produto passa a ser exclusividade do ADMIN.
+--
+-- Numeração: 0043–0046 já foram usadas no Supabase por outra sessão (Contas a
+-- Receber, conciliação bancária, histórico de conciliação, admin recebe) e
+-- ainda não estão versionadas aqui. Esta entra depois delas.
 --
 -- Contexto: a grid de Produtos ganhou exclusão em massa, e o pedido do dono é
 -- que apagar produto só apareça no login admin. A trava na tela (botão que nem
