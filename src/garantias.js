@@ -172,7 +172,7 @@ export function renderGarantiaCard(g) {
   } else prazoTxt = 'Entregue';
 
   const foto = g.foto_url
-    ? `<div class="garantia-foto"><img src="${g.foto_url}" alt="foto"></div>`
+    ? `<div class="garantia-foto"><img src="${esc(g.foto_url)}" alt="foto"></div>`
     : `<div class="garantia-foto"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg></div>`;
 
   const statusMap = { aberta:'badge-aberta', em_conserto:'badge-em_conserto', pronta:'badge-pronta', entregue:'badge-entregue' };
@@ -222,7 +222,7 @@ export async function verGarantia(id) {
   const destMap = { rebanho:'Rebanho', fornecedor:'Fornecedor', conserto_local:'Conserto local', outro:'Outro' };
   const statusMap = { aberta:'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#3f7fe0;margin-right:5px;vertical-align:middle"></span>Aberta', em_conserto:'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--warning);margin-right:5px;vertical-align:middle"></span>Em conserto', pronta:'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--success);margin-right:5px;vertical-align:middle"></span>Pronta', entregue:'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;background:#5a4a60;margin-right:5px;vertical-align:middle"></span>Entregue' };
 
-  let fotoHtml = g.foto_url ? `<img src="${g.foto_url}" class="detail-foto">` : '';
+  let fotoHtml = g.foto_url ? `<img src="${esc(g.foto_url)}" class="detail-foto">` : '';
 
   // Pipeline horizontal de status (fiel ao design) — preenchido até o atual.
   const ORDEM_ST = ['aberta', 'em_conserto', 'pronta', 'entregue'];

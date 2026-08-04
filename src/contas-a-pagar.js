@@ -13,6 +13,8 @@ import { ehGestor, ehAdmin } from './auth.js';
 import { cadastroCache, cadNovo } from './cadastros.js';
 
 const hojeISO = () => new Date().toISOString().slice(0, 10);
+// Só aceita http(s) — evita href javascript:/data: (XSS) em links de boleto.
+const urlHttp = u => /^https?:\/\//i.test(u || '') ? u : null;
 
 const FORMAS_PGTO = ['PIX', 'Boleto', 'Cartão de crédito', 'Cartão de débito',
   'Dinheiro', 'Transferência', 'Cheque', 'Outro'];
@@ -293,9 +295,9 @@ function capDetalheHtml(t) {
     <div><label class="form-label">Observação</label>
       <textarea class="form-control" rows="2" ${dis} onchange="capCampoChange('${t.id}','observacao',this)">${esc(t.observacao || '')}</textarea></div>
     <div><label class="form-label">Código do boleto</label>
-      <div style="display:flex;gap:6px"><input type="text" class="form-control" value="${esc(t.boleto_codigo || '')}" ${dis} onchange="capCampoChange('${t.id}','boleto_codigo',this)">${t.boleto_codigo ? `<button class="btn-secondary btn-sm" onclick="capCopiarBoleto('${esc(t.boleto_codigo)}')">Copiar</button>` : ''}</div></div>
+      <div style="display:flex;gap:6px"><input type="text" class="form-control" value="${esc(t.boleto_codigo || '')}" ${dis} onchange="capCampoChange('${t.id}','boleto_codigo',this)">${t.boleto_codigo ? `<button class="btn-secondary btn-sm" data-cod="${esc(t.boleto_codigo)}" onclick="capCopiarBoleto(this)">Copiar</button>` : ''}</div></div>
     <div><label class="form-label">Link do boleto</label>
-      <div style="display:flex;gap:6px"><input type="url" class="form-control" value="${esc(t.boleto_url || '')}" ${dis} onchange="capCampoChange('${t.id}','boleto_url',this)">${t.boleto_url ? `<a class="btn-secondary btn-sm" href="${esc(t.boleto_url)}" target="_blank" rel="noopener">Abrir</a>` : ''}</div></div>
+      <div style="display:flex;gap:6px"><input type="url" class="form-control" value="${esc(t.boleto_url || '')}" ${dis} onchange="capCampoChange('${t.id}','boleto_url',this)">${urlHttp(t.boleto_url) ? `<a class="btn-secondary btn-sm" href="${esc(urlHttp(t.boleto_url))}" target="_blank" rel="noopener">Abrir</a>` : ''}</div></div>
     ${t.status === 'pago' ? `<div><label class="form-label">Data do pagamento</label>
       <input type="date" class="form-control" value="${esc(t.data_pagamento || '')}" ${dis} onchange="capCampoChange('${t.id}','data_pagamento',this)"></div>` : ''}
     ${capRecCardHtml(t)}
@@ -708,7 +710,8 @@ export function capExcluirTitulo(id) {
   });
 }
 
-export function capCopiarBoleto(codigo) {
+export function capCopiarBoleto(el) {
+  const codigo = typeof el === 'string' ? el : (el?.dataset?.cod || '');
   navigator.clipboard.writeText(codigo)
     .then(() => toast('Código copiado!'))
     .catch(() => toast('Não foi possível copiar.'));
