@@ -547,13 +547,31 @@ function produtosSelecionados() {
   return produtosCache.filter(p => selecionados.has(String(p.id)));
 }
 
+// Um produto vira 1 linha; produto com variações vira 1 linha por variação —
+// é a variação que tem SKU, código de barras e estoque próprios (o pai fica 0).
+function itensEtiquetaDoProduto(p) {
+  const vars = variacoesPorProduto.get(String(p.id)) || [];
+  if (p.formato === 'variacao' && vars.length) {
+    return vars.map(v => ({
+      sku: v.sku || p.sku || '',
+      nome: `${p.nome} — ${v.atributo}: ${v.valor}`,
+      preco_venda: v.preco_venda ?? p.preco_venda,
+      codigo_barras: v.codigo_barras || null,
+      qtd: 1,
+      estoque: Number(v.estoque_qtd) || 0,
+    }));
+  }
+  return [{
+    sku: p.sku || '', nome: p.nome, preco_venda: p.preco_venda,
+    codigo_barras: p.codigo_barras || null, qtd: 1,
+    estoque: Number(p.estoque_qtd) || 0,
+  }];
+}
+
 export function produtoMassaEtiquetas() {
   const sel = produtosSelecionados();
   if (!sel.length) { toast('Nada selecionado.', 'erro'); return; }
-  abrirImpressaoEtiquetas(sel.map(p => ({
-    sku: p.sku || '', nome: p.nome, preco_venda: p.preco_venda,
-    codigo_barras: p.codigo_barras || null, qtd: 1,
-  })));
+  abrirImpressaoEtiquetas(sel.flatMap(itensEtiquetaDoProduto));
 }
 
 export function produtoMassaAtivo(ativo) {
@@ -1680,7 +1698,8 @@ export function produtoImprimirEtiqueta() {
   const codigo_barras = document.getElementById('p-codbarras').value.trim() || null;
   const preco_venda = parseMoneyBR(document.getElementById('p-venda').value) || 0;
   if (!sku) { toast('Informe o SKU antes de imprimir a etiqueta.'); return; }
-  abrirImpressaoEtiquetas([{ sku, nome, preco_venda, codigo_barras, qtd: 1 }]);
+  const estoque = parseInt(document.getElementById('p-estoque')?.value, 10) || 0;
+  abrirImpressaoEtiquetas([{ sku, nome, preco_venda, codigo_barras, qtd: 1, estoque }]);
 }
 
 // ── Salvar ──

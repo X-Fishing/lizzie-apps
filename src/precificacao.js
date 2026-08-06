@@ -710,7 +710,7 @@ export async function loteLancar(btn) {
   // SKU (o modal avisa isso por produto).
   const impressos = payloads.map(p => ({
     sku: p.sku, nome: p.nome, preco_venda: p.preco_venda,
-    codigo_barras: null, qtd: p.estoque_qtd,
+    codigo_barras: null, qtd: p.estoque_qtd, estoque: p.estoque_qtd,
   }));
   toast(`${payloads.length} produto${payloads.length > 1 ? 's' : ''} lançado${payloads.length > 1 ? 's' : ''} no catálogo!`);
   loteRows = [];
