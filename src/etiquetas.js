@@ -1,7 +1,8 @@
 // ═══════════════════════════════════════════════════════════════════
 // Etiquetas Zebra (ZPL) — geração da linguagem de impressão + integração
 // com o Zebra Browser Print (serviço local Windows que enxerga impressoras
-// USB e de rede já cadastradas nele — zebra.com/browserprint).
+// USB e de rede já cadastradas nele — download em zebra.com, Support & Downloads
+// → Printer Software → Browser Print).
 //
 // Por que não window.print(): etiqueta térmica precisa de posicionamento
 // exato em milímetros; o jeito confiável é gerar ZPL e mandar direto pra
@@ -322,7 +323,7 @@ function renderConfigPanel() {
       <div class="sub">Configuração deste computador — vale pra toda impressão de etiqueta até você mudar aqui.</div>
     </div></div>
     <div class="card" style="max-width:420px">
-      ${!temBrowserPrint() ? '<div style="font-size:12.5px;color:var(--warning);margin-bottom:12px">Zebra Browser Print não detectado neste computador. Instale o serviço (zebra.com/browserprint) pra imprimir direto — enquanto isso dá pra usar "Baixar .zpl" na tela de impressão.</div>' : ''}
+      ${!temBrowserPrint() ? `<div style="font-size:12.5px;color:var(--warning);margin-bottom:12px">Zebra Browser Print não detectado neste computador. <a href="https://www.zebra.com/us/en/support-downloads/software/printer-software/browser-print.html" target="_blank" rel="noopener">Instale o serviço</a> pra imprimir direto — enquanto isso dá pra usar "Baixar .zpl" na tela de impressão.</div>` : ''}
       <div class="form-group"><label class="form-label">Impressora</label>
         <select id="etq-cfg-dev" class="form-control">${opcoes}</select></div>
       <div class="form-group"><label class="form-label">Resolução (DPI)</label>
