@@ -144,8 +144,23 @@ export function temBrowserPrint() {
   return typeof window !== 'undefined' && !!window.BrowserPrint;
 }
 
+// Browser Print roda como serviço local (HTTPS numa porta da máquina); se o
+// serviço estiver parado/travado (driver preso, porta bloqueada por
+// firewall...), o SDK às vezes nunca chama nem o callback de sucesso nem o
+// de erro — a Promise fica pendurada pra sempre. Sem isso, o clique "trava"
+// sem NENHUM aviso na tela (parece que não fez nada, e nem sobra erro no
+// console pra investigar). 8s é folgado pro caso normal (a resposta do
+// serviço local é quase instantânea) mas corta o caso travado.
+function comTimeout(promise, ms, msgTimeout) {
+  let venceu = false;
+  return Promise.race([
+    promise.finally(() => { venceu = true; }),
+    new Promise((_, reject) => setTimeout(() => { if (!venceu) reject(new Error(msgTimeout)); }, ms)),
+  ]);
+}
+
 export function listarImpressoras() {
-  return new Promise((resolve, reject) => {
+  const p = new Promise((resolve, reject) => {
     if (!temBrowserPrint()) { reject(new Error('Zebra Browser Print não detectado neste computador.')); return; }
     window.BrowserPrint.getLocalDevices(
       devices => resolve(devices || []),
@@ -153,15 +168,17 @@ export function listarImpressoras() {
       'printer'
     );
   });
+  return comTimeout(p, 8000, 'Zebra Browser Print não respondeu a tempo — o serviço pode estar parado ou travado. Reinicie o Browser Print e tente de novo.');
 }
 
 export function enviarParaImpressora(device, zpl) {
-  return new Promise((resolve, reject) => {
+  const p = new Promise((resolve, reject) => {
     if (!device) { reject(new Error('Nenhuma impressora selecionada.')); return; }
     device.send(zpl,
       () => resolve(true),
       error => reject(new Error(error || 'Erro ao enviar para a impressora.')));
   });
+  return comTimeout(p, 10000, 'A impressora não respondeu a tempo — confira se está ligada, conectada e com papel.');
 }
 
 // ── Fallback: baixa o .zpl para envio manual (Browser Print ausente) ──
@@ -397,6 +414,13 @@ function temTextoVazio() {
   return etqProdutos.some(p => p.texto != null && !p.texto.trim());
 }
 
+// Trava os botões do modal durante o envio pra impressora — feedback
+// imediato (o clique visivelmente "pegou") e evita clique duplo enquanto
+// aguarda o serviço local responder.
+function travarBotoesImpressao(travar) {
+  document.querySelectorAll('#etiquetas-body button').forEach(b => { b.disabled = travar; });
+}
+
 // Preenche cada linha com o estoque atual e já manda pra impressora (1 clique).
 // Itens sem estoque conhecido (texto livre) mantêm a qtd que a pessoa digitou.
 export async function etiquetasUsarEstoque() {
@@ -404,10 +428,12 @@ export async function etiquetasUsarEstoque() {
     toast('Nenhum item desta lista tem estoque conhecido.', 'erro');
     return;
   }
+  travarBotoesImpressao(true); // feedback imediato — o re-render abaixo troca os nós, então trava antes
   etqProdutos.forEach(p => { if (p.estoque != null) p.qtd = p.estoque; });
   renderEtiquetas();
   if (!etqProdutos.reduce((s, p) => s + p.qtd, 0)) {
     toast('Nenhum item com estoque — nada a imprimir.', 'erro');
+    travarBotoesImpressao(false);
     return;
   }
   await etiquetasImprimir();
@@ -420,6 +446,7 @@ export async function etiquetasImprimir() {
   }
   if (temTextoVazio()) { toast('Preencha o texto da etiqueta personalizada (ou remova a linha).', 'erro'); return; }
   if (!etqProdutos.reduce((s, p) => s + p.qtd, 0)) { toast('Nenhuma etiqueta para imprimir.', 'erro'); return; }
+  travarBotoesImpressao(true);
   try {
     const { device, dpi, colunas } = await dispositivoConfigurado();
     const zpl = gerarZPLLote(etqProdutos, { dpi, colunas });
@@ -429,6 +456,7 @@ export async function etiquetasImprimir() {
   } catch (e) {
     console.error('Impressão de etiquetas:', e);
     toast('Erro ao imprimir: ' + e.message, 'erro');
+    travarBotoesImpressao(false);
   }
 }
 
