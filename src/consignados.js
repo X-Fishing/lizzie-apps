@@ -61,8 +61,19 @@ export function sortConsignados(col) {
   renderCicloGrid();
 }
 
+// O botão "Divulgar catálogo" mora no page-head, que é HTML estático, mas
+// quem decide se ele aparece é o render (só a revendedora, e só com maleta
+// ativa). Desligar por padrão aqui e deixar UM único ponto ligando
+// (renderCicloRevendedora) evita que ele sobreviva numa sub-tela — que é o
+// que aconteceria se cada caminho de saída tivesse que lembrar de escondê-lo.
+function setBtnDivulgarTopo(mostrar) {
+  const b = document.getElementById('btn-divulgar-topo');
+  if (b) b.style.display = mostrar ? 'inline-flex' : 'none';
+}
+
 export function renderCicloGrid() {
   const div = document.getElementById('c-list');
+  setBtnDivulgarTopo(false);
   // Sub-telas (conferência/fechamento) renderizam no lugar do catálogo, na
   // largura normal centralizada (mesmo padrão do histórico de ciclos).
   if (confTelaAberta || fechTelaAberta) {
@@ -179,9 +190,9 @@ export function renderCicloRevendedora() {
   let ativos = soAtivos(state.allConsignados);
   if (state.maletaAtivaId) ativos = ativos.filter(c => c.maleta_id === state.maletaAtivaId);
   const temAtivos = ativos.some(c => qtdDisp(c) > 0);
-  const btnDivulgar = temAtivos
-    ? `<button class="btn-primary" style="width:100%;margin-top:16px" onclick="abrirDivulgarMaleta()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Divulgar minha maleta</button>`
-    : '';
+  // Divulgar subiu pro page-head (não fica mais no rodapé, embaixo da tabela
+  // inteira): é a ação mais usada e agora não depende de rolar até o fim.
+  setBtnDivulgarTopo(temAtivos);
   const btnFechamento = temAtivos
     ? `<button class="btn-secondary" style="width:100%;margin-top:10px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</button>`
     : '';
@@ -208,7 +219,7 @@ export function renderCicloRevendedora() {
           : `Nenhuma peça encontrada com "${termo}"`;
       return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>${msgVazio}</p></div>` + historico;
     }
-    return cabecalho + cicloTableHtml(lista, false) + btnDivulgar + btnFechamento + historico;
+    return cabecalho + cicloTableHtml(lista, false) + btnFechamento + historico;
   }
 
   // Sem catálogo ativo: mostra aviso + histórico (se houver), em vez de tabela vazia.
@@ -216,7 +227,7 @@ export function renderCicloRevendedora() {
     return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div><p>Nenhum catálogo ativo no momento</p></div>` + historico;
   }
 
-  return cabecalho + cicloTableHtml(ativos, false) + btnDivulgar + btnFechamento + historico;
+  return cabecalho + cicloTableHtml(ativos, false) + btnFechamento + historico;
 }
 
 export function agruparPorRevendedora() {
@@ -449,6 +460,7 @@ function cicloAdmCardsHtml() {
           <div style="height:100%;width:${Math.min(100, convPct)}%;background:linear-gradient(90deg,var(--rose),var(--gold))"></div>
         </div>
       </div>
+      ${ehGestor() && l.temAtivos ? `<button class="btn-secondary" style="width:100%;margin-top:10px;font-size:12px;padding:7px" onclick="event.stopPropagation();abrirDivulgarMaleta('${l.revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Divulgar</button>` : ''}
     </div>`;
   }).join('');
 }
