@@ -4,6 +4,7 @@ import { state } from './state.js';
 import { sbQ, showMsg, toast, handleSupabaseError, openModal, closeModal, telValido } from './utils.js';
 import { carregarPermissoes, renderSidebar } from './menu.js';
 import { iniciarRoteamento } from './nav.js';
+import { iniciarLembretes } from './lembretes.js';
 export function mostrarRecovery() {
   state.recoveryAtiva = true;
   document.getElementById('splash').style.display = 'none';
@@ -117,6 +118,10 @@ function montarAppUI() {
   const permissoes = ehStaff() ? carregarPermissoes() : Promise.resolve();
   permissoes.then(() => {
     renderSidebar();
+    // Lembretes: só staff, e só DEPOIS das permissões — cada seção do painel
+    // é gated por podeAcessarPanel, que responderia "não" pra tudo se o
+    // conjunto de permissões ainda estivesse vazio.
+    if (ehStaff()) iniciarLembretes();
     // Liga o roteador por hash e resolve a URL atual: se veio de um link
     // direto/F5 (#/produtos), abre aquela tela (com guard de papel); se não,
     // cai no painel inicial permitido. Faz o "voltar" do navegador funcionar.

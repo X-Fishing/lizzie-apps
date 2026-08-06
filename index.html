@@ -325,6 +325,17 @@
   </aside>
 </div>
 
+<!-- LEMBRETES (staff) — irmao de #app de proposito: o @media print ja esconde
+     todo body > * que nao seja #print-overlay, entao o painel some da
+     impressao sem regra nova; e fica fora dos display:none por painel do
+     nav.js. Quem monta e o lembretes.js, so para staff. -->
+<div id="lembretes" style="display:none">
+  <!-- caixa ANTES da bolha: com o wrapper ancorado por baixo, isso mantem a
+       bolha fixa no canto e faz o painel crescer pra cima ao abrir -->
+  <div id="lembretes-box" style="display:none"></div>
+  <button type="button" id="lembretes-bolha" onclick="toggleLembretes()" title="Lembretes"></button>
+</div>
+
 <!-- MODAL NOVA GARANTIA -->
 <div class="modal-overlay" id="modal-garantia" data-lock-outside>
   <div class="modal">

@@ -104,7 +104,7 @@ export async function carregarMaletasTroca() {
 // Info de troca a partir de uma data conhecida. refDate identifica o "ciclo" desta
 // troca (p/ saber se uma resolucao antiga ainda vale) — usa a criacao da maleta,
 // pra funcionar mesmo com data de troca no futuro.
-function infoDaData(dataIso, refDate) {
+export function infoDaData(dataIso, refDate) {
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const prev = new Date(dataIso + 'T00:00:00');
   const dias = Math.round((prev - hoje) / 86400000);
