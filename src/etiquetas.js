@@ -7,13 +7,16 @@
 // exato em milímetros; o jeito confiável é gerar ZPL e mandar direto pra
 // impressora, sem passar pela caixa de diálogo de impressão do navegador.
 //
-// Etiqueta padrão: 30×20mm (calibrado na prática, ver histórico de revisões
+// Etiqueta padrão: 30×15mm (calibrado na prática, ver histórico de revisões
 // abaixo) — código de barras (Code128) + SKU + preço. Sem nome/banho (não
 // cabe). Barcode = codigo_barras do produto, ou o SKU quando não houver (a
 // Entrada de Mercadoria em lote nunca grava codigo_barras — todo lote cai
 // no fallback do SKU). Suporta rolos com várias etiquetas lado a lado
 // (config "Colunas no rolo") — o Browser Print manda ZPL cru, sem passar
-// pelo driver do Windows que normalmente cuidaria disso sozinho.
+// pelo driver do Windows que normalmente cuidaria disso sozinho. Largura e
+// altura da etiqueta são configuráveis em Configurações → Impressora de
+// Etiquetas (ver CFG_KEY) — os defaults abaixo só valem enquanto não há
+// config salva.
 // ═══════════════════════════════════════════════════════════════════
 import { esc, fmtBRL, toast, openModal, closeModal } from './utils.js';
 import { showPanel } from './nav.js';
@@ -22,9 +25,9 @@ const dotsPorMm = dpi => dpi / 25.4;
 const mm = (valorMm, dpi) => Math.round(valorMm * dotsPorMm(dpi));
 
 // Constantes de calibração (em dots, computadas pro dpi da vez). PONTO DE
-// PARTIDA — 30×20mm é apertado (barra + 2 linhas de texto): quase sempre
-// precisa de ajuste fino na etiqueta física, na impressora real. Isso não é
-// bug — é calibração de hardware. Histórico das revisões:
+// PARTIDA — quase sempre precisa de ajuste fino na etiqueta física, na
+// impressora real. Isso não é bug — é calibração de hardware. Histórico das
+// revisões:
 // Rev. 3: a largura da BARRA (Code128) não era limitada pela margem — só o
 // texto do preço era. SKU real (mais longo que o "TESTE-001" do botão de
 // teste) alarga a barra e estoura a direita, MESMO com MARGEM_X maior.
@@ -39,24 +42,31 @@ const mm = (valorMm, dpi) => Math.round(valorMm * dotsPorMm(dpi));
 // (não o módulo/largura: mantém a folga lateral da rev.3). Foi longe demais
 // (7mm) e cortou o preço embaixo.
 // Rev. 6: recuou pra dentro da faixa comprovada segura (a rev.4, terminando
-// em 17.2mm, NÃO cortou; a rev.5, em 18.7mm, cortou — a altura real está
-// entre essas duas). Barra fica 6mm (ganho parcial sobre o original 5.5mm).
-// Aumentar a LARGURA (módulo) não é seguro pro SKU real; avisar quando
-// confirmar a largura física real da etiqueta.
+// em 17.2mm, NÃO cortou; a rev.5, em 18.7mm, cortou — a altura real estava
+// entre essas duas, ~20mm). Barra fica 6mm (ganho parcial sobre o original
+// 5.5mm). Aumentar a LARGURA (módulo) não é seguro pro SKU real.
+// Rev. 7 (2026-08-06): a rev.4-6 foi calibrada num rolo de 1 coluna que
+// era de fato ~20mm. O rolo de 3 colunas medido fisicamente pelo Rondon é
+// 30×15mm — 5mm mais baixo. Comprimida a coluna vertical inteira pra caber
+// nesse limite, com prioridade: preço não pode cortar, código de barras não
+// pode ficar ilegível (se sobrar apertado de novo, cortar da FONTE do
+// SKU/preço antes de cortar da altura da barra — barra ilegível trava
+// leitura de estoque, texto pequeno só incomoda). Ainda é ponto de partida,
+// precisa de confirmação em teste físico.
 function calibracao(dpi) {
   return {
     MARGEM_X: mm(2.5, dpi),      // margem esquerda/direita
-    BARRA_Y: mm(4.5, dpi),       // topo da etiqueta
-    BARRA_ALTURA: mm(6, dpi),    // altura das barras
+    BARRA_Y: mm(3, dpi),         // topo da etiqueta
+    BARRA_ALTURA: mm(4.5, dpi),  // altura das barras
     BARRA_MODULO: 1,             // ^BY — largura do módulo (1 = mais fino)
-    SKU_Y: mm(11, dpi),          // logo abaixo da barra
+    SKU_Y: mm(8, dpi),           // logo abaixo da barra
     SKU_FONTE: 20,               // altura/largura da fonte (dots)
-    PRECO_Y: mm(13.8, dpi),
+    PRECO_Y: mm(10.5, dpi),
     PRECO_FONTE: 26,
     // Etiqueta de texto livre (sem barra) — fonte grande, centralizada,
     // quebra em até 3 linhas. Ponto de partida, mesma lógica de calibração.
-    TEXTO_Y: mm(6, dpi),
-    TEXTO_FONTE: 28,
+    TEXTO_Y: mm(4, dpi),
+    TEXTO_FONTE: 24,
     TEXTO_LINHAS: 3,
   };
 }
@@ -95,7 +105,7 @@ function camposEtiqueta(produto, offsetXdots, larguraColDots, dpi) {
 
 // Gera o ZPL de UMA etiqueta sozinha (produto + quantas cópias, via ^PQ).
 export function gerarZPL(produto, opts = {}) {
-  const { dpi = 203, larguraMm = 30, alturaMm = 20, qtd = 1 } = opts;
+  const { dpi = 203, larguraMm = 30, alturaMm = 15, qtd = 1 } = opts;
   const w = mm(larguraMm, dpi);
   const h = mm(alturaMm, dpi);
   return ['^XA', `^PW${w}`, `^LL${h}`, '^CI28', camposEtiqueta(produto, 0, w, dpi), `^PQ${qtd}`, '^XZ'].join('\n');
@@ -107,7 +117,7 @@ export function gerarZPL(produto, opts = {}) {
 // o layout tem que ser desenhado aqui, à mão. `itens` com menos de
 // `colunas` posições deixa o resto da linha em branco.
 function gerarZPLLinha(itens, opts) {
-  const { dpi = 203, larguraMm = 30, alturaMm = 20, colunas = 1, gapMm = 2 } = opts;
+  const { dpi = 203, larguraMm = 30, alturaMm = 15, colunas = 1, gapMm = 2 } = opts;
   const larguraColDots = mm(larguraMm, dpi);
   const gapDots = mm(gapMm, dpi);
   const w = larguraColDots * colunas + gapDots * (colunas - 1);
