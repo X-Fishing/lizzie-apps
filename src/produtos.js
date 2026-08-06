@@ -1478,11 +1478,13 @@ export function produtoPrecifPreview() {
   document.getElementById('p-prev-sugerido').textContent = fmtBRL(r.precoSugerido);
 }
 
-// Categoria escolhida → preenche o Banho com a milesimagem padrão dela.
+// Categoria escolhida → preenche Banho e Verniz com o padrão dela.
 export function produtoCategoriaBanho() {
   const cat = (cadastroCache.categorias || []).find(c => String(c.id) === String(document.getElementById('p-categoria').value));
-  const el = document.getElementById('p-banho');
-  if (el && cat && Number(cat.banho_padrao)) el.value = Number(cat.banho_padrao);
+  const elBanho = document.getElementById('p-banho');
+  if (elBanho && cat && Number(cat.banho_padrao)) elBanho.value = Number(cat.banho_padrao);
+  const elVerniz = document.getElementById('p-verniz');
+  if (elVerniz && cat && cat.verniz_padrao != null) elVerniz.value = Number(cat.verniz_padrao);
   produtoPrecifPreview();
 }
 
