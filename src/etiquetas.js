@@ -296,7 +296,7 @@ function renderEtiquetasLista() {
   const statusImpressora = !temBrowserPrint()
     ? '<div style="font-size:12.5px;color:var(--warning);margin-bottom:10px">Zebra Browser Print não detectado neste computador. Use "Baixar .zpl" e envie manualmente, ou instale o Browser Print.</div>'
     : temConfig
-      ? `<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Impressora: <b>${esc(cfg.deviceName)}</b> (${cfg.dpi} dpi · ${cfg.colunas || 1} coluna${(cfg.colunas || 1) === 1 ? '' : 's'})</div>`
+      ? `<div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Impressora: <b>${esc(cfg.deviceName)}</b> (${cfg.dpi} dpi · ${cfg.colunas || 1} coluna${(cfg.colunas || 1) === 1 ? '' : 's'} · ${cfg.larguraMm || 30}×${cfg.alturaMm || 15}mm)</div>`
       : `<div style="font-size:12.5px;color:var(--warning);margin-bottom:10px">Nenhuma impressora configurada. <a href="#" onclick="event.preventDefault();closeModal('modal-etiquetas');showPanel('etiquetas-config')">Configurar agora</a>, ou use "Baixar .zpl".</div>`;
 
   return `
@@ -373,6 +373,13 @@ function renderConfigPanel() {
         <select id="etq-cfg-colunas" class="form-control">
           ${[1, 2, 3, 4].map(n => `<option value="${n}" ${(cfg?.colunas || 1) === n ? 'selected' : ''}>${n}${n === 1 ? ' (rolo comum, 1 etiqueta por vez)' : ` (rolo com ${n} etiquetas lado a lado)`}</option>`).join('')}
         </select></div>
+      <div style="display:flex;gap:10px">
+        <div class="form-group" style="flex:1"><label class="form-label">Largura da etiqueta (mm)</label>
+          <input type="number" id="etq-cfg-largura" class="form-control" step="0.1" min="1" value="${cfg?.larguraMm ?? 30}"></div>
+        <div class="form-group" style="flex:1"><label class="form-label">Altura da etiqueta (mm)</label>
+          <input type="number" id="etq-cfg-altura" class="form-control" step="0.1" min="1" value="${cfg?.alturaMm ?? 15}"></div>
+      </div>
+      <div style="font-size:11.5px;color:var(--muted);margin:-4px 0 10px">Meça a etiqueta física (uma coluna) — o tamanho errado é o que mais corta ou desalinha a impressão.</div>
       <button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="etiquetasListarImpressoras()">Atualizar lista</button>
       <button class="btn-primary" style="width:100%;margin-bottom:10px" onclick="etiquetasConfigSalvar()">Salvar</button>
       <div style="display:flex;gap:10px">
@@ -386,8 +393,10 @@ export function etiquetasConfigSalvar() {
   const deviceName = document.getElementById('etq-cfg-dev')?.value || '';
   const dpi = Number(document.getElementById('etq-cfg-dpi')?.value) || 203;
   const colunas = Number(document.getElementById('etq-cfg-colunas')?.value) || 1;
+  const larguraMm = Number(document.getElementById('etq-cfg-largura')?.value) || 30;
+  const alturaMm = Number(document.getElementById('etq-cfg-altura')?.value) || 15;
   if (!deviceName) { toast('Selecione uma impressora.', 'erro'); return; }
-  salvarCfgImpressora({ deviceName, dpi, colunas });
+  salvarCfgImpressora({ deviceName, dpi, colunas, larguraMm, alturaMm });
   toast('Impressora configurada.', 'erro');
 }
 
@@ -397,7 +406,7 @@ async function dispositivoConfigurado() {
   const lista = etqImpressoras.length ? etqImpressoras : await listarImpressoras();
   const device = lista.find(d => d.name === cfg.deviceName);
   if (!device) throw new Error('Impressora configurada não foi encontrada — reconfigure.');
-  return { device, dpi: cfg.dpi, colunas: cfg.colunas || 1 };
+  return { device, dpi: cfg.dpi, colunas: cfg.colunas || 1, larguraMm: cfg.larguraMm || 30, alturaMm: cfg.alturaMm || 15 };
 }
 
 export async function etiquetasTeste() {
@@ -405,13 +414,15 @@ export async function etiquetasTeste() {
     const deviceName = document.getElementById('etq-cfg-dev')?.value;
     const dpi = Number(document.getElementById('etq-cfg-dpi')?.value) || 203;
     const colunas = Number(document.getElementById('etq-cfg-colunas')?.value) || 1;
+    const larguraMm = Number(document.getElementById('etq-cfg-largura')?.value) || 30;
+    const alturaMm = Number(document.getElementById('etq-cfg-altura')?.value) || 15;
     if (!deviceName) { toast('Selecione uma impressora.', 'erro'); return; }
     const lista = etqImpressoras.length ? etqImpressoras : await listarImpressoras();
     const device = lista.find(d => d.name === deviceName);
     if (!device) { toast('Impressora não encontrada.', 'erro'); return; }
     // Testa com `colunas` cópias — valida o layout lado a lado de uma vez.
     const testes = Array.from({ length: colunas }, () => ({ sku: 'TESTE-001', nome: 'Etiqueta de teste', preco_venda: 9.9, codigo_barras: null }));
-    const zpl = gerarZPLLote(testes, { dpi, colunas });
+    const zpl = gerarZPLLote(testes, { dpi, colunas, larguraMm, alturaMm });
     await enviarParaImpressora(device, zpl);
     toast('Etiqueta de teste enviada!', 'erro');
   } catch (e) {
@@ -458,8 +469,8 @@ export async function etiquetasImprimir() {
   if (!etqProdutos.reduce((s, p) => s + p.qtd, 0)) { toast('Nenhuma etiqueta para imprimir.', 'erro'); return; }
   travarBotoesImpressao(true);
   try {
-    const { device, dpi, colunas } = await dispositivoConfigurado();
-    const zpl = gerarZPLLote(etqProdutos, { dpi, colunas });
+    const { device, dpi, colunas, larguraMm, alturaMm } = await dispositivoConfigurado();
+    const zpl = gerarZPLLote(etqProdutos, { dpi, colunas, larguraMm, alturaMm });
     await enviarParaImpressora(device, zpl);
     toast('Etiquetas enviadas para a impressora!', 'erro');
     closeModal('modal-etiquetas');
@@ -474,7 +485,7 @@ export function etiquetasBaixarZpl() {
   if (temTextoVazio()) { toast('Preencha o texto da etiqueta personalizada (ou remova a linha).', 'erro'); return; }
   if (!etqProdutos.reduce((s, p) => s + p.qtd, 0)) { toast('Nenhuma etiqueta para imprimir.', 'erro'); return; }
   const cfg = carregarCfgImpressora();
-  const zpl = gerarZPLLote(etqProdutos, { dpi: cfg?.dpi || 203, colunas: cfg?.colunas || 1 });
+  const zpl = gerarZPLLote(etqProdutos, { dpi: cfg?.dpi || 203, colunas: cfg?.colunas || 1, larguraMm: cfg?.larguraMm || 30, alturaMm: cfg?.alturaMm || 15 });
   baixarZPL(`etiquetas-${Date.now()}`, zpl);
   toast('Arquivo .zpl baixado.', 'erro');
 }
