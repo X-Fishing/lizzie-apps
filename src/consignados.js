@@ -511,11 +511,18 @@ export function renderCicloAdminDetalhe(revId, list) {
   // Ações em evidência no topo do card (perto do "Vendido R$ ..."):
   // Link da maleta + Finalizar Mostruário. O rodapé fica só com
   // "Atualizar itens da maleta" e "Excluir maleta aguardando".
-  const acoesTopo = ehGestor()
-    ? `<div class="btn-group" style="margin-bottom:14px">
-        <button class="btn btn-outline" onclick="abrirDivulgarMaleta('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link da maleta</button>
-        ${temAtivos ? `<button class="btn btn-primary" onclick="abrirConferencia('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar Mostruário</button>` : ''}
-      </div>`
+  // "Imprimir vendidas" é só leitura, então vale pra qualquer staff que já
+  // enxergue a tela — a permissão do painel é o gate. As outras seguem em
+  // ehGestor() por serem ações que mexem em dado.
+  const btnImprimirVendidas = ativos.some(foiVendida)
+    ? `<button class="btn btn-outline" onclick="imprimirVendidasMaleta('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Imprimir vendidas</button>`
+    : '';
+  const acoesGestor = ehGestor()
+    ? `<button class="btn btn-outline" onclick="abrirDivulgarMaleta('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link da maleta</button>
+        ${temAtivos ? `<button class="btn btn-primary" onclick="abrirConferencia('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar Mostruário</button>` : ''}`
+    : '';
+  const acoesTopo = (acoesGestor || btnImprimirVendidas)
+    ? `<div class="btn-group" style="margin-bottom:14px">${acoesGestor}${btnImprimirVendidas}</div>`
     : '';
   const acoes = ehGestor()
     ? `<div class="btn-group" style="margin-top:12px">
@@ -1648,6 +1655,70 @@ export function imprimirRelacaoVendidas() {
         <div style="flex:1;border-top:1px solid #c9b8c4;padding-top:8px;font-size:11.5px;color:#9a8aa0;text-align:center">Assinatura da revendedora</div>
         <div style="flex:1;border-top:1px solid #c9b8c4;padding-top:8px;font-size:11.5px;color:#9a8aa0;text-align:center">Assinatura Lizzie Semijoias</div>
       </div>
+    </div>`;
+
+  document.getElementById('print-overlay').classList.add('show');
+  setTimeout(() => window.print(), 300);
+}
+
+// Relação SÓ das peças vendidas, impressa direto da grid do desk — sem
+// precisar entrar no fechamento. Documento diferente do imprimirRelacaoVendidas
+// acima, de propósito:
+//   - lá o critério é `!c.devolvido` (veredito da conferência FÍSICA, só existe
+//     dentro dela); aqui é `foiVendida` = venda registrada no app.
+//   - lá a quantidade é a ENVIADA (a peça inteira voltou ou não voltou); aqui é
+//     a VENDIDA (o ciclo continua aberto, pode ter vendido parte).
+//   - aqui não vai comissão nem assinatura: é uma parcial de meio de ciclo,
+//     não um acerto fechado.
+export function imprimirVendidasMaleta(revId) {
+  const lista = state.allConsignados.filter(c => c.revendedora_id === revId);
+  const { ativos } = statsRevendedora(lista);
+  // Ignora de propósito a busca/filtros da tela: o papel é a relação completa
+  // do que foi vendido, não um recorte do que estava filtrado na hora.
+  const vendidas = ativos.filter(foiVendida);
+  if (!vendidas.length) { toast('Nenhuma peça vendida para imprimir.'); return; }
+
+  const nome = state.revNameMap[revId] || 'Revendedora';
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const unidades = vendidas.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+  const total = vendidas.reduce((s, c) => s + (c.quantidade_vendida || 0) * Number(c.preco_venda || 0), 0);
+
+  const th = (txt, al) => `<th style="padding:10px 14px;text-align:${al};font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:600;color:#6d2947">${txt}</th>`;
+  const linhas = vendidas.map(c => {
+    const qtd = c.quantidade_vendida || 0;
+    const sub = qtd * Number(c.preco_venda || 0);
+    return `<tr style="border-bottom:1px solid #f0e8ee">
+      <td style="padding:9px 14px;font-size:11.5px;color:#9a8aa0;font-family:'DM Mono',monospace">${esc(c.referencia || '—')}</td>
+      <td style="padding:9px 14px;font-size:12.5px;color:#2d1f35">${esc(c.descricao)}</td>
+      <td style="padding:9px 14px;text-align:center;font-size:12.5px">${qtd}</td>
+      <td style="padding:9px 14px;text-align:right;font-size:12.5px;color:#6a5a70">${c.preco_venda ? 'R$ ' + Number(c.preco_venda).toFixed(2) : '—'}</td>
+      <td style="padding:9px 14px;text-align:right;font-size:12.5px;font-weight:600;color:#2d1f35">R$ ${sub.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('print-content').innerHTML = `
+    <div style="font-family:'DM Sans',Arial,sans-serif;color:#2d1f35;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #6d2947;padding-bottom:16px;margin-bottom:18px">
+        <div>
+          <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#c9748a;font-weight:600;margin-bottom:7px">Lizzie Semijoias</div>
+          <h1 style="font-family:'Cormorant Garamond',Georgia,serif;font-size:30px;font-weight:600;margin:0;line-height:1">Peças Vendidas</h1>
+        </div>
+        <div style="text-align:right;font-size:12px;color:#9a8aa0">
+          <div style="font-size:14px;color:#2d1f35;font-weight:600">${esc(nome)}</div>
+          <div style="margin-top:3px">${hoje}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:28px;margin-bottom:20px;font-size:12.5px">
+        <span style="color:#9a8aa0">Itens <strong style="color:#2d1f35;font-size:14px">${vendidas.length}</strong></span>
+        <span style="color:#9a8aa0">Unidades <strong style="color:#2d1f35;font-size:14px">${unidades}</strong></span>
+        <span style="color:#9a8aa0">Total <strong style="color:#a03a5d;font-size:14px">R$ ${total.toFixed(2)}</strong></span>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#faf3f6;border-bottom:2px solid #e8d8e2;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+          ${th('Código', 'left')}${th('Descrição', 'left')}${th('Qtd', 'center')}${th('Preço', 'right')}${th('Subtotal', 'right')}
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
     </div>`;
 
   document.getElementById('print-overlay').classList.add('show');
