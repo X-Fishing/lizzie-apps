@@ -4,6 +4,19 @@ import { state } from './state.js';
 import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 import { abrirModalPosVenda } from './pos-venda.js';
+
+const IC_OLHO = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" width="15" height="15"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>';
+
+// Total vendido no ciclo fica escondido por padrão (é valor sensível do
+// negócio) — só aparece enquanto a pessoa segura o clique no olhinho.
+// Não usa estado em módulo: lê/escreve direto no elemento, então funciona
+// mesmo que o card seja re-renderizado entre o mousedown e o mouseup.
+export function cicloValorVisivel(mostrar) {
+  const el = document.getElementById('ciclo-total-valor');
+  if (!el) return;
+  el.textContent = mostrar ? el.dataset.valor : '•••••';
+}
+
 export async function loadConsignados() {
   confTelaAberta = false; fechTelaAberta = false;
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
@@ -459,8 +472,13 @@ export function renderCicloAdmin() {
 
   return `<button class="btn-secondary" style="width:100%;margin-bottom:14px;border-color:var(--rose);color:var(--rose)" onclick="openBuscaPeca()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar peça — com quem está</button>
     <div style="background:linear-gradient(135deg,#1a0a2e,#5a2a44);border-radius:16px;padding:20px;color:#fff;margin-bottom:14px">
-      <div style="font-size:12px;opacity:.8;text-transform:uppercase;letter-spacing:.5px">Total vendido no ciclo</div>
-      <div style="font-family:'Cormorant Garamond',serif;font-size:40px;line-height:1.1;margin-top:4px">${fmtBRL(grandTotal)}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="font-size:12px;opacity:.8;text-transform:uppercase;letter-spacing:.5px">Total vendido no ciclo</div>
+        <button type="button" title="Segure pra ver o valor" style="background:none;border:none;padding:2px;cursor:pointer;color:rgba(255,255,255,.65);display:inline-flex;line-height:0"
+          onmousedown="cicloValorVisivel(true)" onmouseup="cicloValorVisivel(false)" onmouseleave="cicloValorVisivel(false)"
+          ontouchstart="event.preventDefault();cicloValorVisivel(true)" ontouchend="cicloValorVisivel(false)" ontouchcancel="cicloValorVisivel(false)">${IC_OLHO}</button>
+      </div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:40px;line-height:1.1;margin-top:4px" id="ciclo-total-valor" data-valor="${fmtBRL(grandTotal)}">•••••</div>
       <div style="font-size:12px;opacity:.8;margin-top:4px">${totalRevsAtivas} revendedora${totalRevsAtivas!==1?'s':''} ativa${totalRevsAtivas!==1?'s':''}</div>
     </div>
     <div class="kpi-grid" style="margin-bottom:14px">
