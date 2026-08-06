@@ -84,6 +84,11 @@ export function montarPixCopiaECola({ chave, nome, cidade, valor, txid }) {
 // ═══════════════════════════════════════════════════════════════════
 let recCtx = null; // { fech, saldo, jaRecebido, teste, pixCola }
 
+// Acima disso o excedente pede um 2º clique (protege de erro de digitação);
+// abaixo, passa direto — é a faixa do arredondamento do dia a dia.
+const TOLERANCIA_EXCEDENTE = 5;
+let recExcedenteConfirmado = false;
+
 // Chamado ao FECHAR o modal de recebimento pelo X/Esc: avisa se ainda há
 // saldo a receber (recebimento obrigatório — não some sem registrar).
 export function avisarRecebimentoPendente() {
@@ -112,6 +117,7 @@ export async function abrirRecebimento(fechamentoId) {
   const saldo = r2(Number(f.valor_a_receber) - jaRecebido);
   const teste = ehRevTeste(f.revendedora_id);
   recCtx = { fech: f, saldo, jaRecebido, teste, pixCola: '' };
+  recExcedenteConfirmado = false;
 
   const body = document.getElementById('recebimento-body');
   const quitado = saldo <= 0.001;
@@ -223,7 +229,15 @@ export function recRecalc() {
     elR.textContent = fmtBRL(Math.max(0, rest));
     elR.style.color = rest < -0.001 ? 'var(--danger)' : 'var(--rose)';
   }
-  if (rest < -0.001) toast('Recebido maior que o valor a receber — confira os valores.');
+  // Mexeu nos valores: a confirmação do excedente e o botão voltam ao normal.
+  recExcedenteConfirmado = false;
+  const btnReg = document.querySelector('#modal-recebimento .btn-primary');
+  if (btnReg && btnReg.style.background) {
+    btnReg.style.background = '';
+    btnReg.innerHTML = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Registrar recebimento';
+  }
+  // Aviso, não trava: receber a mais é permitido (arredondamento acontece).
+  if (rest < -0.001) toast(`Recebido ${fmtBRL(-rest)} a mais que o valor a receber — permitido, só confira.`);
   // regenera o QR com debounce (não a cada tecla)
   clearTimeout(qrTimer);
   qrTimer = setTimeout(atualizarQrPix, 300);
@@ -265,7 +279,22 @@ export async function registrarRecebimento(btn) {
   })).filter(e => e.valor > 0);
   const agora = r2(entradas.reduce((s, e) => s + e.valor, 0));
   if (agora <= 0) { toast('Informe ao menos um pagamento com valor.'); return; }
-  if (agora > recCtx.saldo + 0.001) { toast('Recebido maior que o restante a receber — confira.'); return; }
+
+  // Receber A MAIS é permitido: arredondamento pra cima/baixo acontece o tempo
+  // todo e ninguém controla (a revendedora manda um PIX redondo). O que vale é
+  // gravar o valor REAL recebido — é ele que bate na conciliação bancária.
+  // A sobra não vira crédito: a maleta fecha quitada e a diferença aparece no
+  // aviso, pra não inventar saldo que ninguém pediu pra controlar.
+  const excedente = r2(agora - recCtx.saldo);
+  // Trava só pro caso de dedo gordo (526000 no lugar de 526,00) — não bloqueia,
+  // pede um segundo clique. Arredondamento normal nunca chega perto disso.
+  if (excedente > TOLERANCIA_EXCEDENTE && !recExcedenteConfirmado) {
+    recExcedenteConfirmado = true;
+    btn.innerHTML = `Confirmar ${fmtBRL(excedente)} a mais — clique de novo`;
+    btn.style.background = 'var(--warning)';
+    toast(`Recebido ${fmtBRL(excedente)} acima do valor a receber. Clique de novo pra confirmar.`);
+    return;
+  }
 
   // Vencimento do restante: obrigatório, hoje até hoje+15 dias.
   const restante = r2(recCtx.saldo - agora);
@@ -304,7 +333,9 @@ export async function registrarRecebimento(btn) {
 
   toast(restante > 0.001
     ? `Recebimento registrado! Restam ${fmtBRL(restante)} a receber.`
-    : 'Recebimento registrado — maleta quitada!');
+    : excedente > 0.001
+      ? `Recebimento registrado — maleta quitada com ${fmtBRL(excedente)} a mais (arredondamento).`
+      : 'Recebimento registrado — maleta quitada!');
   if (restante > 0.001) abrirRecebimento(f.id); // reabre atualizado p/ conferência
   else closeModal('modal-recebimento');
 }
