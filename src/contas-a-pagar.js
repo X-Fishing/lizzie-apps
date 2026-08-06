@@ -275,7 +275,9 @@ function capLinhaHtml(t) {
   const pagoCel = cancel
     ? `<span class="badge badge-entregue">Cancelado</span>`
     : `<label class="cap-switch"><input type="checkbox" ${t.status === 'pago' ? 'checked' : ''} ${!ehGestor() ? 'disabled' : ''} onchange="capTogglePago('${t.id}',this.checked)"><span></span></label>`;
-  return `<tr class="cap-row${cancel ? ' cap-cancelada' : ''}" data-id="${t.id}">
+  // cap-st-* pinta a linha por status (aberto/pago/atrasado/cancelado). Antes
+  // só o vencido tinha cor — os outros estados ficavam visualmente iguais.
+  return `<tr class="cap-row cap-st-${ef}${cancel ? ' cap-cancelada' : ''}" data-id="${t.id}">
     <td class="ciclo-td" style="width:26px"><button class="cap-chevron${aberto ? ' aberto' : ''}" onclick="capToggleDetalhe('${t.id}')" title="Detalhes">${IC_CHEV}</button></td>
     <td class="ciclo-td"><input type="date" class="cap-inp${ef === 'atrasado' ? ' cap-atrasada' : ''}" value="${esc(t.vencimento || '')}" ${dis} onchange="capCampoChange('${t.id}','vencimento',this)"></td>
     <td class="ciclo-td"><input type="text" class="cap-inp" style="min-width:130px" value="${esc(t.descricao || '')}" ${dis} onchange="capCampoChange('${t.id}','descricao',this)">${temDet ? '<span class="cap-dot" title="tem observação/boleto"></span>' : ''}${t.parcela_total ? `<span style="font-size:10px;color:var(--muted);margin-left:5px" title="${t.recorrencia === 'parcelado' ? 'parcela' : 'recorrência'} ${t.parcela_num}/${t.parcela_total}">${t.parcela_num}/${t.parcela_total}</span>` : ''}</td>
@@ -436,7 +438,14 @@ export async function capCampoChange(id, campo, el) {
 
   if (campo === 'vencimento') {
     if (el.value.slice(0, 7) !== capMes) { toast('Movido para outro mês.'); capRenderGrid(); return; }
-    el.classList.toggle('cap-atrasada', statusEfetivo(t) === 'atrasado');
+    const ef = statusEfetivo(t);
+    el.classList.toggle('cap-atrasada', ef === 'atrasado');
+    // A cor da LINHA também depende do vencimento (aberto ⇄ atrasado) — sem
+    // isso a faixa lateral ficava com o status antigo até recarregar.
+    const tr = el.closest('tr.cap-row');
+    if (tr) {
+      ['aberto', 'pago', 'atrasado', 'cancelado'].forEach(s => tr.classList.toggle('cap-st-' + s, s === ef));
+    }
   }
 }
 

@@ -156,14 +156,18 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .topbar-crumb .crumb-grp { color: rgba(255,255,255,0.55); }
 .topbar-crumb .crumb-sep { color: rgba(255,255,255,0.3); }
 .topbar-crumb .crumb-cur { color: var(--gold); font-weight: 500; }
+/* Padrão = fundo CLARO (a esmagadora maioria dos usos: grids, modais,
+   toolbars). O branco vale só na topbar escura — quando era o contrário, todo
+   .btn-icon novo fora dela nascia invisível (branco no branco) e só aparecia
+   no hover, que foi exatamente o que aconteceu com as setas de mês do Contas
+   a Pagar e com o remover do modal de etiquetas. */
 .btn-icon {
-  background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.5);
+  background: none; border: none; cursor: pointer; color: var(--muted);
   font-size: 18px; padding: 4px; transition: color 0.3s;
 }
-.btn-icon:hover { color: var(--gold); }
-/* No grid claro do Contas a Pagar o branco do .btn-icon some — usa muted. */
-.cap-grid-table .btn-icon { color: var(--muted); }
-.cap-grid-table .btn-icon:hover { color: var(--rose); }
+.btn-icon:hover { color: var(--rose); }
+.topbar .btn-icon { color: rgba(255,255,255,0.5); }
+.topbar .btn-icon:hover { color: var(--gold); }
 
 /* NAV */
 .nav {
@@ -911,6 +915,20 @@ textarea.form-control { resize: vertical; min-height: 80px; }
 select.cap-inp { cursor:pointer; }
 .cap-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--rose); vertical-align:middle; margin-left:2px; }
 .cap-cancelada .cap-inp { opacity:.55; }
+
+/* Cor por status: faixa na 1ª célula + tom do valor. Faixa em vez de fundo
+   na linha inteira porque a grid é editável — fundo forte brigaria com o
+   estado de foco dos campos. Cor sozinha não basta pra acessibilidade, então
+   cada estado tem também um reforço não-cromático (peso, opacidade ou
+   tachado), e o rótulo textual continua no chip/switch. */
+.cap-row > td:first-child { border-left:3px solid transparent; }
+.cap-st-aberto    > td:first-child { border-left-color:var(--gold); }
+.cap-st-pago      > td:first-child { border-left-color:var(--success); }
+.cap-st-atrasado  > td:first-child { border-left-color:var(--danger); }
+.cap-st-cancelado > td:first-child { border-left-color:var(--muted); }
+.cap-st-pago .cap-inp.cap-valor { color:var(--success); font-weight:600; }
+.cap-st-atrasado .cap-inp.cap-valor { color:var(--danger); font-weight:600; }
+.cap-st-cancelado .cap-inp { text-decoration:line-through; }
 .cap-chevron { background:none; border:none; cursor:pointer; color:var(--muted); padding:2px; display:inline-flex; transition:transform .15s; }
 .cap-chevron.aberto { transform:rotate(90deg); }
 .cap-switch { position:relative; display:inline-block; width:38px; height:22px; }

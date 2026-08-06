@@ -68,6 +68,9 @@ Branches abertas: `feat/redesign-fase0`, `fase1`, `fase2`, `fase3`. **Fase 4** (
 **Decisão a registrar no plano:** *fluxo denso = tela inteira, não modal.* Fechamento e Conferência já foram convertidos. Faltam converter, **cada um dentro da fase que já vai tocar o módulo** (para não conflitar com as branches abertas): `modal-bling`, `modal-detalhe-venda`, `modal-recebimento`, `modal-maleta`, `modal-divulgar`, `modal-detalhe-rev`.
 **Continuam modais (corretos assim):** `confirma`, `install`, `foto-perfil`, `busca-peca`, `busca-produto`, `scanner`, `pos-venda`.
 
+### 4-B. RODAR: `0048_financeiro_anexos.sql` (06/08/2026)
+Cria `financeiro_anexos` — comprovantes de pagamento em Contas a Receber, **vários por lançamento** (um acerto costuma ser pago em mais de um PIX). Reaproveita o bucket privado `documentos` da 0026, sem bucket nem policy de storage nova. Enquanto não rodar, a tela **funciona normal** e só não mostra os comprovantes (o erro cai num `console.warn`, não quebra o financeiro).
+
 ### 4-A. RODAR: `0047_produtos_delete_admin.sql` (04/08/2026)
 A grid de Produtos ganhou **exclusão em massa**, e o botão de excluir (linha e barra de massa) só aparece pro **admin**. Isso é trava de **UI** — a policy de delete de `produtos`/`produto_variacoes` ainda é `is_gestor()`, então **func_completo consegue apagar chamando a API direto**. A migração 0047 troca essa policy pra `is_admin()`. O `produtos-schema.sql` já foi alinhado junto (um re-run dele não reabre o delete).
 

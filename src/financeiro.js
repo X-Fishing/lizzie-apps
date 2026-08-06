@@ -327,6 +327,7 @@ async function insLanc(rows) {
 let finLancamentos = [];
 let finTelefones = {};   // pessoa_id -> telefone (para o WhatsApp de cobrança)
 let finChavePix = '';
+let finAnexos = {};      // lancamento_id -> [anexos] (comprovantes de pagamento)
 
 export async function loadFinanceiro() {
   const panel = document.getElementById('panel-financeiro');
@@ -359,6 +360,17 @@ export async function loadFinanceiro() {
     finChavePix = cRes.data?.chave_pix || '';
   }
 
+  // Comprovantes (migração 0048). Se a tabela ainda não existir, a tela segue
+  // funcionando sem os anexos em vez de quebrar o financeiro inteiro.
+  finAnexos = {};
+  const idsLanc = finLancamentos.map(l => l.id);
+  if (idsLanc.length) {
+    const { data: anx, error: eAnx } = await sbQ(sb.from('financeiro_anexos')
+      .select('*').in('lancamento_id', idsLanc).order('created_at'));
+    if (eAnx) console.warn('Comprovantes indisponíveis (rode a migração 0048):', eAnx.message);
+    for (const a of (anx || [])) (finAnexos[a.lancamento_id] ||= []).push(a);
+  }
+
   const hoje = hojeISO();
   const refLinha = l => `${fmtMostruario(l)}${l.fechamento_data ? ' · Fechado em ' + formatDate(l.fechamento_data) : ''}${l.fechamento_id ? ` · <span title="${esc(l.fechamento_id)}" style="font-family:monospace">id ${idAbrev(l.fechamento_id)}</span>` : ''}`;
 
@@ -388,13 +400,14 @@ export async function loadFinanceiro() {
       <td class="ciclo-td">${esc(l.pessoa_nome || '—')}</td>
       <td class="ciclo-td">${l.forma_pagamento ? `<span class="badge badge-ativo" style="font-size:10px">${esc(l.forma_pagamento)}</span>` : '<span style="color:var(--muted)">—</span>'}</td>
       <td class="ciclo-td" style="text-align:right"><span class="ciclo-preco" ${l.estornado ? 'style="text-decoration:line-through"' : ''}>${fmtBRL(l.valor)}</span></td>
+      <td class="ciclo-td" style="white-space:nowrap">${btnComprovantes(l)}</td>
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         ${l.pago && !l.estornado && l.tipo === 'receber' && podeEstornar()
           ? `<button class="btn-icon" title="Estornar recebimento" style="color:var(--danger)" onclick="estornarRecebimento('${l.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>` : ''}
         ${IS_ADMIN ? `<button class="btn-icon" title="Excluir lançamento" style="color:var(--danger)" onclick="excluirLancamento('${l.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>` : ''}
       </td>
     </tr>`).join('') :
-    '<tr><td colspan="6"><div class="empty-state" style="padding:18px 0"><p style="font-size:13px">Nenhum recebimento ainda — feche uma maleta para começar.</p></div></td></tr>';
+    '<tr><td colspan="7"><div class="empty-state" style="padding:18px 0"><p style="font-size:13px">Nenhum recebimento ainda — feche uma maleta para começar.</p></div></td></tr>';
 
   panel.innerHTML = `
     <div class="page-head">
@@ -416,8 +429,128 @@ export async function loadFinanceiro() {
     <div style="font-size:13px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:8px 0">Recebidos</div>
     <div class="pag-wrap"><table class="pag-table"><thead><tr>
       <th class="pag-th">Data</th><th class="pag-th">Descrição</th><th class="pag-th">Pessoa</th>
-      <th class="pag-th">Forma</th><th class="pag-th" style="text-align:right">Valor</th><th class="pag-th"></th>
-    </tr></thead><tbody>${rowsRec}</tbody></table></div>`;
+      <th class="pag-th">Forma</th><th class="pag-th" style="text-align:right">Valor</th>
+      <th class="pag-th">Comprovante</th><th class="pag-th"></th>
+    </tr></thead><tbody>${rowsRec}</tbody></table></div>
+    <input type="file" id="fin-comp-file" accept="application/pdf,image/*" multiple style="display:none" onchange="finCompUpload(this)">`;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// COMPROVANTES DE PAGAMENTO (bucket privado 'documentos', tabela
+// financeiro_anexos — migração 0048). Vários por lançamento: um acerto de
+// maleta costuma ser pago em mais de um PIX, cada um com seu comprovante.
+// ═══════════════════════════════════════════════════════════════════
+const IC_CLIP_FIN = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
+const MAX_COMP_MB = 10;
+
+let finCompLancId = null;   // lançamento cujo modal de comprovantes está aberto
+
+// Botão da grid — sempre visível, com a contagem. Sem anexo mostra "Anexar"
+// (o pedido era um botão que se enxergue, não um clipe escondido).
+function btnComprovantes(l) {
+  const n = (finAnexos[l.id] || []).length;
+  return `<button class="btn-secondary btn-sm" onclick="finCompAbrir('${l.id}')"
+    title="${n ? `${n} comprovante(s) — clique para ver` : 'Anexar comprovante de pagamento'}">
+    ${IC_CLIP_FIN} ${n ? `${n} comprovante${n > 1 ? 's' : ''}` : 'Anexar'}</button>`;
+}
+
+export function finCompAbrir(lancId) {
+  finCompLancId = lancId;
+  renderComprovantes();
+  openModal('modal-comprovantes');
+}
+
+function renderComprovantes() {
+  const body = document.getElementById('comprovantes-body');
+  if (!body) return;
+  const l = finLancamentos.find(x => String(x.id) === String(finCompLancId));
+  const lista = finAnexos[finCompLancId] || [];
+  const linhas = lista.map(a => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+      <button class="btn-link" style="flex:1;text-align:left;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+        onclick="finCompAbrirArquivo('${a.id}')" title="${esc(a.nome)}">${IC_CLIP_FIN} ${esc(a.nome)}</button>
+      <span style="font-size:11px;color:var(--muted);white-space:nowrap">${formatDate(a.created_at)}</span>
+      ${ehGestor() ? `<button class="btn-icon" style="color:var(--danger)" title="Remover" onclick="finCompRemover('${a.id}')">${IC_TRASH_REC}</button>` : ''}
+    </div>`).join('');
+
+  body.innerHTML = `
+    <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">
+      ${esc(l?.pessoa_nome || l?.descricao || '')} · ${l ? fmtBRL(l.valor) : ''}</div>
+    <div style="max-height:44vh;overflow-y:auto;margin-bottom:12px">
+      ${linhas || '<div style="padding:10px 0;color:var(--muted);font-size:13px">Nenhum comprovante anexado ainda.</div>'}
+    </div>
+    ${ehGestor()
+      ? `<button class="btn-primary" style="width:100%" onclick="finCompEscolher()">${IC_CLIP_FIN} Adicionar comprovante</button>
+         <div style="font-size:11px;color:var(--muted);margin-top:6px;text-align:center">PDF ou imagem, até ${MAX_COMP_MB} MB cada. Dá para escolher vários de uma vez.</div>`
+      : '<div style="font-size:12px;color:var(--muted)">Só gestor/admin pode anexar ou remover.</div>'}`;
+}
+
+export function finCompEscolher() {
+  const inp = document.getElementById('fin-comp-file');
+  if (!inp) return;
+  inp.value = '';
+  inp.click();
+}
+
+export async function finCompUpload(inp) {
+  const arquivos = [...(inp.files || [])];
+  if (!arquivos.length || !finCompLancId) return;
+  const lancId = finCompLancId;
+
+  const grandes = arquivos.filter(f => f.size > MAX_COMP_MB * 1024 * 1024);
+  if (grandes.length) { toast(`Arquivo maior que ${MAX_COMP_MB} MB: ${grandes[0].name}`); return; }
+
+  toast(`Enviando ${arquivos.length} arquivo(s)...`);
+  let enviados = 0;
+  for (const file of arquivos) {
+    // Nome único: o mesmo comprovante pode ser anexado em lançamentos diferentes.
+    const ext = (file.name.split('.').pop() || 'bin').toLowerCase();
+    const path = `comprovantes/${lancId}/${Date.now()}_${enviados}.${ext}`;
+    const { error: upErr } = await sb.storage.from('documentos').upload(path, file);
+    if (upErr) { console.error('Upload comprovante:', upErr); await handleSupabaseError(upErr, `Erro ao enviar "${file.name}"`); break; }
+
+    const { data, error } = await sbQ(sb.from('financeiro_anexos').insert({
+      lancamento_id: lancId, path, nome: file.name, tamanho: file.size,
+      created_by: state.currentUser?.id || null,
+    }).select('*').single());
+    if (error) {
+      // Gravou no storage mas não no banco: desfaz pra não deixar órfão.
+      console.error('Salvar comprovante:', error);
+      try { await sb.storage.from('documentos').remove([path]); } catch { /* best-effort */ }
+      await handleSupabaseError(error, 'Erro ao salvar o comprovante');
+      break;
+    }
+    (finAnexos[lancId] ||= []).push(data);
+    enviados++;
+  }
+
+  if (enviados) toast(`${enviados} comprovante(s) anexado(s).`);
+  renderComprovantes();
+  loadFinanceiro();   // atualiza a contagem no botão da grid
+}
+
+export async function finCompAbrirArquivo(anexoId) {
+  const a = Object.values(finAnexos).flat().find(x => String(x.id) === String(anexoId));
+  if (!a) return;
+  // Bucket é privado — abre por URL assinada temporária (1h).
+  const { data, error } = await sb.storage.from('documentos').createSignedUrl(a.path, 3600);
+  if (error || !data?.signedUrl) { toast('Não foi possível abrir o comprovante.'); return; }
+  window.open(data.signedUrl, '_blank', 'noopener');
+}
+
+export function finCompRemover(anexoId) {
+  if (!ehGestor()) { toast('Sem permissão para remover comprovantes.'); return; }
+  const a = Object.values(finAnexos).flat().find(x => String(x.id) === String(anexoId));
+  if (!a) return;
+  confirmarAcao('Remover comprovante', `Remover "${a.nome}"? Isso não pode ser desfeito.`, 'Remover', async () => {
+    const { error } = await sbQ(sb.from('financeiro_anexos').delete().eq('id', a.id));
+    if (error) { await handleSupabaseError(error, 'Erro ao remover o comprovante'); return; }
+    try { await sb.storage.from('documentos').remove([a.path]); } catch { /* best-effort */ }
+    finAnexos[a.lancamento_id] = (finAnexos[a.lancamento_id] || []).filter(x => String(x.id) !== String(a.id));
+    toast('Comprovante removido.');
+    renderComprovantes();
+    loadFinanceiro();
+  });
 }
 
 // ── Estorno de recebimento (ação especial: admin ou permissão) ──────
@@ -507,6 +640,13 @@ export function excluirLancamento(id) {
     `Excluir "${l.pessoa_nome || l.descricao || 'lançamento'}" de ${fmtBRL(l.valor)}? `
     + 'Diferente do estorno, nada volta para "A receber". Isso não pode ser desfeito.',
     'Excluir', async () => {
+      // Os comprovantes somem por cascade no banco, mas o arquivo no storage
+      // não — apaga antes pra não deixar órfão no bucket.
+      const anexos = finAnexos[id] || [];
+      if (anexos.length) {
+        try { await sb.storage.from('documentos').remove(anexos.map(a => a.path)); }
+        catch (e) { console.warn('Comprovantes do lançamento excluído ficaram no storage:', e); }
+      }
       const { error } = await sbQ(sb.from('financeiro_lancamentos').delete().eq('id', id));
       if (error) { console.error('Excluir lançamento:', error); toast(`Erro ao excluir: ${error.message}`); return; }
       toast('Lançamento excluído.');
