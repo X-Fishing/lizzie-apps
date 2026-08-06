@@ -48,21 +48,25 @@ const mm = (valorMm, dpi) => Math.round(valorMm * dotsPorMm(dpi));
 // Rev. 7 (2026-08-06): a rev.4-6 foi calibrada num rolo de 1 coluna que
 // era de fato ~20mm. O rolo de 3 colunas medido fisicamente pelo Rondon é
 // 30×15mm — 5mm mais baixo. Comprimida a coluna vertical inteira pra caber
-// nesse limite, com prioridade: preço não pode cortar, código de barras não
-// pode ficar ilegível (se sobrar apertado de novo, cortar da FONTE do
-// SKU/preço antes de cortar da altura da barra — barra ilegível trava
-// leitura de estoque, texto pequeno só incomoda). Ainda é ponto de partida,
-// precisa de confirmação em teste físico.
+// nesse limite — preço parou de cortar, mas comeu a altura da BARRA (6mm→
+// 4.5mm) pra sobrar espaço, e isso deixou o código de barras visivelmente
+// menos nítido que antes (feedback do teste físico).
+// Rev. 8 (2026-08-06): barra de volta pra 6mm — em vez de tirar da altura
+// da barra, tirou da MARGEM DO TOPO (4.5mm→1.5mm, era folga desperdiçada,
+// não conteúdo) e das FONTES de SKU/preço (que continuam legíveis bem
+// menores). Conteúdo termina em ~13.5mm, deixando 1.5mm de folga dentro dos
+// 15mm — a rev.6 anterior não tinha NENHUMA folga (por isso cortava); essa
+// folga é de propósito, pra tolerar variação de alinhamento da impressora.
 function calibracao(dpi) {
   return {
     MARGEM_X: mm(2.5, dpi),      // margem esquerda/direita
-    BARRA_Y: mm(3, dpi),         // topo da etiqueta
-    BARRA_ALTURA: mm(4.5, dpi),  // altura das barras
+    BARRA_Y: mm(1.5, dpi),       // topo da etiqueta
+    BARRA_ALTURA: mm(6, dpi),    // altura das barras
     BARRA_MODULO: 1,             // ^BY — largura do módulo (1 = mais fino)
     SKU_Y: mm(8, dpi),           // logo abaixo da barra
-    SKU_FONTE: 20,               // altura/largura da fonte (dots)
+    SKU_FONTE: 18,               // altura/largura da fonte (dots)
     PRECO_Y: mm(10.5, dpi),
-    PRECO_FONTE: 26,
+    PRECO_FONTE: 24,
     // Etiqueta de texto livre (sem barra) — fonte grande, centralizada,
     // quebra em até 3 linhas. Ponto de partida, mesma lógica de calibração.
     TEXTO_Y: mm(4, dpi),
