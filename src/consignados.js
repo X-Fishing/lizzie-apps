@@ -1,7 +1,7 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado, ehFormaAReceber } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 import { abrirModalPosVenda } from './pos-venda.js';
 
@@ -1806,6 +1806,7 @@ export async function excluirMaletaAdmin(revId) {
           // Filhos antes da venda (não depende de ON DELETE CASCADE nas FKs).
           await sbQ(sb.from('recebimentos').delete().in('venda_id', vendaIds));
           await sbQ(sb.from('venda_itens').delete().in('venda_id', vendaIds));
+          await sbQ(sb.from('venda_pagamentos').delete().in('venda_id', vendaIds));
           ({ error } = await sbQ(sb.from('vendas').delete().in('id', vendaIds)));
         }
         // Escopo sempre por maleta_id — nunca por revendedora solta.
@@ -1920,14 +1921,16 @@ export function abrirFinalizarVenda() {
   document.getElementById('f-tel').value = '';
   document.getElementById('f-nasc').value = '';
   document.getElementById('f-data').value = hojeBR();
-  document.getElementById('f-forma').value = 'Pix';
+  // Uma linha de pagamento já com o total: o caso comum (forma única) segue
+  // sendo 2 toques. Quem precisa dividir usa "+ Adicionar outra forma".
+  state.vendaPagamentos = [{ forma: 'Pix', valor: total }];
   document.getElementById('f-combinada').value = '';
   document.getElementById('f-obs').value = '';
   document.getElementById('f-cliente-status').innerHTML = '';
   const semZapEl = document.getElementById('f-sem-zap');
   if (semZapEl) { semZapEl.checked = false; vendaSemZapToggle(); }
   state.vendaClienteId = null;
-  ajustarValorPago();
+  renderVendaPagamentos();
   openModal('modal-finalizar');
   // Telefone é o gatilho do autocomplete → foca nele ao abrir.
   setTimeout(() => document.getElementById('f-tel')?.focus(), 120);
@@ -2036,13 +2039,110 @@ export function vendaNomeBlur() {
   setTimeout(() => { const el = document.getElementById('f-cliente-sugestoes'); if (el) el.innerHTML = ''; }, 150);
 }
 
-export function ajustarValorPago() {
-  const total = state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
-  const forma = document.getElementById('f-forma').value;
-  const aVista = ['Dinheiro', 'Pix', 'Cartão débito', 'Cartão crédito'].includes(forma);
-  document.getElementById('f-pago').value = aVista ? moneyToInput(total) : '';
-  // Data combinada só faz sentido no fiado.
-  document.getElementById('f-combinada-wrap').style.display = forma === 'Fiado' ? 'block' : 'none';
+// ── Formas de pagamento da venda (0051/0052) ────────────────────────────
+// Antes era um <select> único: "pagou R$ 100 no Pix e R$ 50 no cartão" não
+// tinha como ser lançado. Agora a venda tem N linhas {forma, valor} e a soma
+// precisa fechar com o total do carrinho.
+// "Cartão crédito Nx" é maquininha — dinheiro garantido, conta como recebido.
+// "Fiado parcelado Nx" é a revendedora parcelando DIRETO com a cliente — é
+// dívida, igual ao Fiado (ver ehFormaAReceber em utils.js).
+const FORMAS_RECEBIDO = ['Dinheiro', 'Pix', 'Cartão débito', 'Cartão crédito (à vista)',
+  'Cartão crédito 2x', 'Cartão crédito 3x', 'Cartão crédito 4x', 'Cartão crédito 5x', 'Cartão crédito 6x'];
+const FORMAS_A_RECEBER = ['Fiado', 'Fiado parcelado 2x', 'Fiado parcelado 3x',
+  'Fiado parcelado 4x', 'Fiado parcelado 5x', 'Fiado parcelado 6x'];
+const FORMAS_VENDA = [...FORMAS_RECEBIDO, ...FORMAS_A_RECEBER];
+
+const totalCarrinho = () => state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
+const somaPagamentos = () => state.vendaPagamentos.reduce((s, p) => s + Number(p.valor || 0), 0);
+
+export function renderVendaPagamentos() {
+  const wrap = document.getElementById('f-pgtos');
+  if (!wrap) return;
+  const podeRemover = state.vendaPagamentos.length > 1;
+  const optgroup = (label, formas, p) => `<optgroup label="${label}">
+    ${formas.map(f => `<option value="${f}"${f === p.forma ? ' selected' : ''}>${esc(f)}</option>`).join('')}
+  </optgroup>`;
+
+  wrap.innerHTML = state.vendaPagamentos.map((p, i) => `
+    <div class="form-row" style="align-items:flex-end;gap:8px;margin-bottom:8px">
+      <div class="form-group" style="flex:2;margin:0">
+        <select class="form-control" onchange="vendaPgtoSet(${i},'forma',this.value)">
+          ${optgroup('Recebido agora', FORMAS_RECEBIDO, p)}
+          ${optgroup('A receber', FORMAS_A_RECEBER, p)}
+        </select>
+      </div>
+      <div class="form-group" style="flex:1;margin:0">
+        <input type="text" class="form-control" inputmode="numeric" placeholder="0,00"
+               value="${moneyToInput(p.valor || 0)}"
+               oninput="maskMoneyBR(this);vendaPgtoSet(${i},'valor',this.value)">
+      </div>
+      ${podeRemover ? `<button type="button" class="btn-icon" title="Remover forma" onclick="vendaPgtoRemover(${i})"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : ''}
+    </div>`).join('');
+
+  atualizarResumoPagamentos();
+}
+
+// Separado do render porque redesenhar os inputs a cada tecla faria o campo
+// de valor perder o foco no meio da digitação.
+function atualizarResumoPagamentos() {
+  const total = totalCarrinho();
+  const falta = total - somaPagamentos();
+
+  // Data combinada é obrigatória em qualquer forma "a receber" (Fiado e Fiado
+  // parcelado): sem ela a venda não entra na cobrança automática (lembretes.js
+  // só enxerga vendas com data_combinada vencida).
+  const temAReceber = state.vendaPagamentos.some(p => ehFormaAReceber(p.forma));
+  const wrapComb = document.getElementById('f-combinada-wrap');
+  if (wrapComb) wrapComb.style.display = temAReceber ? 'block' : 'none';
+
+  // Nada a repartir quando a soma já fechou.
+  const btnAdd = document.getElementById('f-pgto-add');
+  if (btnAdd) btnAdd.disabled = Math.abs(falta) < 0.01;
+
+  const res = document.getElementById('f-pgto-resumo');
+  if (!res) return;
+  if (Math.abs(falta) < 0.01) {
+    res.innerHTML = `<span style="color:var(--success)">Fecha com o total: ${fmtBRL(total)}</span>`;
+  } else if (falta > 0) {
+    res.innerHTML = `<span style="color:var(--warning)">Faltam ${fmtBRL(falta)} de ${fmtBRL(total)}</span>`;
+  } else {
+    res.innerHTML = `<span style="color:var(--danger)">Passou ${fmtBRL(-falta)} do total</span>`;
+  }
+}
+
+export function vendaPgtoAdd() {
+  const falta = totalCarrinho() - somaPagamentos();
+  const usadas = new Set(state.vendaPagamentos.map(p => p.forma));
+  // A forma sugerida sai só do grupo "Recebido agora" — senão a 2ª linha
+  // podia nascer como dívida sem a revendedora escolher isso de propósito.
+  state.vendaPagamentos.push({
+    forma: FORMAS_RECEBIDO.find(f => !usadas.has(f)) || 'Dinheiro',
+    valor: falta > 0 ? falta : 0,
+  });
+  renderVendaPagamentos();
+}
+
+export function vendaPgtoRemover(i) {
+  if (state.vendaPagamentos.length <= 1) return;   // sempre resta uma linha
+  state.vendaPagamentos.splice(i, 1);
+  renderVendaPagamentos();
+}
+
+export function vendaPgtoSet(i, campo, valor) {
+  const linha = state.vendaPagamentos[i];
+  if (!linha) return;
+  if (campo === 'valor') {
+    linha.valor = parseMoneyBR(valor);
+    atualizarResumoPagamentos();   // NÃO re-renderiza: perderia o foco do input
+    return;
+  }
+  // Só UMA linha "a receber" por venda: Fiado e Fiado parcelado dependem da
+  // mesma data_combinada — duas dívidas não têm como ser cobradas separado.
+  if (ehFormaAReceber(valor)) {
+    state.vendaPagamentos.forEach((p, j) => { if (j !== i && ehFormaAReceber(p.forma)) p.forma = 'Dinheiro'; });
+  }
+  linha.forma = valor;
+  renderVendaPagamentos();
 }
 
 export async function confirmarVendaCarrinho(btn) {
@@ -2050,10 +2150,17 @@ export async function confirmarVendaCarrinho(btn) {
   const tel = soDigitos(document.getElementById('f-tel').value);
   const nasc = brToISO(document.getElementById('f-nasc').value);
   const data = brToISO(document.getElementById('f-data').value);
-  const forma = document.getElementById('f-forma').value;
-  const pago = parseMoneyBR(document.getElementById('f-pago').value);
   const obs = document.getElementById('f-obs').value.trim();
-  const combinada = forma === 'Fiado' ? diaMesParaISO(document.getElementById('f-combinada').value) : null;
+
+  // Rateio por forma. Formas "a receber" (Fiado, Fiado parcelado) entram na
+  // venda mas não somam em valor_pago — é o que a cliente ficou devendo.
+  const pgtos = state.vendaPagamentos
+    .filter(p => Number(p.valor || 0) > 0)
+    .map(p => ({ forma: p.forma, valor: Number(p.valor), data }));
+  const somaPgtos = pgtos.reduce((s, p) => s + p.valor, 0);
+  const pago = pgtos.filter(p => !ehFormaAReceber(p.forma)).reduce((s, p) => s + p.valor, 0);
+  const temAReceber = pgtos.some(p => ehFormaAReceber(p.forma));
+  const combinada = temAReceber ? diaMesParaISO(document.getElementById('f-combinada').value) : null;
 
   // "Não quis informar" é a saída honesta: sem ela a revendedora inventava um
   // número (00000000000), e como o telefone é a CHAVE da cliente isso fundia
@@ -2064,10 +2171,19 @@ export async function confirmarVendaCarrinho(btn) {
   if (!semZap && !telValido(tel)) { toast('Telefone inválido — informe um número real com DDD.'); return; }
   if (!semZap && !nasc) { toast('Informe o aniversário da cliente (dd/mm/aaaa)'); return; }
   if (!data) { toast('Data inválida (use dd/mm/aaaa)'); return; }
-  if (forma === 'Fiado' && !combinada) { toast('Informe a data combinada de pagamento'); return; }
   if (!state.carrinhoVenda.length) { toast('Carrinho vazio'); return; }
 
   const total = state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
+
+  // O rateio precisa fechar com o total: sem isso a venda nasce com valor_pago
+  // errado e o Financeiro/cobrança herdam o erro.
+  if (!pgtos.length) { toast('Informe ao menos uma forma de pagamento'); return; }
+  if (Math.abs(somaPgtos - total) > 0.01) {
+    toast(`As formas somam ${fmtBRL(somaPgtos)} e o total é ${fmtBRL(total)}. Ajuste os valores.`);
+    return;
+  }
+  if (temAReceber && !combinada) { toast('Informe a data combinada de pagamento'); return; }
+
   const status = pago >= total ? 'quitado' : pago > 0 ? 'parcial' : 'pendente';
 
   btn.disabled = true;
@@ -2082,9 +2198,12 @@ export async function confirmarVendaCarrinho(btn) {
       sb.rpc('registrar_venda', {
         p_cliente: cliente,
         p_data: data,
-        p_forma: forma,
+        // 'Misto' quando são 2+ formas — as telas de lista exibem esse campo
+        // e o detalhe da venda abre o rateio completo (venda_pagamentos).
+        p_forma: pgtos.length === 1 ? pgtos[0].forma : 'Misto',
         p_total: total,
         p_pago: pago,
+        p_pagamentos: pgtos,
         p_status: status,
         p_obs: obs || null,
         p_tel: semZap ? null : telNormalizado(tel),
@@ -2124,6 +2243,7 @@ export async function confirmarVendaCarrinho(btn) {
       itens: state.carrinhoVenda.map(i => ({ descricao: i.descricao, referencia: i.referencia || null, quantidade: i.quantidade })),
     };
     state.carrinhoVenda = [];
+    state.vendaPagamentos = [];
     resetBtn();
     closeModal('modal-finalizar');
     renderCartBar();

@@ -1,7 +1,7 @@
 // Pagamentos: lista de vendas, detalhe, registrar pagamento, excluir.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, parseMoneyBR, moneyToInput, hojeBR, brToISO, telValido, telFmt, telNormalizado, waMeLink } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, parseMoneyBR, moneyToInput, hojeBR, brToISO, telValido, telFmt, telNormalizado, waMeLink, ehFormaAReceber } from './utils.js';
 import { enviarCertificado, gerarCertificadoGarantia, gerarVersoGarantia, numeroCertificado } from './certificado.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 
@@ -126,16 +126,18 @@ export async function verVenda(id) {
   const v = state.allVendas.find(x => x.id === id);
   if (!v) return;
 
-  const [itensRes, recebsRes] = await Promise.all([
+  const [itensRes, recebsRes, pgtosRes] = await Promise.all([
     state.vendaItensCache[id]
       ? Promise.resolve({ data: state.vendaItensCache[id] })
       : sbQ(sb.from('venda_itens').select('*').eq('venda_id', id).order('created_at')),
-    sbQ(sb.from('recebimentos').select('*').eq('venda_id', id).order('data_recebimento'))
+    sbQ(sb.from('recebimentos').select('*').eq('venda_id', id).order('data_recebimento')),
+    sbQ(sb.from('venda_pagamentos').select('*').eq('venda_id', id).order('created_at'))
   ]);
   if (itensRes.error) { toast('Erro ao carregar itens'); return; }
   const itens = itensRes.data || [];
   state.vendaItensCache[id] = itens;
   const recebimentos = (recebsRes.data) || [];
+  const pagamentos = (pgtosRes.data) || [];
 
   const restante = Number(v.valor_total) - Number(v.valor_pago);
   const itensHtml = itens.map(it => `
@@ -143,6 +145,18 @@ export async function verVenda(id) {
       <span>${it.quantidade}× ${esc(it.descricao)}${it.referencia ? ` <span style="color:var(--muted);font-size:11px">(${esc(it.referencia)})</span>` : ''}</span>
       <span>R$ ${(it.quantidade * Number(it.preco_unit)).toFixed(2)}</span>
     </div>`).join('');
+
+  // Rateio por forma (0051/0052). Só vale a pena mostrar quando a venda foi
+  // paga em mais de uma forma — com uma só, a linha "Forma" do grid acima já diz tudo.
+  const pgtosHtml = pagamentos.length > 1 ? `
+    <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Formas de pagamento</div>
+    <div style="background:#faf7f2;padding:10px 12px;border-radius:10px;margin-bottom:14px">
+      ${pagamentos.map(p => `
+        <div class="hist-item-row">
+          <span>${esc(p.forma)}${ehFormaAReceber(p.forma) ? ' <span style="color:var(--muted);font-size:11px">(a receber)</span>' : ''}</span>
+          <span>R$ ${Number(p.valor).toFixed(2)}</span>
+        </div>`).join('')}
+    </div>` : '';
 
   const recebsHtml = recebimentos.length
     ? recebimentos.map(r => `
@@ -174,6 +188,7 @@ export async function verVenda(id) {
     <div class="divider"></div>
     <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Itens da compra</div>
     <div style="background:#faf7f2;padding:10px 12px;border-radius:10px;margin-bottom:14px">${itensHtml}</div>
+    ${pgtosHtml}
     <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Recebimentos</div>
     <div style="background:#faf7f2;padding:10px 12px;border-radius:10px;margin-bottom:14px">${recebsHtml}</div>
     ${v.status !== 'quitado' ? `
@@ -347,6 +362,7 @@ export async function excluirVenda(id) {
     // CASCADE nas FKs (se o cascade existir, esses deletes sao inofensivos).
     await sbQ(sb.from('venda_itens').delete().eq('venda_id', id));
     await sbQ(sb.from('recebimentos').delete().eq('venda_id', id));
+    await sbQ(sb.from('venda_pagamentos').delete().eq('venda_id', id));
 
     const { error } = await sb.from('vendas').delete().eq('id', id);
     if (error) { toast('Erro ao excluir'); return; }

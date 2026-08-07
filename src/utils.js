@@ -19,6 +19,13 @@ export function marcarRevsTeste(profiles) {
   state.revTesteSet = new Set((profiles || []).filter(p => p.teste).map(p => String(p.id)));
 }
 
+// Formas "a receber": a cliente ainda não pagou. Prefixo 'Fiado' cobre
+// 'Fiado' e 'Fiado parcelado Nx' com uma regra só — mesma do banco (0052).
+// Cartão crédito Nx é maquininha: o dinheiro está garantido, conta como recebido.
+export function ehFormaAReceber(f) {
+  return /^fiado/i.test(String(f || ''));
+}
+
 // Quantidade disponivel de uma peca (trata campos null para nao gerar NaN).
 export function qtdDisp(c) {
   return (c.quantidade_enviada || 0) - (c.quantidade_vendida || 0) - (c.quantidade_devolvida || 0);

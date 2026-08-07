@@ -556,29 +556,22 @@
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Forma de pagamento *</label>
-      <select id="f-forma" class="form-control" onchange="ajustarValorPago()">
-          <option value="Dinheiro">Dinheiro</option>
-          <option value="Pix" selected>Pix</option>
-          <option value="Cartão débito">Cartão débito</option>
-          <option value="Cartão crédito">Cartão crédito (à vista)</option>
-          <option value="Parcelado 2x">Parcelado 2x</option>
-          <option value="Parcelado 3x">Parcelado 3x</option>
-          <option value="Parcelado 4x">Parcelado 4x</option>
-          <option value="Parcelado 5x">Parcelado 5x</option>
-          <option value="Parcelado 6x">Parcelado 6x</option>
-          <option value="Fiado">Fiado</option>
-        </select>
+      <label class="form-label">Formas de pagamento *</label>
+      <!-- Linhas renderizadas por renderVendaPagamentos() (consignados.js).
+           A cliente pode pagar parte no Pix e parte no cartão: a soma das
+           linhas tem que fechar com o total do carrinho. Formas "A receber"
+           (Fiado, Fiado parcelado Nx) NAO contam como recebidas — sao o que
+           a cliente ainda deve. Cartao credito Nx e maquininha: recebido. -->
+      <div id="f-pgtos"></div>
+      <button type="button" id="f-pgto-add" class="btn-secondary" style="width:100%;margin-top:8px;font-size:13px" onclick="vendaPgtoAdd()">
+        + Adicionar outra forma
+      </button>
+      <div id="f-pgto-resumo" style="font-size:12px;margin-top:8px;min-height:18px"></div>
     </div>
     <div class="form-group" id="f-combinada-wrap" style="display:none">
       <label class="form-label">Data combinada de pagamento *</label>
       <input type="text" id="f-combinada" class="form-control" placeholder="dd/mm" maxlength="5" inputmode="numeric" oninput="maskDiaMes(this)">
       <div style="font-size:11px;color:var(--muted);margin-top:4px">Só o dia e o mês. Aparece na cobrança por WhatsApp da tela de Pagamentos.</div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Valor recebido agora (R$)</label>
-      <input type="text" id="f-pago" class="form-control" inputmode="numeric" placeholder="0,00" oninput="maskMoneyBR(this)">
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">Deixe igual ao total para marcar como quitada</div>
     </div>
     <div class="form-group">
       <label class="form-label">Observação (opcional)</label>
