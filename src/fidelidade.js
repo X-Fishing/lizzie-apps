@@ -103,6 +103,20 @@ function linhas() {
   if (!lista.length) {
     return `<div class="empty-state" style="padding:40px 0"><div class="empty-icon">${IC_STAMP}</div><p>${termo ? 'Nenhuma cliente encontrada' : 'Nenhuma cliente com fidelidade ainda'}</p></div>`;
   }
+  // A revendedora usa card com barra (design mobile); a tabela tem min-width
+  // 560px e no celular dela só existiria rolando de lado. Mesmos campos.
+  if (!ehStaff()) {
+    return lista.map(c => `
+      <div class="fid-card" onclick="fidelidadeVerCliente('${c.id}')">
+        <div class="fid-card-topo">
+          <div class="fid-card-nome">${esc(c.nome)}</div>
+          <div class="fid-card-selos">${c.selos}/10${c.premios ? ` · ${c.premios} prêmio${c.premios > 1 ? 's' : ''}` : ''}</div>
+        </div>
+        <div class="fid-card-tel">${esc(telFmt(c.celular))}${telRuim(c.celular) ? ' <span class="badge badge-pendente" title="Número fora do padrão — esta cartela pode misturar mais de uma pessoa.">Telefone inválido</span>' : ''}</div>
+        <div class="fid-bar"><div style="width:${Math.min(100, c.selos * 10)}%"></div></div>
+      </div>`).join('');
+  }
+
   return `<div class="pag-wrap"><table class="pag-table"><thead><tr>
     <th class="pag-th">Cliente</th><th class="pag-th">Telefone</th><th class="pag-th" style="text-align:center">Selos</th><th class="pag-th"></th>
   </tr></thead><tbody>${lista.map(c => `

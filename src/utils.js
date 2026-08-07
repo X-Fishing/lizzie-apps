@@ -211,6 +211,19 @@ export function isoEmDias(n) {
   return d.toLocaleDateString('sv-SE');
 }
 
+// Ciclo de mostruário da Lizzie. Fonte única: o Lançador usa para sugerir a
+// data de troca e a tela "Próxima troca" da revendedora para projetar os
+// próximos ciclos — duplicar o número faria as duas telas divergirem.
+export const DIAS_CICLO_MOSTRUARIO = 35;
+
+// Soma n dias a uma data ISO ('yyyy-mm-dd'), sem mexer no fuso.
+export function isoSomandoDias(iso, n) {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d)) return '';
+  d.setDate(d.getDate() + n);
+  return d.toLocaleDateString('sv-SE');
+}
+
 // CPF 000.000.000-00
 export function maskCpf(input) {
   let v = input.value.replace(/\D/g, '').slice(0, 11);

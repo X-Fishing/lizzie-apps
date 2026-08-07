@@ -11,7 +11,10 @@
 <link rel="apple-touch-icon" href="/icon-192.png">
 <title>Lizzie Semijoias</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<!-- Playfair Display + Poppins são do design "Lizzie Mobile Revendedora" e só
+     valem no app dela (escopo .rev-drawer). Cormorant/DM Sans continuam sendo
+     as fontes do desk — trocar lá mexeria em dezenas de telas não desenhadas. -->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&family=Playfair+Display:wght@500;600&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -247,6 +250,9 @@
           <button class="btn btn-primary" id="btn-novo-consig" onclick="openNovoConsignado()" style="display:none">+ Novo</button>
         </div>
       </div>
+      <!-- Ações em largura total ANTES da busca (design da revendedora).
+           Quem preenche é renderCicloRevendedora; para o staff fica vazio. -->
+      <div id="c-acoes-rev"></div>
       <div class="search-bar" id="c-search-bar" style="display:none">
         <input class="search-input" id="c-search" placeholder="Buscar por nome ou código..." oninput="renderCicloGrid()">
         <label class="filtro-vendidos" style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none">

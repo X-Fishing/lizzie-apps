@@ -68,9 +68,9 @@ export function filtrarPagamentos() {
     <button class="chip${scope === 'todos' ? ' active' : ''}" onclick="setPScope('todos')">Histórico</button>
   </div>`;
   const resumo = scopeToggle + `<div class="pag-resumo">
-    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('todos')"><div class="pag-resumo-label">Total vendas</div><div class="pag-resumo-valor">R$ ${totalGeral.toFixed(2)}</div></div>
-    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('quitado')"><div class="pag-resumo-label">Recebido</div><div class="pag-resumo-valor recv">R$ ${totalPago.toFixed(2)}</div></div>
-    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('pendente')"><div class="pag-resumo-label">A receber</div><div class="pag-resumo-valor pend">R$ ${totalPendente.toFixed(2)}</div></div>
+    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('todos')"><div class="pag-resumo-label">Total vendas</div><div class="pag-resumo-valor">${fmtBRL(totalGeral)}</div></div>
+    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('quitado')"><div class="pag-resumo-label">Recebido</div><div class="pag-resumo-valor recv">${fmtBRL(totalPago)}</div></div>
+    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('pendente')"><div class="pag-resumo-label">A receber</div><div class="pag-resumo-valor pend">${fmtBRL(totalPendente)}</div></div>
   </div>`;
 
   if (!list.length) {
@@ -82,16 +82,39 @@ export function filtrarPagamentos() {
   const statusLabel = { pendente: 'Pendente', parcial: 'Parcial', quitado: 'Quitado' };
   const statusBadge = { pendente: 'badge-pendente', parcial: 'badge-parcial', quitado: 'badge-quitado' };
 
+  const zapBtn = v => `<button class="btn-icon" title="Cobrar no WhatsApp" style="color:#128C7E" onclick="event.stopPropagation();zapCobrancaCliente('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg></button>`;
+
+  // A tabela tem min-width 560px: no celular da revendedora ela só existe
+  // rolando de lado. O design entrega as mesmas colunas como card, então a
+  // lista dela vira card e o staff (telas largas) continua na tabela.
+  if (!ehStaff()) {
+    div.innerHTML = resumo + list.map(v => {
+      const pendente = Number(v.valor_total) - Number(v.valor_pago);
+      return `<div class="pag-card" onclick="verVenda('${v.id}')">
+        <div class="pag-card-topo">
+          <div class="pag-card-nome">${esc(v.nome_cliente)}</div>
+          <span class="badge ${statusBadge[v.status]}">${statusLabel[v.status]}</span>
+        </div>
+        <div class="pag-card-meta">${formatDate(v.data_venda)} · ${esc(v.forma_pagamento || '—')}</div>
+        <div class="pag-card-linha"><span>Total</span><b>${fmtBRL(v.valor_total)}</b></div>
+        <div class="pag-card-linha"><span>Pago</span><b class="pag-valor-pago">${fmtBRL(v.valor_pago)}</b></div>
+        ${pendente > 0 ? `<div class="pag-card-linha"><span>Pendente</span><b class="pag-valor-pendente">${fmtBRL(pendente)}</b></div>` : ''}
+        ${pendente > 0 && telValido(v.telefone_cliente) ? `<div class="pag-card-acao">${zapBtn(v)} <span>Cobrar no WhatsApp</span></div>` : ''}
+      </div>`;
+    }).join('');
+    return;
+  }
+
   const rows = list.map(v => {
     const pendente = Number(v.valor_total) - Number(v.valor_pago);
     return `<tr class="pag-row" onclick="verVenda('${v.id}')">
       <td class="pag-td"><div class="pag-cliente">${esc(v.nome_cliente)}</div><div class="pag-forma">${formatDate(v.data_venda)}</div></td>
-      <td class="pag-td"><span class="pag-valor">R$ ${Number(v.valor_total).toFixed(2)}</span></td>
+      <td class="pag-td"><span class="pag-valor">${fmtBRL(v.valor_total)}</span></td>
       <td class="pag-td"><span class="pag-forma">${v.forma_pagamento}</span></td>
-      <td class="pag-td"><span class="pag-valor pag-valor-pago">R$ ${Number(v.valor_pago).toFixed(2)}</span></td>
-      <td class="pag-td"><span class="pag-valor ${pendente>0?'pag-valor-pendente':''}">R$ ${pendente.toFixed(2)}</span></td>
+      <td class="pag-td"><span class="pag-valor pag-valor-pago">${fmtBRL(v.valor_pago)}</span></td>
+      <td class="pag-td"><span class="pag-valor ${pendente>0?'pag-valor-pendente':''}">${fmtBRL(pendente)}</span></td>
       <td class="pag-td"><span class="badge ${statusBadge[v.status]}">${statusLabel[v.status]}</span></td>
-      <td class="pag-td" style="text-align:right">${pendente > 0 && telValido(v.telefone_cliente) ? `<button class="btn-icon" title="Cobrar no WhatsApp" style="color:#128C7E" onclick="event.stopPropagation();zapCobrancaCliente('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg></button>` : ''}</td>
+      <td class="pag-td" style="text-align:right">${pendente > 0 && telValido(v.telefone_cliente) ? zapBtn(v) : ''}</td>
     </tr>`;
   }).join('');
 

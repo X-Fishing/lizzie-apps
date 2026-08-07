@@ -47,9 +47,9 @@ export function filtrarHistorico() {
       <div class="hist-nome">${esc(c.nome)}</div>
       <div class="hist-stats">
         <b>${c.vendas.length}</b> compra${c.vendas.length!==1?'s':''} ·
-        Total <b>R$ ${total.toFixed(2)}</b> ·
-        Pago <b style="color:var(--success)">R$ ${pago.toFixed(2)}</b>
-        ${pendente > 0 ? ` · Pendente <b style="color:var(--danger)">R$ ${pendente.toFixed(2)}</b>` : ''}
+        Total <b>${fmtBRL(total)}</b> ·
+        Pago <b style="color:var(--success)">${fmtBRL(pago)}</b>
+        ${pendente > 0 ? ` · Pendente <b style="color:var(--danger)">${fmtBRL(pendente)}</b>` : ''}
       </div>
       ${aberto ? `<div class="hist-detalhe" onclick="event.stopPropagation()">${renderHistoricoDetalhes(c.vendas)}</div>` : ''}
     </div>`;

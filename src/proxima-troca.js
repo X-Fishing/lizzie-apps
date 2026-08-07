@@ -7,7 +7,7 @@
 // (--rose/--text/--muted/--blush) para não destoar das outras telas.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, sbQ, toast, formatDate, openModal, closeModal, confirmarAcao, handleSupabaseError } from './utils.js';
+import { esc, sbQ, toast, formatDate, openModal, closeModal, confirmarAcao, handleSupabaseError, isoSomandoDias, DIAS_CICLO_MOSTRUARIO } from './utils.js';
 
 const panel = () => document.getElementById('panel-proxima-troca');
 
@@ -63,10 +63,13 @@ export async function loadProximaTroca() {
   }
 
   state.minhaTroca = { maleta: mRes.data || null, solicitacoes: sRes.data || [] };
-  render();
+  renderProximaTroca();
 }
 
-function render() {
+// Redesenha a partir de state.minhaTroca, sem ir ao banco. Exportado para que
+// dê para redesenhar depois de mexer no estado (e para o teste conseguir ver a
+// tela com dados — a revendedora de teste não tem maleta ativa).
+export function renderProximaTroca() {
   const { maleta, solicitacoes } = state.minhaTroca || {};
   const pendente = (solicitacoes || []).find(s => s.status === 'pendente') || null;
 
@@ -76,7 +79,30 @@ function render() {
       <div class="sub">Agenda de troca de mostruário</div>
     </div></div>
     ${heroHtml(maleta, pendente)}
+    ${proximosCiclosHtml(maleta)}
     ${pedidosHtml(solicitacoes)}`;
+}
+
+// "Próximos ciclos" do design: a troca marcada + as duas seguintes projetadas
+// pelo ciclo de 35 dias. As projetadas são PREVISTAS, não compromisso — por
+// isso o rótulo diferente; quem marca de verdade é a Lizzie no desk.
+function proximosCiclosHtml(maleta) {
+  if (!maleta?.data_troca) return '';
+  const hora = horaCurta(maleta.hora_troca);
+  const linhas = [{ data: maleta.data_troca, agendada: true }];
+  for (let i = 1; i <= 2; i++) {
+    const d = isoSomandoDias(maleta.data_troca, DIAS_CICLO_MOSTRUARIO * i);
+    if (d) linhas.push({ data: d, agendada: false });
+  }
+  const item = c => `<div class="card" style="padding:14px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+    <div style="min-width:0">
+      <div style="font-size:14px;font-weight:600;color:var(--text)">${formatDate(c.data)}</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:2px">${c.agendada ? (hora || 'horário a combinar') : `previsão · ciclo de ${DIAS_CICLO_MOSTRUARIO} dias`}</div>
+    </div>
+    <span style="background:${c.agendada ? '#e6effa' : '#eeeaf2'};color:${c.agendada ? '#3568b0' : '#8b7fa0'};font-size:11.5px;font-weight:600;padding:5px 11px;border-radius:999px;flex-shrink:0">${c.agendada ? 'Agendada' : 'Prevista'}</span>
+  </div>`;
+  return `<div style="font-family:'Playfair Display',serif;font-weight:600;font-size:18px;color:var(--text);margin:18px 0 10px">Próximos ciclos</div>
+    ${linhas.map(item).join('')}`;
 }
 
 // Card-herói: ícone + "DATA AGENDADA" + data por extenso, divisor e as linhas
@@ -109,6 +135,7 @@ function heroHtml(maleta, pendente) {
     </div>
     <div style="height:1px;background:var(--border);margin-bottom:16px"></div>
     ${linha('Horário', hora || '<span style="color:var(--muted);font-weight:400">a combinar</span>')}
+    ${maleta.local_troca ? linha('Local', esc(maleta.local_troca)) : ''}
     ${nM ? linha('Maleta', `#${esc(String(nM))}`) : ''}
     ${linha('Ciclo atual', `${formatDate(String(maleta.created_at).slice(0, 10))} → ${formatDate(maleta.data_troca)}`)}
     ${pendente
@@ -139,7 +166,7 @@ function pedidosHtml(solicitacoes) {
     : ''}
     </div>`;
   };
-  return `<div style="font-family:'Cormorant Garamond',serif;font-size:18px;color:var(--text);margin:18px 0 10px">Meus pedidos</div>
+  return `<div style="font-family:'Playfair Display',serif;font-weight:600;font-size:18px;color:var(--text);margin:18px 0 10px">Meus pedidos</div>
     ${solicitacoes.map(item).join('')}`;
 }
 

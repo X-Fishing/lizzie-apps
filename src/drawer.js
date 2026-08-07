@@ -63,6 +63,9 @@ export function drawerSincronizar(panel) {
 // Liga a gaveta para a revendedora (chamado em auth.js/montarAppUI).
 export function ativarDrawer() {
   el('app')?.classList.add('rev-drawer');
+  // A skin do design vive em body.rev-app (e não em #app) porque os modais
+  // ficam FORA de #app no index.html — uma classe no #app não os alcançaria.
+  document.body.classList.add('rev-app');
   const b = el('btn-drawer');
   if (b) b.style.display = '';
   // Estado inicial do design: "Minha Maleta" aberto, "Vendas" recolhido.

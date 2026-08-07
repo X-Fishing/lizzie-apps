@@ -71,9 +71,18 @@ function setBtnDivulgarTopo(mostrar) {
   if (b) b.style.display = mostrar ? 'inline-flex' : 'none';
 }
 
+// Divulgar + Fechamento em largura total, acima da busca — a ordem do design.
+// Só para a revendedora: no desk elas continuam no page-head/rodapé, onde o
+// staff já as procura. Mesmo ponto único de controle do setBtnDivulgarTopo.
+function setAcoesRev(html) {
+  const el = document.getElementById('c-acoes-rev');
+  if (el) el.innerHTML = html || '';
+}
+
 export function renderCicloGrid() {
   const div = document.getElementById('c-list');
   setBtnDivulgarTopo(false);
+  setAcoesRev('');   // mesmo motivo: um único ponto liga, todo o resto desliga
   // Sub-telas (conferência/fechamento) renderizam no lugar do catálogo, na
   // largura normal centralizada (mesmo padrão do histórico de ciclos).
   if (confTelaAberta || fechTelaAberta) {
@@ -160,12 +169,41 @@ export function cicloRowHtml(c, isAdmin, historico = false) {
     <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${c.referencia ? esc(c.referencia) : '—'}</td>
     <td class="ciclo-td"><span class="ciclo-badge">${CAT_LABEL[cat] || cat}</span></td>
     <td class="ciclo-td"><span class="ciclo-num">${c.quantidade_enviada}</span></td>
-    <td class="ciclo-td">${c.preco_venda ? `<span class="ciclo-preco">R$ ${Number(c.preco_venda).toFixed(2)}</span>` : '—'}</td>
+    <td class="ciclo-td">${c.preco_venda ? `<span class="ciclo-preco">${fmtBRL(c.preco_venda)}</span>` : '—'}</td>
     <td class="ciclo-td ciclo-acao">${acao}</td>
   </tr>`;
 }
 
+// Catálogo da revendedora em CARD (design mobile). A tabela tem 6 colunas e
+// no celular dela as duas últimas — preço e o botão Vender — ficavam fora da
+// tela; era preciso rolar de lado para vender. Mesmos campos, empilhados.
+function cicloCardsHtml(list) {
+  return cicloSortRows(list).map(c => {
+    const disp = qtdDisp(c);
+    const cat = c.categoria || detectarCategoria(c.descricao);
+    const acao = disp > 0
+      ? `<button class="btn-vender" onclick="event.stopPropagation();openVenda('${c.id}')">Vender</button>`
+      : '<span class="ciclo-card-vendido">Vendido</span>';
+    return `<div class="ciclo-card${disp > 0 ? '' : ' esgotado'}" onclick="confVerFoto('${c.id}')">
+      <div class="ciclo-card-foto"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>
+      <div class="ciclo-card-info">
+        <div class="ciclo-card-desc">${esc(c.descricao)}</div>
+        <div class="ciclo-card-meta">
+          <span>${c.referencia ? esc(c.referencia) : '—'}</span>
+          <span class="ciclo-badge">${CAT_LABEL[cat] || cat}</span>
+          ${c.quantidade_enviada > 1 ? `<span>${c.quantidade_enviada} un.</span>` : ''}
+        </div>
+        ${c.preco_venda ? `<div class="ciclo-card-preco">${fmtBRL(c.preco_venda)}</div>` : ''}
+      </div>
+      ${acao}
+    </div>`;
+  }).join('');
+}
+
 export function cicloTableHtml(list, isAdmin, historico = false) {
+  // Só o catálogo ativo da revendedora vira card; o histórico e as telas do
+  // staff continuam na tabela (lá a comparação coluna a coluna é o ponto).
+  if (!isAdmin && !historico) return cicloCardsHtml(list);
   const rows = cicloSortRows(list).map(c => cicloRowHtml(c, isAdmin, historico)).join('');
   return `<div class="ciclo-wrap">
     <table class="ciclo-table">
@@ -190,12 +228,15 @@ export function renderCicloRevendedora() {
   let ativos = soAtivos(state.allConsignados);
   if (state.maletaAtivaId) ativos = ativos.filter(c => c.maleta_id === state.maletaAtivaId);
   const temAtivos = ativos.some(c => qtdDisp(c) > 0);
-  // Divulgar subiu pro page-head (não fica mais no rodapé, embaixo da tabela
-  // inteira): é a ação mais usada e agora não depende de rolar até o fim.
-  setBtnDivulgarTopo(temAtivos);
-  const btnFechamento = temAtivos
-    ? `<button class="btn-secondary" style="width:100%;margin-top:10px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</button>`
-    : '';
+  // As duas ações principais vão para o bloco acima da busca (design), em
+  // largura total. O botão do page-head fica desligado para não duplicar.
+  setBtnDivulgarTopo(false);
+  setAcoesRev(temAtivos
+    ? `<div class="c-acoes">
+         <button class="btn btn-primary" onclick="abrirDivulgarMaleta()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/><path d="M4 12s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z"/></svg> Divulgar minha maleta</button>
+         <button class="btn btn-outline" onclick="openFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do catálogo</button>
+       </div>`
+    : '');
 
   const historico = historicoCatalogosHtml(state.allConsignados);
   const cabecalho = pedidoLabelHtml(ativos, 12);
@@ -219,7 +260,7 @@ export function renderCicloRevendedora() {
           : `Nenhuma peça encontrada com "${termo}"`;
       return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>${msgVazio}</p></div>` + historico;
     }
-    return cabecalho + cicloTableHtml(lista, false) + btnFechamento + historico;
+    return cabecalho + cicloTableHtml(lista, false) + historico;
   }
 
   // Sem catálogo ativo: mostra aviso + histórico (se houver), em vez de tabela vazia.
@@ -227,7 +268,7 @@ export function renderCicloRevendedora() {
     return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div><p>Nenhum catálogo ativo no momento</p></div>` + historico;
   }
 
-  return cabecalho + cicloTableHtml(ativos, false) + btnFechamento + historico;
+  return cabecalho + cicloTableHtml(ativos, false) + historico;
 }
 
 export function agruparPorRevendedora() {
