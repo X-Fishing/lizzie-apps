@@ -169,6 +169,69 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .topbar .btn-icon { color: rgba(255,255,255,0.5); }
 .topbar .btn-icon:hover { color: var(--gold); }
 
+/* MENU GAVETA (revendedora) — medidas do design "Lizzie Mobile Revendedora":
+   262px, desliza da esquerda, grupos recolhíveis. O staff NUNCA vê (auth.js só
+   liga .rev-drawer para revendedora); ele segue na nav inferior + sidebar. */
+.drawer-burger { color: rgba(255,255,255,0.85); font-size: 22px; margin-right: 4px; }
+.drawer-burger:hover { color: var(--gold); }
+/* Com o hambúrguer à esquerda, o logo centraliza entre ele e o bloco da direita. */
+#app.rev-drawer .topbar-logo { margin: 0 auto; }
+/* Sem nav inferior, o respiro de 90px vira sobra no fim de toda tela. */
+#app.rev-drawer .nav { display: none; }
+#app.rev-drawer .content { padding-bottom: 28px; }
+
+.drawer-overlay {
+  position: fixed; inset: 0; z-index: 200; background: rgba(20,8,35,0.45);
+  opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.drawer-overlay.show { opacity: 1; pointer-events: auto; }
+.drawer {
+  position: fixed; top: 0; bottom: 0; left: 0; width: 262px; max-width: 84vw; z-index: 201;
+  background: var(--cream); display: flex; flex-direction: column;
+  box-shadow: 6px 0 24px rgba(20,8,35,0.18);
+  /* visibility (e não só o transform) tira os botões da ordem de Tab enquanto
+     fechada — senão o teclado navega num menu que está fora da tela. O delay
+     igual à duração segura a animação de saída. */
+  transform: translateX(-100%); visibility: hidden;
+  transition: transform 0.28s ease, visibility 0s linear 0.28s;
+}
+.drawer.show { transform: translateX(0); visibility: visible; transition-delay: 0s; }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 18px 14px; }
+.drawer-logo {
+  font-family: 'Cormorant Garamond', serif; font-size: 19px; font-weight: 300;
+  letter-spacing: 2px; color: var(--gold); text-transform: uppercase;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.drawer-sep { height: 1px; background: var(--border); margin: 0 18px; }
+.drawer-body { display: flex; flex-direction: column; gap: 2px; padding: 10px; flex: 1; overflow-y: auto; }
+.drawer-foot { padding: 14px 10px 20px; }
+
+.drawer-item, .drawer-group, .drawer-sair {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 11px 12px; background: none; border: none; border-radius: 12px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 14.5px; font-weight: 600; color: var(--text);
+}
+.drawer-group { justify-content: space-between; margin-top: 6px; }
+.drawer-group-label { display: flex; align-items: center; gap: 10px; }
+.drawer-item .drawer-ic, .drawer-group .drawer-ic { color: var(--muted); }
+.drawer-ic { font-size: 18px; display: inline-flex; flex-shrink: 0; }
+.drawer-subitem .drawer-ic { font-size: 16px; }
+.drawer-caret { font-size: 14px; color: var(--muted); display: inline-flex; transition: transform 0.2s ease; }
+.drawer-group[aria-expanded="true"] .drawer-caret { transform: rotate(180deg); }
+
+/* Sub-lista: recolhida por padrão; o grupo com a tela ativa abre sozinho. */
+.drawer-sub { display: none; flex-direction: column; gap: 2px; padding-left: 14px; margin: 2px 0 4px; }
+.drawer-sub.show { display: flex; }
+.drawer-subitem {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  padding: 9px 12px; background: none; border: none; border-radius: 10px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 13.5px; font-weight: 600; color: var(--muted);
+}
+.drawer-item.active, .drawer-subitem.active { background: var(--blush); color: var(--rose); }
+.drawer-item.active .drawer-ic, .drawer-subitem.active .drawer-ic { color: var(--rose); }
+.drawer-sair { color: var(--rose); }
+.drawer-sair .drawer-ic { color: var(--rose); }
+
 /* NAV */
 .nav {
   background: #fff; border-top: 1px solid var(--border);

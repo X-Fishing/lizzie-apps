@@ -20,6 +20,7 @@ let maletaDestino = null;   // destino do envio: { nova:true } ou { id, status, 
 // (primeiro render, ou logo após trocar o destino). Depois disso quem manda é
 // o que está no input — inclusive vazio, se a pessoa apagou de propósito.
 let dataTrocaPadrao = '';
+let horaTrocaPadrao = '';
 
 const STATUS_LABEL = { ativa: 'Ativa', aguardando: 'Aguardando', finalizada: 'Finalizada' };
 
@@ -46,6 +47,7 @@ export async function loadLancador() {
   maletasAbertas = [];
   maletaDestino = null;
   dataTrocaPadrao = isoEmDias(DIAS_ATE_TROCA);
+  horaTrocaPadrao = '';
   render();
 }
 
@@ -73,21 +75,26 @@ export async function lancadorSelecionarRev(revId) {
 // maleta existente manteria na tela a sugestão de hoje+35 e o envio empurraria
 // a data de troca daquela maleta pra frente a cada bipe extra — perda de dado
 // silenciosa.
-function aplicarDataTroca(valor) {
+function aplicarDataTroca(valor, hora) {
   dataTrocaPadrao = valor || '';
   const el = document.getElementById('lan-data-troca');
   if (el) el.value = dataTrocaPadrao;
+  // A hora acompanha a data pelo mesmo motivo: continuar uma maleta existente
+  // sem isto sobrescreveria o horário já combinado com ela.
+  horaTrocaPadrao = (hora || '').slice(0, 5);   // 'HH:MM:SS' do Postgres → 'HH:MM'
+  const elH = document.getElementById('lan-hora-troca');
+  if (elH) elH.value = horaTrocaPadrao;
 }
 
 // Escolha do destino pelos botões da tela.
 export function lancadorDestinoNova() {
   maletaDestino = { nova: true };
-  aplicarDataTroca(isoEmDias(DIAS_ATE_TROCA));
+  aplicarDataTroca(isoEmDias(DIAS_ATE_TROCA), '');
   render();
 }
 export function lancadorDestinoExistente(id) {
   const m = maletasAbertas.find(x => String(x.id) === String(id));
-  if (m) { maletaDestino = { ...m }; aplicarDataTroca(m.data_troca); }
+  if (m) { maletaDestino = { ...m }; aplicarDataTroca(m.data_troca, m.hora_troca); }
   render();
 }
 export function lancadorTrocarDestino() { maletaDestino = null; render(); }
@@ -99,6 +106,8 @@ function render() {
   // pessoa pode ter apagado). Só cai no padrão quando ainda não há campo.
   const elDT = document.getElementById('lan-data-troca');
   const dataTrocaSel = elDT ? elDT.value : dataTrocaPadrao;
+  const elHT = document.getElementById('lan-hora-troca');
+  const horaTrocaSel = elHT ? elHT.value : horaTrocaPadrao;
   const total = carrinho.reduce((s, i) => s + i.qtd, 0);
   const valor = carrinho.reduce((s, i) => s + i.qtd * (i.preco_venda || 0), 0);
   // Códigos repetidos no carrinho: destaca a linha inteira em rosa (blush) p/
@@ -144,9 +153,12 @@ function render() {
             <option value="">Selecione a revendedora...</option>
             ${revsAprovadas.map(r => `<option value="${r.id}" ${String(r.id) === revSel ? 'selected' : ''}>${esc(r.nome)}</option>`).join('')}
           </select></div>
-        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Data de troca</label>
+        <div class="form-group"><label class="form-label">Data de troca</label>
           <input type="date" id="lan-data-troca" class="form-control" value="${dataTrocaSel}">
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">Sugerimos ${DIAS_ATE_TROCA} dias. Pode alterar ou deixar em branco. Aparece na tela de Trocas.</div></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Sugerimos ${DIAS_ATE_TROCA} dias. Pode alterar ou deixar em branco.</div></div>
+        <div class="form-group"><label class="form-label">Horário</label>
+          <input type="time" id="lan-hora-troca" class="form-control" value="${horaTrocaSel}">
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Opcional. A revendedora vê data e horário no app dela.</div></div>
       </div>
       ${maletaPanelHtml(revSel)}
     </div>
@@ -309,8 +321,10 @@ export async function lancadorEnviar() {
   // { error } —, por isso a checagem explícita (o try/catch anterior nunca
   // disparava, e era por isso que a data sumia sem ninguém notar).
   const dataTroca = document.getElementById('lan-data-troca')?.value || null;
-  const { error: dtErr } = await sb.from('maletas').update({ data_troca: dataTroca }).eq('id', maletaId);
-  if (dtErr) console.warn('[lancador] nao gravou data_troca (rodou a migration 0050?):', dtErr.message);
+  const horaTroca = document.getElementById('lan-hora-troca')?.value || null;
+  const { error: dtErr } = await sb.from('maletas')
+    .update({ data_troca: dataTroca, hora_troca: horaTroca }).eq('id', maletaId);
+  if (dtErr) console.warn('[lancador] nao gravou data/hora de troca (rodou as migrations 0050/0053?):', dtErr.message);
 
   // 2) Insere as peças vinculadas à maleta.
   // ESTOQUE: hoje o envio NÃO baixa produtos.estoque_qtd. Quando a baixa

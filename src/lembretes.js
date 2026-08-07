@@ -75,6 +75,31 @@ async function coletarTrocas() {
   return { chave: 'trocas', titulo: 'Trocas de mostruário', panel: 'trocas', itens };
 }
 
+// Pedidos de remarcação vindos do app da revendedora (0053), esperando resposta.
+// Sem isto, a revendedora pede e ninguém no desk fica sabendo até abrir Trocas.
+async function coletarSolicitacoesTroca() {
+  if (!podeAcessarPanel('trocas')) return null;
+  const { data, error } = await sbQ(sb.from('solicitacoes_troca')
+    .select('id,revendedora_id,data_solicitada,hora_solicitada,created_at')
+    .eq('status', 'pendente').order('created_at').limit(50));
+  if (error) { console.warn('[lembretes] solicitacoes_troca:', error.message); return null; }
+  if (!data?.length) return null;
+
+  const ids = [...new Set(data.map(s => s.revendedora_id))];
+  const { data: perfis } = await sbQ(sb.from('profiles').select('id,nome').in('id', ids));
+  const nomePor = Object.fromEntries((perfis || []).map(p => [p.id, p.nome]));
+
+  const itens = data.map(s => {
+    const hora = (s.hora_solicitada || '').slice(0, 5);
+    return {
+      txt: nomePor[s.revendedora_id] || 'Revendedora',
+      sub: `quer remarcar para ${formatDate(s.data_solicitada)}${hora ? ' às ' + hora : ''}`,
+      urgente: true,   // pedido parado é revendedora esperando resposta
+    };
+  });
+  return { chave: 'sol-troca', titulo: 'Trocas — pedidos de remarcação', panel: 'trocas', itens };
+}
+
 // Revendedora devendo à Lizzie: lançamento a receber vencido e não pago.
 // `estornado` é filtrado no JS (mesma exclusão que a tela de Financeiro faz).
 async function coletarRecebimentos() {
@@ -144,7 +169,7 @@ async function coletarContasPagar() {
 
 export async function carregarAvisos() {
   const res = await Promise.all([
-    coletarTrocas(), coletarRecebimentos(), coletarFiado(), coletarContasPagar(),
+    coletarTrocas(), coletarSolicitacoesTroca(), coletarRecebimentos(), coletarFiado(), coletarContasPagar(),
   ].map(p => Promise.resolve(p).catch(e => { console.warn('[lembretes]', e); return null; })));
   return res.filter(Boolean);
 }
