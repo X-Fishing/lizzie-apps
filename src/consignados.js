@@ -61,8 +61,19 @@ export function sortConsignados(col) {
   renderCicloGrid();
 }
 
+// O botão "Divulgar catálogo" mora no page-head, que é HTML estático, mas
+// quem decide se ele aparece é o render (só a revendedora, e só com maleta
+// ativa). Desligar por padrão aqui e deixar UM único ponto ligando
+// (renderCicloRevendedora) evita que ele sobreviva numa sub-tela — que é o
+// que aconteceria se cada caminho de saída tivesse que lembrar de escondê-lo.
+function setBtnDivulgarTopo(mostrar) {
+  const b = document.getElementById('btn-divulgar-topo');
+  if (b) b.style.display = mostrar ? 'inline-flex' : 'none';
+}
+
 export function renderCicloGrid() {
   const div = document.getElementById('c-list');
+  setBtnDivulgarTopo(false);
   // Sub-telas (conferência/fechamento) renderizam no lugar do catálogo, na
   // largura normal centralizada (mesmo padrão do histórico de ciclos).
   if (confTelaAberta || fechTelaAberta) {
@@ -179,9 +190,9 @@ export function renderCicloRevendedora() {
   let ativos = soAtivos(state.allConsignados);
   if (state.maletaAtivaId) ativos = ativos.filter(c => c.maleta_id === state.maletaAtivaId);
   const temAtivos = ativos.some(c => qtdDisp(c) > 0);
-  const btnDivulgar = temAtivos
-    ? `<button class="btn-primary" style="width:100%;margin-top:16px" onclick="abrirDivulgarMaleta()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Divulgar minha maleta</button>`
-    : '';
+  // Divulgar subiu pro page-head (não fica mais no rodapé, embaixo da tabela
+  // inteira): é a ação mais usada e agora não depende de rolar até o fim.
+  setBtnDivulgarTopo(temAtivos);
   const btnFechamento = temAtivos
     ? `<button class="btn-secondary" style="width:100%;margin-top:10px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</button>`
     : '';
@@ -208,7 +219,7 @@ export function renderCicloRevendedora() {
           : `Nenhuma peça encontrada com "${termo}"`;
       return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>${msgVazio}</p></div>` + historico;
     }
-    return cabecalho + cicloTableHtml(lista, false) + btnDivulgar + btnFechamento + historico;
+    return cabecalho + cicloTableHtml(lista, false) + btnFechamento + historico;
   }
 
   // Sem catálogo ativo: mostra aviso + histórico (se houver), em vez de tabela vazia.
@@ -216,7 +227,7 @@ export function renderCicloRevendedora() {
     return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div><p>Nenhum catálogo ativo no momento</p></div>` + historico;
   }
 
-  return cabecalho + cicloTableHtml(ativos, false) + btnDivulgar + btnFechamento + historico;
+  return cabecalho + cicloTableHtml(ativos, false) + btnFechamento + historico;
 }
 
 export function agruparPorRevendedora() {
@@ -449,6 +460,7 @@ function cicloAdmCardsHtml() {
           <div style="height:100%;width:${Math.min(100, convPct)}%;background:linear-gradient(90deg,var(--rose),var(--gold))"></div>
         </div>
       </div>
+      ${ehGestor() && l.temAtivos ? `<button class="btn-secondary" style="width:100%;margin-top:10px;font-size:12px;padding:7px" onclick="event.stopPropagation();abrirDivulgarMaleta('${l.revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Divulgar</button>` : ''}
     </div>`;
   }).join('');
 }
@@ -511,11 +523,18 @@ export function renderCicloAdminDetalhe(revId, list) {
   // Ações em evidência no topo do card (perto do "Vendido R$ ..."):
   // Link da maleta + Finalizar Mostruário. O rodapé fica só com
   // "Atualizar itens da maleta" e "Excluir maleta aguardando".
-  const acoesTopo = ehGestor()
-    ? `<div class="btn-group" style="margin-bottom:14px">
-        <button class="btn btn-outline" onclick="abrirDivulgarMaleta('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link da maleta</button>
-        ${temAtivos ? `<button class="btn btn-primary" onclick="abrirConferencia('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar Mostruário</button>` : ''}
-      </div>`
+  // "Imprimir vendidas" é só leitura, então vale pra qualquer staff que já
+  // enxergue a tela — a permissão do painel é o gate. As outras seguem em
+  // ehGestor() por serem ações que mexem em dado.
+  const btnImprimirVendidas = ativos.some(foiVendida)
+    ? `<button class="btn btn-outline" onclick="imprimirVendidasMaleta('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Imprimir vendidas</button>`
+    : '';
+  const acoesGestor = ehGestor()
+    ? `<button class="btn btn-outline" onclick="abrirDivulgarMaleta('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link da maleta</button>
+        ${temAtivos ? `<button class="btn btn-primary" onclick="abrirConferencia('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar Mostruário</button>` : ''}`
+    : '';
+  const acoesTopo = (acoesGestor || btnImprimirVendidas)
+    ? `<div class="btn-group" style="margin-bottom:14px">${acoesGestor}${btnImprimirVendidas}</div>`
     : '';
   const acoes = ehGestor()
     ? `<div class="btn-group" style="margin-top:12px">
@@ -1648,6 +1667,70 @@ export function imprimirRelacaoVendidas() {
         <div style="flex:1;border-top:1px solid #c9b8c4;padding-top:8px;font-size:11.5px;color:#9a8aa0;text-align:center">Assinatura da revendedora</div>
         <div style="flex:1;border-top:1px solid #c9b8c4;padding-top:8px;font-size:11.5px;color:#9a8aa0;text-align:center">Assinatura Lizzie Semijoias</div>
       </div>
+    </div>`;
+
+  document.getElementById('print-overlay').classList.add('show');
+  setTimeout(() => window.print(), 300);
+}
+
+// Relação SÓ das peças vendidas, impressa direto da grid do desk — sem
+// precisar entrar no fechamento. Documento diferente do imprimirRelacaoVendidas
+// acima, de propósito:
+//   - lá o critério é `!c.devolvido` (veredito da conferência FÍSICA, só existe
+//     dentro dela); aqui é `foiVendida` = venda registrada no app.
+//   - lá a quantidade é a ENVIADA (a peça inteira voltou ou não voltou); aqui é
+//     a VENDIDA (o ciclo continua aberto, pode ter vendido parte).
+//   - aqui não vai comissão nem assinatura: é uma parcial de meio de ciclo,
+//     não um acerto fechado.
+export function imprimirVendidasMaleta(revId) {
+  const lista = state.allConsignados.filter(c => c.revendedora_id === revId);
+  const { ativos } = statsRevendedora(lista);
+  // Ignora de propósito a busca/filtros da tela: o papel é a relação completa
+  // do que foi vendido, não um recorte do que estava filtrado na hora.
+  const vendidas = ativos.filter(foiVendida);
+  if (!vendidas.length) { toast('Nenhuma peça vendida para imprimir.'); return; }
+
+  const nome = state.revNameMap[revId] || 'Revendedora';
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const unidades = vendidas.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+  const total = vendidas.reduce((s, c) => s + (c.quantidade_vendida || 0) * Number(c.preco_venda || 0), 0);
+
+  const th = (txt, al) => `<th style="padding:10px 14px;text-align:${al};font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:600;color:#6d2947">${txt}</th>`;
+  const linhas = vendidas.map(c => {
+    const qtd = c.quantidade_vendida || 0;
+    const sub = qtd * Number(c.preco_venda || 0);
+    return `<tr style="border-bottom:1px solid #f0e8ee">
+      <td style="padding:9px 14px;font-size:11.5px;color:#9a8aa0;font-family:'DM Mono',monospace">${esc(c.referencia || '—')}</td>
+      <td style="padding:9px 14px;font-size:12.5px;color:#2d1f35">${esc(c.descricao)}</td>
+      <td style="padding:9px 14px;text-align:center;font-size:12.5px">${qtd}</td>
+      <td style="padding:9px 14px;text-align:right;font-size:12.5px;color:#6a5a70">${c.preco_venda ? 'R$ ' + Number(c.preco_venda).toFixed(2) : '—'}</td>
+      <td style="padding:9px 14px;text-align:right;font-size:12.5px;font-weight:600;color:#2d1f35">R$ ${sub.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('print-content').innerHTML = `
+    <div style="font-family:'DM Sans',Arial,sans-serif;color:#2d1f35;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #6d2947;padding-bottom:16px;margin-bottom:18px">
+        <div>
+          <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#c9748a;font-weight:600;margin-bottom:7px">Lizzie Semijoias</div>
+          <h1 style="font-family:'Cormorant Garamond',Georgia,serif;font-size:30px;font-weight:600;margin:0;line-height:1">Peças Vendidas</h1>
+        </div>
+        <div style="text-align:right;font-size:12px;color:#9a8aa0">
+          <div style="font-size:14px;color:#2d1f35;font-weight:600">${esc(nome)}</div>
+          <div style="margin-top:3px">${hoje}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:28px;margin-bottom:20px;font-size:12.5px">
+        <span style="color:#9a8aa0">Itens <strong style="color:#2d1f35;font-size:14px">${vendidas.length}</strong></span>
+        <span style="color:#9a8aa0">Unidades <strong style="color:#2d1f35;font-size:14px">${unidades}</strong></span>
+        <span style="color:#9a8aa0">Total <strong style="color:#a03a5d;font-size:14px">R$ ${total.toFixed(2)}</strong></span>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#faf3f6;border-bottom:2px solid #e8d8e2;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+          ${th('Código', 'left')}${th('Descrição', 'left')}${th('Qtd', 'center')}${th('Preço', 'right')}${th('Subtotal', 'right')}
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
     </div>`;
 
   document.getElementById('print-overlay').classList.add('show');

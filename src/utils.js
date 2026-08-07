@@ -188,6 +188,22 @@ export function hojeBR() {
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
 }
 
+// ISO yyyy-mm-dd em horário LOCAL. Não use toISOString() para isso: ele
+// converte para UTC, então a partir das 21h no horário de Brasília já devolve
+// AMANHÃ — e aí um vencimento de amanhã aparece como vencido hoje.
+// 'sv-SE' é o locale cujo formato de data já é exatamente yyyy-mm-dd.
+export function hojeISO() {
+  return new Date().toLocaleDateString('sv-SE');
+}
+
+// ISO yyyy-mm-dd daqui a n dias (n negativo = passado). Mesma regra de fuso
+// do hojeISO; setDate() trata virada de mês/ano sozinho.
+export function isoEmDias(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toLocaleDateString('sv-SE');
+}
+
 // CPF 000.000.000-00
 export function maskCpf(input) {
   let v = input.value.replace(/\D/g, '').slice(0, 11);

@@ -981,3 +981,37 @@ select.cap-inp { cursor:pointer; }
 .fid-selo.on svg { width:20px; height:20px; }
 .fid-progresso { font-family:'Cormorant Garamond',serif; color:var(--plum); font-weight:600; }
 @media (max-width:400px) { .fid-selo { font-size:12px; } }
+
+/* ── LEMBRETES (painel flutuante staff, ver src/lembretes.js) ──────────
+   z-index 140: acima da .nav (100), da .staff-nav (100) e do #snav-reabrir
+   (130), e ABAIXO de .modal-overlay (500), #toast (9999) e #print-overlay
+   (10000) — o painel nunca pode cobrir um modal aberto.
+   bottom 136px no mobile: livra a .nav (60px) E o #install-btn (bottom 76 +
+   ~48 de altura). No desktop staff a .nav some, entao encosta embaixo. */
+#lembretes { position: fixed; right: 16px; bottom: 136px; z-index: 140; }
+#lembretes-bolha {
+  position: relative; width: 52px; height: 52px; border-radius: 50%;
+  background: var(--grad-rose); color: #fff; border: none; cursor: pointer;
+  box-shadow: 0 6px 20px rgba(124,58,93,.35);
+  display: flex; align-items: center; justify-content: center; margin-left: auto;
+}
+#lembretes-bolha svg { width: 22px; height: 22px; }
+.lembrete-badge {
+  position: absolute; top: -2px; right: -2px; min-width: 20px; height: 20px;
+  padding: 0 5px; border-radius: 10px; background: var(--danger); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 20px; border: 2px solid var(--cream);
+}
+#lembretes-box {
+  width: min(340px, calc(100vw - 32px)); max-height: 60vh; overflow-y: auto;
+  background: var(--cream); border: 1px solid var(--border); border-radius: 16px;
+  padding: 14px; margin-bottom: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.14);
+}
+.lembrete-count {
+  min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--blush);
+  color: var(--rose); font-size: 11px; font-weight: 700; text-align: center;
+}
+.lembrete-link {
+  background: none; border: none; padding: 6px 0 0; cursor: pointer;
+  font-size: 11.5px; font-weight: 600; color: var(--rose);
+}
+@media (min-width: 900px) { #app.staff-desktop ~ #lembretes { bottom: 20px; } }
