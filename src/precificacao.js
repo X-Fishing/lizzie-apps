@@ -61,6 +61,9 @@ export async function loadPrecificacao() {
   const cfg = await carregarPrecificacao(true);
   if (!cfg) { painelSemConfig('panel-precificacao'); return; }
   const { params, banhos } = cfg;
+  await carregarCadastrosParaSelect(); // categorias (banho/verniz padrão)
+  const categorias = (cadastroCache.categorias || []).filter(c => c.ativo !== false);
+  const semVernizPadrao = categorias.length && categorias[0].verniz_padrao === undefined;
 
   panel.innerHTML = `
     <div class="page-head"><div>
@@ -98,6 +101,24 @@ export async function loadPrecificacao() {
         </tr>`).join('')}
       </tbody></table></div>
       <button class="btn btn-primary" style="margin-top:12px" onclick="precifSalvarBanhos(this)">Salvar cotações</button>
+    </div>
+
+    <div class="dash-card" style="margin-top:16px">
+      <h3>Banho e verniz por categoria</h3>
+      <div class="dash-sub">Ao escolher a categoria na Entrada de Mercadoria ou no produto, Banho e Verniz vêm preenchidos sozinhos com o padrão daqui (editável por peça).</div>
+      ${semVernizPadrao ? '<div style="font-size:12px;color:var(--warning);margin-top:6px">A coluna "verniz padrão" não existe no banco — rode a migração 0049 no Supabase.</div>' : ''}
+      <div class="pag-wrap" style="margin-top:10px"><table class="pag-table"><thead><tr>
+        <th class="pag-th">Categoria</th>
+        <th class="pag-th" title="Milésimos — só se aplica ao ouro">Banho (milésimos)</th>
+        <th class="pag-th" title="R$ por quilo — entra no custo quando maior que zero">Verniz (R$/kg)</th>
+      </tr></thead><tbody>
+        ${categorias.map(c => `<tr class="ciclo-row">
+          <td class="ciclo-td">${esc(c.nome)}</td>
+          <td class="ciclo-td"><input type="number" step="0.01" class="form-control" style="padding:6px 10px;width:110px" id="pc-banho-${c.id}" value="${Number(c.banho_padrao) || 0}"></td>
+          <td class="ciclo-td"><input type="number" step="0.01" class="form-control" style="padding:6px 10px;width:110px" id="pc-verniz-${c.id}" value="${c.verniz_padrao != null ? Number(c.verniz_padrao) : 390}"></td>
+        </tr>`).join('') || `<tr><td colspan="3" style="padding:14px;color:var(--muted);font-size:12px">Nenhuma categoria ativa — cadastre em Estoque &gt; Categorias.</td></tr>`}
+      </tbody></table></div>
+      ${categorias.length ? '<button class="btn btn-primary" style="margin-top:12px" onclick="precifSalvarCategorias(this)">Salvar banho e verniz</button>' : ''}
     </div>`;
 }
 
@@ -134,6 +155,31 @@ export async function precifSalvarBanhos(btn) {
   if (error) { console.error('Cotações:', error); if (await handleSupabaseError(error, `Erro ao salvar: ${error.message}`)) return; }
   precifCache = null;
   toast('Cotações salvas!');
+}
+
+export async function precifSalvarCategorias(btn) {
+  const categorias = (cadastroCache.categorias || []).filter(c => c.ativo !== false);
+  const rows = categorias.map(c => ({
+    id: c.id,
+    banho_padrao: parseFloat(document.getElementById(`pc-banho-${c.id}`)?.value) || 0,
+    verniz_padrao: parseFloat(document.getElementById(`pc-verniz-${c.id}`)?.value) || 0,
+  }));
+  btn.disabled = true;
+  const { error } = await sbQ(sb.from('categorias').upsert(rows));
+  btn.disabled = false;
+  if (error) {
+    console.error('Banho/verniz por categoria:', error);
+    if (/verniz_padrao/i.test(error.message || '') && /column|schema cache/i.test(error.message || '')) {
+      toast('A coluna "verniz padrão" não existe no banco — rode a migração 0049 no Supabase.');
+      return;
+    }
+    if (await handleSupabaseError(error, `Erro ao salvar: ${error.message}`)) return;
+  }
+  // Recarrega o cache de categorias (Entrada de Mercadoria/produto usam
+  // cadastroCache diretamente — sem isso, os valores novos só apareceriam
+  // depois de um F5).
+  await carregarCadastrosParaSelect();
+  toast('Banho e verniz salvos!');
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -209,7 +255,7 @@ const RASCUNHO_KEY = 'lizzie-entrada-mercadoria-rascunho';
 function rascunhoSalvar() {
   try {
     localStorage.setItem(RASCUNHO_KEY, JSON.stringify({
-      fornecedorId: document.getElementById('lote-forn')?.value || '',
+      categoriaId: document.getElementById('lote-categ')?.value || '',
       data: document.getElementById('lote-data')?.value || '',
       obs: document.getElementById('lote-obs')?.value || '',
       rows: loteRows,
@@ -240,7 +286,14 @@ export async function loadEntradaMercadoria() {
   await carregarCadastrosParaSelect();
   await loteCarregarProximoSku();
 
-  const rasc = rascunhoLer();
+  let rasc = rascunhoLer();
+  // Rascunho no formato ANTIGO (fornecedor no cabeçalho, categoria por linha)
+  // não é compatível com o layout atual (categoria no cabeçalho, fornecedor
+  // por linha) — descarta em silêncio em vez de misturar os dois formatos.
+  if (rasc && (rasc.fornecedorId !== undefined || (rasc.rows || []).some(r => r.categoriaId !== undefined))) {
+    rascunhoLimpar();
+    rasc = null;
+  }
   loteRows = rasc?.rows || [];
   // Saneia rascunhos gravados com a trava antiga: banhoManual=true sem um
   // valor real digitado (0) voltava a bloquear o padrão da categoria p/ sempre.
@@ -253,11 +306,11 @@ export async function loadEntradaMercadoria() {
     </div></div>
     <div class="dash-card" style="margin-bottom:14px">
       <div style="display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap">
-        <div class="form-group" style="margin:0;min-width:230px"><label class="form-label">Fornecedor do lote *</label>
-          <select id="lote-forn" class="form-control" onchange="loteRecalcTudo()">
-            <option value="">— sem fornecedor (0%) —</option>
-            ${(cadastroCache.fornecedores || []).filter(f => f.ativo !== false).map(f =>
-              `<option value="${f.id}" ${rasc?.fornecedorId === String(f.id) ? 'selected' : ''}>${esc(f.nome)}${Number(f.desconto) ? ` (${Number(f.desconto)}% desc.)` : ''}</option>`).join('')}
+        <div class="form-group" style="margin:0;min-width:230px"><label class="form-label">Categoria do lote *</label>
+          <select id="lote-categ" class="form-control" onchange="loteRecalcTudo()">
+            <option value="">— escolha a categoria —</option>
+            ${(cadastroCache.categorias || []).filter(c => c.ativo !== false).map(c =>
+              `<option value="${c.id}" ${rasc?.categoriaId === String(c.id) ? 'selected' : ''}>${esc(c.nome)}</option>`).join('')}
           </select></div>
         <div class="form-group" style="margin:0"><label class="form-label">Data da entrada</label>
           <input type="date" id="lote-data" class="form-control" value="${rasc?.data || new Date().toISOString().slice(0, 10)}" onchange="loteRecalcTudo()"></div>
@@ -276,10 +329,19 @@ export async function loadEntradaMercadoria() {
   loteRender();
 }
 
+// Categoria do LOTE (cabeçalho) — banho/verniz padrão vêm dela.
+function catDoLote() {
+  const id = document.getElementById('lote-categ')?.value;
+  return (cadastroCache.categorias || []).find(c => String(c.id) === String(id));
+}
+
 function loteNovaLinha() {
+  const cat = catDoLote();
   return {
     sku: String(loteProxSku++),
-    categoriaId: '', modelo: '', tipo: '', banho: 0, banhoManual: false, verniz: 0,
+    fornecedorId: '', modelo: '', tipo: '',
+    banho: Number(cat?.banho_padrao) || 0, banhoManual: false,
+    verniz: cat?.verniz_padrao != null ? Number(cat.verniz_padrao) : 390, vernizManual: false,
     qntd: 1, codForn: '', pecaBruta: 0, peso: 0,
     precoFinal: null, precoManual: false,
   };
@@ -291,7 +353,7 @@ function loteNovaLinha() {
 
 function loteCalc(r) {
   const banhoCfg = (precifCache?.banhos || []).find(b => b.codigo === r.tipo);
-  const forn = (cadastroCache.fornecedores || []).find(f => String(f.id) === String(document.getElementById('lote-forn')?.value));
+  const forn = (cadastroCache.fornecedores || []).find(f => String(f.id) === String(r.fornecedorId));
   const descontoPct = Number(forn?.desconto) || 0;
   const res = calcularPrecificacao({
     tipoBanho: r.tipo, cotacao: Number(banhoCfg?.cotacao) || 0,
@@ -317,9 +379,9 @@ function loteRender() {
     const c = loteCalc(r);
     return `<tr class="ciclo-row">
       <td class="ciclo-td">${inp(i, 'sku', r.sku, `id="lote-sku-${i}" style="${loteSkuDuplicado(r.sku, i) ? 'border-color:var(--danger);color:var(--danger)' : ''}" title="${loteSkuDuplicado(r.sku, i) ? 'SKU duplicado!' : ''}"`)}</td>
-      <td class="ciclo-td"><select class="form-control" onchange="loteSet(${i},'categoriaId',this.value)">
-        <option value="">categ...</option>
-        ${(cadastroCache.categorias || []).filter(x => x.ativo !== false).map(x => `<option value="${x.id}" ${String(x.id) === String(r.categoriaId) ? 'selected' : ''}>${esc(x.nome)}</option>`).join('')}
+      <td class="ciclo-td"><select class="form-control" onchange="loteSet(${i},'fornecedorId',this.value)">
+        <option value="">fornec...</option>
+        ${(cadastroCache.fornecedores || []).filter(f => f.ativo !== false).map(f => `<option value="${f.id}" ${String(f.id) === String(r.fornecedorId) ? 'selected' : ''}>${esc(f.nome)}${Number(f.desconto) ? ` (${Number(f.desconto)}%)` : ''}</option>`).join('')}
       </select></td>
       <td class="ciclo-td">${inp(i, 'modelo', r.modelo, 'placeholder="descrição completa da peça"')}</td>
       <td class="ciclo-td"><select class="form-control" onchange="loteSet(${i},'tipo',this.value)">
@@ -364,11 +426,11 @@ function loteRender() {
       </colgroup>
       <thead><tr>
       <th class="pag-th" title="Código (SKU) — gerado em sequência, editável">Cód.</th>
-      <th class="pag-th" title="Categoria (agrupamento e banho padrão — não entra no nome)">Categ</th>
+      <th class="pag-th" title="Fornecedor desta peça (desconto entra no cálculo)">Fornecedor</th>
       <th class="pag-th" title="Descrição — é o nome final do produto, exatamente como digitado">Descrição</th>
       <th class="pag-th" title="Tipo de banho (usado na cotação — não entra no nome)">Tipo</th>
-      <th class="pag-th" title="Banho (milésimos — só ouro; preenchido pelo padrão da categoria)">Banho</th>
-      <th class="pag-th" title="Verniz">Vern.</th>
+      <th class="pag-th" title="Banho (milésimos — só ouro; preenchido pelo padrão da categoria do lote)">Banho</th>
+      <th class="pag-th" title="Verniz (R$/kg; preenchido pelo padrão da categoria do lote)">Vern.</th>
       <th class="pag-th" title="Quantidade (vai para o estoque)">Qtd</th>
       <th class="pag-th" title="Código no fornecedor">C. Forn</th>
       <th class="pag-th" title="Peça bruta (R$)">P. Bruta</th>
@@ -379,7 +441,7 @@ function loteRender() {
       <th class="pag-th" title="Preço final (editável — arredondamento comercial)">Preço</th>
       <th class="pag-th"></th>
     </tr></thead><tbody>${linhas}</tbody></table></div>
-    <div style="font-size:11.5px;color:var(--muted);margin-top:6px">A descrição é exatamente o que você digitar — inclua o banho no texto se quiser diferenciar (ex.: "... Ouro 18 k"). Escolher a categoria preenche os milésimos padrão dela.</div>
+    <div style="font-size:11.5px;color:var(--muted);margin-top:6px">A descrição é exatamente o que você digitar — inclua o banho no texto se quiser diferenciar (ex.: "... Ouro 18 k"). Banho e Verniz vêm do padrão da categoria escolhida no topo (editável por peça).</div>
     <div class="dash-card" style="margin-top:12px;display:flex;gap:24px;align-items:center;flex-wrap:wrap">
       <span style="font-size:13px;color:var(--muted)">${loteRows.length} linha${loteRows.length > 1 ? 's' : ''} · <b id="lote-tot-pecas" style="color:var(--plum)">${tot.pecas}</b> peças</span>
       <span style="font-size:13px;color:var(--muted)">Custo total: <b id="lote-tot-custo" style="color:var(--plum)">${fmtBRL(tot.custo)}</b></span>
@@ -432,15 +494,17 @@ export function loteArredondarTodos() {
 }
 
 // ── Colar da planilha (Excel/Sheets): uma linha por peça, colunas na
-// ordem da grade: SKU | Categ | Modelo | Tipo | Banho | Verniz | Qntd |
-// Cód.Forn | Peça bruta | Peso. SKU vazio = gera automático.
+// ordem da grade: SKU | Fornecedor | Modelo | Tipo | Banho | Verniz | Qntd |
+// Cód.Forn | Peça bruta | Peso. SKU vazio = gera automático. Categoria é a
+// do LOTE (cabeçalho) — não vem colada, é uma só para o lote inteiro.
 export function entradaColarAbrir() {
   document.getElementById('cad-modal-titulo').textContent = 'Colar da planilha';
   document.getElementById('cad-modal-body').innerHTML = `
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:8px">
       Cole as linhas copiadas do Excel/Sheets (separadas por Tab), nesta ordem de colunas:<br>
-      <b>SKU · Categ · Descrição · Tipo (o/b/n/p/d) · Banho · Verniz · Qntd · Cód.Forn · Peça bruta · Peso</b><br>
-      SKU vazio gera automático; a categoria casa pelo nome; a descrição vira o nome exato do produto.
+      <b>SKU · Fornecedor · Descrição · Tipo (o/b/n/p/d) · Banho · Verniz · Qntd · Cód.Forn · Peça bruta · Peso</b><br>
+      SKU vazio gera automático; o fornecedor casa pelo nome; a descrição vira o nome exato do produto.
+      Banho e Verniz em branco (ou 0) usam o padrão da categoria escolhida no topo do lote.
     </div>
     <textarea id="colar-texto" class="form-control" rows="8" placeholder="cole aqui..."></textarea>`;
   document.getElementById('cad-modal-salvar').setAttribute('onclick', 'entradaColarProcessar()');
@@ -454,23 +518,25 @@ export function entradaColarProcessar() {
   const linhas = (document.getElementById('colar-texto').value || '')
     .split(/\r?\n/).filter(l => l.trim() !== '');
   if (!linhas.length) { toast('Nada para colar.'); return; }
+  const cat = catDoLote();
   let ok = 0;
   for (const linha of linhas) {
     const c = linha.split('\t').map(x => x.trim());
-    const [sku, categNome, modelo, tipoRaw, banho, verniz, qntd, codForn, pecaBruta, peso] = c;
-    const cat = (cadastroCache.categorias || []).find(x => (x.nome || '').toLowerCase() === (categNome || '').toLowerCase());
+    const [sku, fornNome, modelo, tipoRaw, banho, verniz, qntd, codForn, pecaBruta, peso] = c;
+    const forn = (cadastroCache.fornecedores || []).find(x => (x.nome || '').toLowerCase() === (fornNome || '').toLowerCase());
     const tipoLower = (tipoRaw || '').toLowerCase();
     const banhoCfg = (precifCache?.banhos || []).find(b => b.codigo === tipoLower || (b.nome || '').toLowerCase() === tipoLower);
     const r = loteNovaLinha();
     if (sku) { r.sku = sku; } // senão fica o automático já gerado
-    r.categoriaId = cat?.id || '';
+    r.fornecedorId = forn?.id || '';
     r.modelo = modelo || '';
     r.tipo = banhoCfg?.codigo || '';
     // '0' colado (padrão das planilhas p/ peças sem milesimagem) NÃO é valor
-    // manual — só banho > 0 trava o automático da categoria.
+    // manual — só banho/verniz > 0 trava o automático da categoria do lote.
     if (num(banho) > 0) { r.banho = num(banho); r.banhoManual = true; }
-    else r.banho = Number(cat?.banho_padrao) || 0; // padrão da categoria
-    r.verniz = num(verniz);
+    else r.banho = Number(cat?.banho_padrao) || 0;
+    if (num(verniz) > 0) { r.verniz = num(verniz); r.vernizManual = true; }
+    else r.verniz = cat?.verniz_padrao != null ? Number(cat.verniz_padrao) : 390;
     r.qntd = Math.max(1, parseInt(qntd) || 1);
     r.codForn = codForn || '';
     r.pecaBruta = num(pecaBruta); r.peso = num(peso);
@@ -492,7 +558,22 @@ export function loteRemover(i) {
   loteRender();
 }
 
-export function loteRecalcTudo() { loteRender(); }
+// Chamado ao trocar a categoria do LOTE (cabeçalho): reaplica o banho/verniz
+// padrão em toda linha que ainda não foi editada à mão (as manuais mantêm o
+// que a pessoa digitou).
+export function loteRecalcTudo() {
+  const cat = catDoLote();
+  if (cat && cat.banho_padrao === undefined) {
+    toast('A coluna "banho padrão" não existe no banco — rode a migração 0015 no Supabase.');
+  } else if (cat && cat.verniz_padrao === undefined) {
+    toast('A coluna "verniz padrão" não existe no banco — rode a migração 0049 no Supabase.');
+  }
+  loteRows.forEach(r => {
+    if (!r.banhoManual) r.banho = Number(cat?.banho_padrao) || 0;
+    if (!r.vernizManual) r.verniz = cat?.verniz_padrao != null ? Number(cat.verniz_padrao) : 390;
+  });
+  loteRender();
+}
 
 export function loteSet(i, campo, valor, el) {
   const r = loteRows[i];
@@ -503,27 +584,30 @@ export function loteSet(i, campo, valor, el) {
     if (el) { maskMoneyBR(el); r.precoFinal = parseMoneyBR(el.value); r.precoManual = true; }
   } else if (campo === 'banho') {
     if (String(valor).trim() === '') {
-      // campo APAGADO = "volta ao automático": destrava e reaplica o padrão
-      const cat = (cadastroCache.categorias || []).find(x => String(x.id) === String(r.categoriaId));
+      // campo APAGADO = "volta ao automático": destrava e reaplica o padrão da categoria do LOTE
+      const cat = catDoLote();
       r.banho = Number(cat?.banho_padrao) || 0;
       r.banhoManual = false;
     } else {
       r.banho = parseFloat(valor) || 0;
       r.banhoManual = true; // digitou um valor: o padrão não sobrescreve mais
     }
-  } else if (['verniz', 'peso'].includes(campo)) {
-    r[campo] = parseFloat(valor) || 0;
+  } else if (campo === 'verniz') {
+    if (String(valor).trim() === '') {
+      // mesma trava do banho: campo apagado volta ao padrão da categoria
+      const cat = catDoLote();
+      r.verniz = cat?.verniz_padrao != null ? Number(cat.verniz_padrao) : 390;
+      r.vernizManual = false;
+    } else {
+      r.verniz = parseFloat(valor) || 0;
+      r.vernizManual = true;
+    }
+  } else if (campo === 'peso') {
+    r.peso = parseFloat(valor) || 0;
   } else if (campo === 'qntd') {
     r.qntd = Math.max(1, parseInt(valor) || 1);
-  } else if (campo === 'categoriaId') {
-    r.categoriaId = valor;
-    // Cada categoria tem sua milesimagem padrão: preenche o Banho sozinho
-    // (a menos que o usuário já tenha digitado um valor manual nesta linha).
-    const cat = (cadastroCache.categorias || []).find(x => String(x.id) === String(valor));
-    if (cat && cat.banho_padrao === undefined) {
-      toast('A coluna "banho padrão" não existe no banco — rode a migração 0015 no Supabase.');
-    }
-    if (!r.banhoManual) r.banho = Number(cat?.banho_padrao) || 0;
+  } else if (campo === 'fornecedorId') {
+    r.fornecedorId = valor; // desconto do fornecedor entra no cálculo desta linha
   } else {
     r[campo] = valor;
   }
@@ -547,7 +631,7 @@ export function loteSet(i, campo, valor, el) {
   loteAtualizarTotais();
   rascunhoSalvar();
   // selects (categ/tipo) mudam estrutura da linha (banho habilita/sufixo do nome)
-  if (campo === 'tipo' || campo === 'categoriaId') loteRender();
+  if (campo === 'tipo' || campo === 'fornecedorId') loteRender();
 }
 
 function loteAtualizarTotais() {
@@ -566,7 +650,8 @@ function loteAtualizarTotais() {
 export async function loteLancar(btn) {
   if (!ehGestor()) { toast('Sem permissão'); return; }
   if (!loteRows.length) { toast('Adicione ao menos uma linha.'); return; }
-  const fornId = document.getElementById('lote-forn').value || null;
+  const categId = document.getElementById('lote-categ').value || null;
+  if (!categId) { toast('Escolha a categoria do lote.'); return; }
 
   // Validação completa ANTES (tudo-ou-nada: com erro, nada é lançado)
   const erros = [];
@@ -597,8 +682,8 @@ export async function loteLancar(btn) {
     return {
       nome: r.modelo.trim(), // descrição literal — exatamente como digitada
       sku: r.sku.trim(),
-      categoria_id: r.categoriaId || null,
-      fornecedor_id: fornId,
+      categoria_id: categId,       // uma só categoria para o lote inteiro
+      fornecedor_id: r.fornecedorId || null,
       codigo_fornecedor: r.codForn.trim() || null,
       formato: 'simples',
       estoque_qtd: r.qntd,
@@ -625,7 +710,7 @@ export async function loteLancar(btn) {
   // SKU (o modal avisa isso por produto).
   const impressos = payloads.map(p => ({
     sku: p.sku, nome: p.nome, preco_venda: p.preco_venda,
-    codigo_barras: null, qtd: p.estoque_qtd,
+    codigo_barras: null, qtd: p.estoque_qtd, estoque: p.estoque_qtd,
   }));
   toast(`${payloads.length} produto${payloads.length > 1 ? 's' : ''} lançado${payloads.length > 1 ? 's' : ''} no catálogo!`);
   loteRows = [];

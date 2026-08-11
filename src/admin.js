@@ -734,6 +734,7 @@ export async function excluirRevendedora(id, btn) {
     if (vendaIds.length) {
       await sbQ(sb.from('venda_itens').delete().in('venda_id', vendaIds));
       await sbQ(sb.from('recebimentos').delete().in('venda_id', vendaIds));
+      await sbQ(sb.from('venda_pagamentos').delete().in('venda_id', vendaIds));
       await sbQ(sb.from('vendas').delete().eq('revendedora_id', id));
     }
     await sbQ(sb.from('garantias').delete().eq('revendedora_id', id));

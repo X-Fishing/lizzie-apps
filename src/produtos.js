@@ -547,13 +547,31 @@ function produtosSelecionados() {
   return produtosCache.filter(p => selecionados.has(String(p.id)));
 }
 
+// Um produto vira 1 linha; produto com variações vira 1 linha por variação —
+// é a variação que tem SKU, código de barras e estoque próprios (o pai fica 0).
+function itensEtiquetaDoProduto(p) {
+  const vars = variacoesPorProduto.get(String(p.id)) || [];
+  if (p.formato === 'variacao' && vars.length) {
+    return vars.map(v => ({
+      sku: v.sku || p.sku || '',
+      nome: `${p.nome} — ${v.atributo}: ${v.valor}`,
+      preco_venda: v.preco_venda ?? p.preco_venda,
+      codigo_barras: v.codigo_barras || null,
+      qtd: 1,
+      estoque: Number(v.estoque_qtd) || 0,
+    }));
+  }
+  return [{
+    sku: p.sku || '', nome: p.nome, preco_venda: p.preco_venda,
+    codigo_barras: p.codigo_barras || null, qtd: 1,
+    estoque: Number(p.estoque_qtd) || 0,
+  }];
+}
+
 export function produtoMassaEtiquetas() {
   const sel = produtosSelecionados();
   if (!sel.length) { toast('Nada selecionado.', 'erro'); return; }
-  abrirImpressaoEtiquetas(sel.map(p => ({
-    sku: p.sku || '', nome: p.nome, preco_venda: p.preco_venda,
-    codigo_barras: p.codigo_barras || null, qtd: 1,
-  })));
+  abrirImpressaoEtiquetas(sel.flatMap(itensEtiquetaDoProduto));
 }
 
 export function produtoMassaAtivo(ativo) {
@@ -1478,11 +1496,13 @@ export function produtoPrecifPreview() {
   document.getElementById('p-prev-sugerido').textContent = fmtBRL(r.precoSugerido);
 }
 
-// Categoria escolhida → preenche o Banho com a milesimagem padrão dela.
+// Categoria escolhida → preenche Banho e Verniz com o padrão dela.
 export function produtoCategoriaBanho() {
   const cat = (cadastroCache.categorias || []).find(c => String(c.id) === String(document.getElementById('p-categoria').value));
-  const el = document.getElementById('p-banho');
-  if (el && cat && Number(cat.banho_padrao)) el.value = Number(cat.banho_padrao);
+  const elBanho = document.getElementById('p-banho');
+  if (elBanho && cat && Number(cat.banho_padrao)) elBanho.value = Number(cat.banho_padrao);
+  const elVerniz = document.getElementById('p-verniz');
+  if (elVerniz && cat && cat.verniz_padrao != null) elVerniz.value = Number(cat.verniz_padrao);
   produtoPrecifPreview();
 }
 
@@ -1678,7 +1698,8 @@ export function produtoImprimirEtiqueta() {
   const codigo_barras = document.getElementById('p-codbarras').value.trim() || null;
   const preco_venda = parseMoneyBR(document.getElementById('p-venda').value) || 0;
   if (!sku) { toast('Informe o SKU antes de imprimir a etiqueta.'); return; }
-  abrirImpressaoEtiquetas([{ sku, nome, preco_venda, codigo_barras, qtd: 1 }]);
+  const estoque = parseInt(document.getElementById('p-estoque')?.value, 10) || 0;
+  abrirImpressaoEtiquetas([{ sku, nome, preco_venda, codigo_barras, qtd: 1, estoque }]);
 }
 
 // ── Salvar ──

@@ -4,6 +4,8 @@ import { state } from './state.js';
 import { sbQ, showMsg, toast, handleSupabaseError, openModal, closeModal, telValido } from './utils.js';
 import { carregarPermissoes, renderSidebar } from './menu.js';
 import { iniciarRoteamento } from './nav.js';
+import { ativarDrawer } from './drawer.js';
+import { iniciarLembretes } from './lembretes.js';
 export function mostrarRecovery() {
   state.recoveryAtiva = true;
   document.getElementById('splash').style.display = 'none';
@@ -110,13 +112,21 @@ function montarAppUI() {
   document.getElementById('nav-pagamentos').style.display = ehRevendedora ? 'flex' : 'none';
   document.getElementById('nav-historico').style.display = ehRevendedora ? 'flex' : 'none';
   document.getElementById('nav-fidelidade').style.display = ehRevendedora ? 'flex' : 'none';
+  document.getElementById('nav-proxima-troca').style.display = ehRevendedora ? 'flex' : 'none';
   // Dashboard PC (barra lateral) só para staff; o CSS faz o resto em telas >=900px.
   document.getElementById('app').classList.toggle('staff-desktop', ehStaff());
+  // Revendedora navega pela GAVETA (design mobile): liga o hambúrguer e
+  // esconde a nav inferior. Staff não entra aqui e segue como antes.
+  if (ehRevendedora) ativarDrawer();
 
   // Permissões por perfil ANTES de montar a sidebar (uma vez por login).
   const permissoes = ehStaff() ? carregarPermissoes() : Promise.resolve();
   permissoes.then(() => {
     renderSidebar();
+    // Lembretes: só staff, e só DEPOIS das permissões — cada seção do painel
+    // é gated por podeAcessarPanel, que responderia "não" pra tudo se o
+    // conjunto de permissões ainda estivesse vazio.
+    if (ehStaff()) iniciarLembretes();
     // Liga o roteador por hash e resolve a URL atual: se veio de um link
     // direto/F5 (#/produtos), abre aquela tela (com guard de papel); se não,
     // cai no painel inicial permitido. Faz o "voltar" do navegador funcionar.

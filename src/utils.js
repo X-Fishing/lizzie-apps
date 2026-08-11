@@ -19,6 +19,13 @@ export function marcarRevsTeste(profiles) {
   state.revTesteSet = new Set((profiles || []).filter(p => p.teste).map(p => String(p.id)));
 }
 
+// Formas "a receber": a cliente ainda não pagou. Prefixo 'Fiado' cobre
+// 'Fiado' e 'Fiado parcelado Nx' com uma regra só — mesma do banco (0052).
+// Cartão crédito Nx é maquininha: o dinheiro está garantido, conta como recebido.
+export function ehFormaAReceber(f) {
+  return /^fiado/i.test(String(f || ''));
+}
+
 // Quantidade disponivel de uma peca (trata campos null para nao gerar NaN).
 export function qtdDisp(c) {
   return (c.quantidade_enviada || 0) - (c.quantidade_vendida || 0) - (c.quantidade_devolvida || 0);
@@ -186,6 +193,35 @@ export function isoToBR(iso) {
 export function hojeBR() {
   const d = new Date();
   return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+}
+
+// ISO yyyy-mm-dd em horário LOCAL. Não use toISOString() para isso: ele
+// converte para UTC, então a partir das 21h no horário de Brasília já devolve
+// AMANHÃ — e aí um vencimento de amanhã aparece como vencido hoje.
+// 'sv-SE' é o locale cujo formato de data já é exatamente yyyy-mm-dd.
+export function hojeISO() {
+  return new Date().toLocaleDateString('sv-SE');
+}
+
+// ISO yyyy-mm-dd daqui a n dias (n negativo = passado). Mesma regra de fuso
+// do hojeISO; setDate() trata virada de mês/ano sozinho.
+export function isoEmDias(n) {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toLocaleDateString('sv-SE');
+}
+
+// Ciclo de mostruário da Lizzie. Fonte única: o Lançador usa para sugerir a
+// data de troca e a tela "Próxima troca" da revendedora para projetar os
+// próximos ciclos — duplicar o número faria as duas telas divergirem.
+export const DIAS_CICLO_MOSTRUARIO = 35;
+
+// Soma n dias a uma data ISO ('yyyy-mm-dd'), sem mexer no fuso.
+export function isoSomandoDias(iso, n) {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d)) return '';
+  d.setDate(d.getDate() + n);
+  return d.toLocaleDateString('sv-SE');
 }
 
 // CPF 000.000.000-00

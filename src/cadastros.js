@@ -19,17 +19,17 @@ const CFG = {
     order: 'nome',
     campos: [
       { key: 'nome', label: 'Nome', type: 'text', required: true },
-      { key: 'banho_padrao', label: 'Banho padrão (milésimos — só ouro)', type: 'number' },
       { key: 'ativo', label: 'Ativo', type: 'bool', default: true },
     ],
-    colunas: ['nome', 'banho_padrao'],
-    fmt: { banho_padrao: v => (Number(v) || 0) + ' mil.' },
+    colunas: ['nome'],
+    // Banho e verniz padrão são configurados em Estoque > Precificação (não
+    // aqui) — um lugar só, sem risco de duas telas mostrando valores diferentes.
     render: linhas => linhas.length
       ? `<div class="card" style="padding:0;overflow:hidden;max-width:760px">${linhas.map((c, i) => `
           <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:13px 18px;${i ? 'border-top:1px solid var(--border);' : ''}${c.ativo === false ? 'opacity:.55;' : ''}">
             <div>
               <div style="font-weight:500;color:var(--plum);font-size:14px">${esc(c.nome)}${c.ativo === false ? ' <span class="badge badge-aberta" style="font-size:10px">inativa</span>' : ''}</div>
-              <div style="font-size:11px;color:var(--muted);margin-top:2px">Banho padrão: ${Number(c.banho_padrao) || 0} milésimos</div>
+              <div style="font-size:11px;color:var(--muted);margin-top:2px">Banho e verniz padrão: configure em Estoque &gt; Precificação</div>
             </div>
             <div style="white-space:nowrap">${cadAcoesHtml('categorias', c.id)}</div>
           </div>`).join('')}</div>`
@@ -190,7 +190,6 @@ const CFG = {
 const LABEL_COL = {
   nome: 'Nome', ano: 'Ano', telefone: 'Telefone', contato: 'Contato',
   valor_min: 'De', valor_max: 'Até', percentual: 'Comissão', desconto: 'Desconto',
-  banho_padrao: 'Banho padrão',
 };
 
 // Alerta (não bloqueia) sobreposição e lacuna entre faixas ATIVAS.
@@ -419,7 +418,7 @@ export function loadCategoriasFinanceiras() { carregar('categorias_financeiras')
 // Carrega os 3 cadastros para alimentar selects do produto (uma vez por abertura).
 export async function carregarCadastrosParaSelect() {
   const [c1, c2, c3] = await Promise.all([
-    sbQ(sb.from('categorias').select('*').order('nome')), // * = inclui banho_padrao (0015)
+    sbQ(sb.from('categorias').select('*').order('nome')), // * = inclui banho_padrao (0015) e verniz_padrao (0049)
     sbQ(sb.from('colecoes').select('id,nome,ativo').order('nome')),
     sbQ(sb.from('fornecedores').select('*').order('nome')), // * = inclui desconto quando a 0013 existir
   ]);

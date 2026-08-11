@@ -124,13 +124,17 @@ function gerarZPLLinha(itens, opts) {
 // (padrão) mantém o formato de sempre — 1 ^XA por SKU distinto, com ^PQ pra
 // repetir. Com 2+ colunas, "estoura" as quantidades em etiquetas
 // individuais e desenha linha por linha, `colunas` por vez.
+// qtd 0 = "sem estoque, não imprime esta"; qtd ausente (chamadas antigas,
+// ex. etiquetasTeste) mantém o fallback histórico de 1 cópia.
+const copias = p => (p.qtd == null ? 1 : Math.max(0, p.qtd));
+
 export function gerarZPLLote(produtos, opts = {}) {
   const colunas = opts.colunas || 1;
   if (colunas <= 1) {
-    return produtos.map(p => gerarZPL(p, { ...opts, qtd: p.qtd || 1 })).join('\n');
+    return produtos.filter(p => copias(p) > 0).map(p => gerarZPL(p, { ...opts, qtd: copias(p) })).join('\n');
   }
   const flat = [];
-  produtos.forEach(p => { for (let k = 0; k < (p.qtd || 1); k++) flat.push(p); });
+  produtos.forEach(p => { for (let k = 0; k < copias(p); k++) flat.push(p); });
   const linhas = [];
   for (let i = 0; i < flat.length; i += colunas) linhas.push(flat.slice(i, i + colunas));
   return linhas.map(row => gerarZPLLinha(row, opts)).join('\n');
@@ -141,8 +145,23 @@ export function temBrowserPrint() {
   return typeof window !== 'undefined' && !!window.BrowserPrint;
 }
 
+// Browser Print roda como serviço local (HTTPS numa porta da máquina); se o
+// serviço estiver parado/travado (driver preso, porta bloqueada por
+// firewall...), o SDK às vezes nunca chama nem o callback de sucesso nem o
+// de erro — a Promise fica pendurada pra sempre. Sem isso, o clique "trava"
+// sem NENHUM aviso na tela (parece que não fez nada, e nem sobra erro no
+// console pra investigar). 8s é folgado pro caso normal (a resposta do
+// serviço local é quase instantânea) mas corta o caso travado.
+function comTimeout(promise, ms, msgTimeout) {
+  let venceu = false;
+  return Promise.race([
+    promise.finally(() => { venceu = true; }),
+    new Promise((_, reject) => setTimeout(() => { if (!venceu) reject(new Error(msgTimeout)); }, ms)),
+  ]);
+}
+
 export function listarImpressoras() {
-  return new Promise((resolve, reject) => {
+  const p = new Promise((resolve, reject) => {
     if (!temBrowserPrint()) { reject(new Error('Zebra Browser Print não detectado neste computador.')); return; }
     window.BrowserPrint.getLocalDevices(
       devices => resolve(devices || []),
@@ -150,15 +169,17 @@ export function listarImpressoras() {
       'printer'
     );
   });
+  return comTimeout(p, 8000, 'Zebra Browser Print não respondeu a tempo — o serviço pode estar parado ou travado. Reinicie o Browser Print e tente de novo.');
 }
 
 export function enviarParaImpressora(device, zpl) {
-  return new Promise((resolve, reject) => {
+  const p = new Promise((resolve, reject) => {
     if (!device) { reject(new Error('Nenhuma impressora selecionada.')); return; }
     device.send(zpl,
       () => resolve(true),
       error => reject(new Error(error || 'Erro ao enviar para a impressora.')));
   });
+  return comTimeout(p, 10000, 'A impressora não respondeu a tempo — confira se está ligada, conectada e com papel.');
 }
 
 // ── Fallback: baixa o .zpl para envio manual (Browser Print ausente) ──
@@ -207,6 +228,7 @@ function normalizarItem(p) {
     preco_venda: Number(p.preco_venda) || 0,
     codigo_barras: p.codigo_barras || null,
     qtd: Math.max(1, parseInt(p.qtd, 10) || 1),
+    estoque: p.estoque == null ? null : Math.max(0, Number(p.estoque) || 0),
   };
 }
 
@@ -233,18 +255,20 @@ function renderEtiquetas() {
 }
 
 function itemLinhaHtml(p, i) {
+  const semQtd = p.texto == null && p.qtd === 0;
   const campo = p.texto != null
     ? `<input type="text" id="etq-item-${i}" class="form-control" style="flex:1" placeholder="Texto da etiqueta (ex.: Pedra Ametista)"
         value="${esc(p.texto)}" oninput="etiquetasTextoChange(${i}, this.value)">`
     : `<div style="flex:1;min-width:0">
         <div style="font-weight:600;color:var(--plum);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.sku || '(sem SKU)')}</div>
-        <div style="font-size:12px;color:var(--muted)">${esc(p.nome)} · R$ ${p.preco_venda.toFixed(2)}</div>
+        <div style="font-size:12px;color:var(--muted)">${esc(p.nome)} · R$ ${p.preco_venda.toFixed(2)}${p.estoque != null ? ` · estoque: ${p.estoque}` : ''}</div>
         ${!p.codigo_barras ? '<div style="font-size:11px;color:var(--warning)">⚠ sem código de barras próprio — usando o SKU</div>' : ''}
+        ${semQtd ? '<div style="font-size:11px;color:var(--warning)">sem estoque — não será impressa</div>' : ''}
       </div>`;
   return `
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)">
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border)${semQtd ? ';opacity:.5' : ''}">
       ${campo}
-      <input type="number" min="1" value="${p.qtd}" style="width:56px;flex-shrink:0" class="form-control"
+      <input type="number" min="0" value="${p.qtd}" style="width:56px;flex-shrink:0" class="form-control"
         onchange="etiquetasQtdChange(${i}, this.value)">
       <button type="button" class="btn-icon" title="Remover" onclick="etiquetasRemoverItem(${i})">${IC_X}</button>
     </div>`;
@@ -256,6 +280,10 @@ function renderEtiquetasLista() {
   const linhas = etqProdutos.map(itemLinhaHtml).join('');
   const temConfig = !!cfg?.deviceName;
 
+  const comEstoque = etqProdutos.filter(p => p.estoque != null);
+  const totalEstoque = comEstoque.reduce((s, p) => s + p.estoque, 0)
+    + etqProdutos.filter(p => p.estoque == null).reduce((s, p) => s + p.qtd, 0);
+
   const statusImpressora = !temBrowserPrint()
     ? '<div style="font-size:12.5px;color:var(--warning);margin-bottom:10px">Zebra Browser Print não detectado neste computador. Use "Baixar .zpl" e envie manualmente, ou instale o Browser Print.</div>'
     : temConfig
@@ -266,14 +294,15 @@ function renderEtiquetasLista() {
     <div style="max-height:40vh;overflow-y:auto;margin-bottom:10px">${linhas || '<div style="padding:8px 0;color:var(--muted);font-size:13px">Nenhuma etiqueta na lista.</div>'}</div>
     <button class="btn-secondary" style="width:100%;margin-bottom:10px" onclick="etiquetasAdicionarPersonalizada()">+ Adicionar etiqueta personalizada</button>
     ${statusImpressora}
+    ${comEstoque.length ? `<button class="btn-secondary" style="width:100%;margin-bottom:10px" ${temConfig ? '' : 'disabled'} onclick="etiquetasUsarEstoque()">Imprimir pelo estoque atual (${totalEstoque} etiqueta${totalEstoque === 1 ? '' : 's'})</button>` : ''}
     <div style="display:flex;gap:10px">
       <button class="btn-secondary" style="flex:1" onclick="etiquetasBaixarZpl()">Baixar .zpl</button>
-      <button class="btn-primary" style="flex:1" ${temConfig ? '' : 'disabled'} onclick="etiquetasImprimir()">Imprimir ${totalEtiquetas} etiqueta${totalEtiquetas === 1 ? '' : 's'}</button>
+      <button class="btn-primary" style="flex:1" ${temConfig && totalEtiquetas ? '' : 'disabled'} onclick="etiquetasImprimir()">Imprimir ${totalEtiquetas} etiqueta${totalEtiquetas === 1 ? '' : 's'}</button>
     </div>`;
 }
 
 export function etiquetasQtdChange(i, valor) {
-  const n = Math.max(1, parseInt(valor, 10) || 1);
+  const n = Math.max(0, parseInt(valor, 10) || 0);
   if (etqProdutos[i]) etqProdutos[i].qtd = n;
   renderEtiquetas(); // atualiza o total no botão de imprimir
 }
@@ -386,12 +415,39 @@ function temTextoVazio() {
   return etqProdutos.some(p => p.texto != null && !p.texto.trim());
 }
 
+// Trava os botões do modal durante o envio pra impressora — feedback
+// imediato (o clique visivelmente "pegou") e evita clique duplo enquanto
+// aguarda o serviço local responder.
+function travarBotoesImpressao(travar) {
+  document.querySelectorAll('#etiquetas-body button').forEach(b => { b.disabled = travar; });
+}
+
+// Preenche cada linha com o estoque atual e já manda pra impressora (1 clique).
+// Itens sem estoque conhecido (texto livre) mantêm a qtd que a pessoa digitou.
+export async function etiquetasUsarEstoque() {
+  if (!etqProdutos.some(p => p.estoque != null)) {
+    toast('Nenhum item desta lista tem estoque conhecido.', 'erro');
+    return;
+  }
+  travarBotoesImpressao(true); // feedback imediato — o re-render abaixo troca os nós, então trava antes
+  etqProdutos.forEach(p => { if (p.estoque != null) p.qtd = p.estoque; });
+  renderEtiquetas();
+  if (!etqProdutos.reduce((s, p) => s + p.qtd, 0)) {
+    toast('Nenhum item com estoque — nada a imprimir.', 'erro');
+    travarBotoesImpressao(false);
+    return;
+  }
+  await etiquetasImprimir();
+}
+
 export async function etiquetasImprimir() {
   if (!temBrowserPrint()) {
     toast('Browser Print não detectado — use "Baixar .zpl".', 'erro');
     return;
   }
   if (temTextoVazio()) { toast('Preencha o texto da etiqueta personalizada (ou remova a linha).', 'erro'); return; }
+  if (!etqProdutos.reduce((s, p) => s + p.qtd, 0)) { toast('Nenhuma etiqueta para imprimir.', 'erro'); return; }
+  travarBotoesImpressao(true);
   try {
     const { device, dpi, colunas } = await dispositivoConfigurado();
     const zpl = gerarZPLLote(etqProdutos, { dpi, colunas });
@@ -401,11 +457,13 @@ export async function etiquetasImprimir() {
   } catch (e) {
     console.error('Impressão de etiquetas:', e);
     toast('Erro ao imprimir: ' + e.message, 'erro');
+    travarBotoesImpressao(false);
   }
 }
 
 export function etiquetasBaixarZpl() {
   if (temTextoVazio()) { toast('Preencha o texto da etiqueta personalizada (ou remova a linha).', 'erro'); return; }
+  if (!etqProdutos.reduce((s, p) => s + p.qtd, 0)) { toast('Nenhuma etiqueta para imprimir.', 'erro'); return; }
   const cfg = carregarCfgImpressora();
   const zpl = gerarZPLLote(etqProdutos, { dpi: cfg?.dpi || 203, colunas: cfg?.colunas || 1 });
   baixarZPL(`etiquetas-${Date.now()}`, zpl);

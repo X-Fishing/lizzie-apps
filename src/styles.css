@@ -169,6 +169,69 @@ html, body { height: 100%; font-family: 'DM Sans', sans-serif; background: var(-
 .topbar .btn-icon { color: rgba(255,255,255,0.5); }
 .topbar .btn-icon:hover { color: var(--gold); }
 
+/* MENU GAVETA (revendedora) — medidas do design "Lizzie Mobile Revendedora":
+   262px, desliza da esquerda, grupos recolhíveis. O staff NUNCA vê (auth.js só
+   liga .rev-drawer para revendedora); ele segue na nav inferior + sidebar. */
+.drawer-burger { color: rgba(255,255,255,0.85); font-size: 22px; margin-right: 4px; }
+.drawer-burger:hover { color: var(--gold); }
+/* Com o hambúrguer à esquerda, o logo centraliza entre ele e o bloco da direita. */
+#app.rev-drawer .topbar-logo { margin: 0 auto; }
+/* Sem nav inferior, o respiro de 90px vira sobra no fim de toda tela. */
+#app.rev-drawer .nav { display: none; }
+#app.rev-drawer .content { padding-bottom: 28px; }
+
+.drawer-overlay {
+  position: fixed; inset: 0; z-index: 200; background: rgba(20,8,35,0.45);
+  opacity: 0; pointer-events: none; transition: opacity 0.25s ease;
+}
+.drawer-overlay.show { opacity: 1; pointer-events: auto; }
+.drawer {
+  position: fixed; top: 0; bottom: 0; left: 0; width: 262px; max-width: 84vw; z-index: 201;
+  background: var(--cream); display: flex; flex-direction: column;
+  box-shadow: 6px 0 24px rgba(20,8,35,0.18);
+  /* visibility (e não só o transform) tira os botões da ordem de Tab enquanto
+     fechada — senão o teclado navega num menu que está fora da tela. O delay
+     igual à duração segura a animação de saída. */
+  transform: translateX(-100%); visibility: hidden;
+  transition: transform 0.28s ease, visibility 0s linear 0.28s;
+}
+.drawer.show { transform: translateX(0); visibility: visible; transition-delay: 0s; }
+.drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 20px 18px 14px; }
+.drawer-logo {
+  font-family: 'Cormorant Garamond', serif; font-size: 19px; font-weight: 300;
+  letter-spacing: 2px; color: var(--gold); text-transform: uppercase;
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.drawer-sep { height: 1px; background: var(--border); margin: 0 18px; }
+.drawer-body { display: flex; flex-direction: column; gap: 2px; padding: 10px; flex: 1; overflow-y: auto; }
+.drawer-foot { padding: 14px 10px 20px; }
+
+.drawer-item, .drawer-group, .drawer-sair {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left;
+  padding: 11px 12px; background: none; border: none; border-radius: 12px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 14.5px; font-weight: 600; color: var(--text);
+}
+.drawer-group { justify-content: space-between; margin-top: 6px; }
+.drawer-group-label { display: flex; align-items: center; gap: 10px; }
+.drawer-item .drawer-ic, .drawer-group .drawer-ic { color: var(--muted); }
+.drawer-ic { font-size: 18px; display: inline-flex; flex-shrink: 0; }
+.drawer-subitem .drawer-ic { font-size: 16px; }
+.drawer-caret { font-size: 14px; color: var(--muted); display: inline-flex; transition: transform 0.2s ease; }
+.drawer-group[aria-expanded="true"] .drawer-caret { transform: rotate(180deg); }
+
+/* Sub-lista: recolhida por padrão; o grupo com a tela ativa abre sozinho. */
+.drawer-sub { display: none; flex-direction: column; gap: 2px; padding-left: 14px; margin: 2px 0 4px; }
+.drawer-sub.show { display: flex; }
+.drawer-subitem {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  padding: 9px 12px; background: none; border: none; border-radius: 10px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 13.5px; font-weight: 600; color: var(--muted);
+}
+.drawer-item.active, .drawer-subitem.active { background: var(--blush); color: var(--rose); }
+.drawer-item.active .drawer-ic, .drawer-subitem.active .drawer-ic { color: var(--rose); }
+.drawer-sair { color: var(--rose); }
+.drawer-sair .drawer-ic { color: var(--rose); }
+
 /* NAV */
 .nav {
   background: #fff; border-top: 1px solid var(--border);
@@ -981,3 +1044,227 @@ select.cap-inp { cursor:pointer; }
 .fid-selo.on svg { width:20px; height:20px; }
 .fid-progresso { font-family:'Cormorant Garamond',serif; color:var(--plum); font-weight:600; }
 @media (max-width:400px) { .fid-selo { font-size:12px; } }
+
+/* ── LEMBRETES (painel flutuante staff, ver src/lembretes.js) ──────────
+   z-index 140: acima da .nav (100), da .staff-nav (100) e do #snav-reabrir
+   (130), e ABAIXO de .modal-overlay (500), #toast (9999) e #print-overlay
+   (10000) — o painel nunca pode cobrir um modal aberto.
+   bottom 136px no mobile: livra a .nav (60px) E o #install-btn (bottom 76 +
+   ~48 de altura). No desktop staff a .nav some, entao encosta embaixo. */
+#lembretes { position: fixed; right: 16px; bottom: 136px; z-index: 140; }
+#lembretes-bolha {
+  position: relative; width: 52px; height: 52px; border-radius: 50%;
+  background: var(--grad-rose); color: #fff; border: none; cursor: pointer;
+  box-shadow: 0 6px 20px rgba(124,58,93,.35);
+  display: flex; align-items: center; justify-content: center; margin-left: auto;
+}
+#lembretes-bolha svg { width: 22px; height: 22px; }
+.lembrete-badge {
+  position: absolute; top: -2px; right: -2px; min-width: 20px; height: 20px;
+  padding: 0 5px; border-radius: 10px; background: var(--danger); color: #fff;
+  font-size: 11px; font-weight: 700; line-height: 20px; border: 2px solid var(--cream);
+}
+#lembretes-box {
+  width: min(340px, calc(100vw - 32px)); max-height: 60vh; overflow-y: auto;
+  background: var(--cream); border: 1px solid var(--border); border-radius: 16px;
+  padding: 14px; margin-bottom: 10px; box-shadow: 0 8px 30px rgba(0,0,0,.14);
+}
+.lembrete-count {
+  min-width: 20px; padding: 0 6px; border-radius: 10px; background: var(--blush);
+  color: var(--rose); font-size: 11px; font-weight: 700; text-align: center;
+}
+.lembrete-link {
+  background: none; border: none; padding: 6px 0 0; cursor: pointer;
+  font-size: 11.5px; font-weight: 600; color: var(--rose);
+}
+@media (min-width: 900px) { #app.staff-desktop ~ #lembretes { bottom: 20px; } }
+
+/* ══════════════════════════════════════════════════════════════════════
+   SKIN "Lizzie Mobile Revendedora" — aplica o design só no app dela.
+
+   Escopo em body.rev-app (e não em #app) porque os modais moram FORA de
+   #app no index.html; uma classe no #app não os alcançaria. O desk do
+   staff nunca recebe esta classe, então nada aqui toca as telas de gestão.
+
+   A paleta e as fontes são as do design; o resto do arquivo continua
+   valendo — aqui só sobrescrevemos o que difere.
+   ══════════════════════════════════════════════════════════════════════ */
+body.rev-app {
+  --plum: #1e0a33;
+  --rose: #c1577d;
+  --gold: #c9a227;
+  --blush: #f6e3ea;
+  --cream: #f8f2e9;
+  --text: #2c1f38;
+  --muted: #7c6f88;
+  --border: #ece0d4;
+  --card: #fff;
+  --success: #2f9e64;
+  --shadow-card: 0 2px 10px rgba(44,31,56,0.06);
+  --shadow-linha: 0 2px 8px rgba(44,31,56,0.05);
+  --grad-rose: linear-gradient(135deg, #c1577d, #a8456a);
+  font-family: 'Poppins', sans-serif;
+}
+body.rev-app input, body.rev-app select, body.rev-app textarea,
+body.rev-app button, body.rev-app .btn, body.rev-app .btn-primary,
+body.rev-app .btn-secondary { font-family: 'Poppins', sans-serif; }
+
+/* TÍTULOS — Playfair no lugar de Cormorant, 24px como no design. */
+body.rev-app .section-title, body.rev-app .page-head h2 {
+  font-family: 'Playfair Display', serif; font-weight: 600; font-size: 24px;
+  color: var(--text); line-height: 1.15;
+}
+body.rev-app .section-subtitle, body.rev-app .page-head .sub {
+  font-size: 13px; color: var(--muted); margin-top: 2px;
+}
+
+/* NÚMEROS — o design usa sans bold; a serifa fica só na marca e nos títulos.
+   Era a diferença que mais saltava aos olhos entre o app e o desenho. */
+body.rev-app .stat-num, body.rev-app .kpi-card .kpi-val,
+body.rev-app .dash-kpi, body.rev-app .regua-valor {
+  font-family: 'Poppins', sans-serif; font-weight: 700; letter-spacing: -0.3px;
+}
+body.rev-app .stat-num { font-size: 26px; }
+body.rev-app .regua-valor { font-size: 24px; color: #a8456a; }
+body.rev-app .kpi-card .kpi-val { font-size: 28px; }
+
+/* CARDS — sem borda, só sombra suave (o design não desenha contorno). */
+body.rev-app .card, body.rev-app .stat-card, body.rev-app .kpi-card,
+body.rev-app .dash-card {
+  background: #fff; border: none; box-shadow: var(--shadow-linha);
+}
+body.rev-app .card { border-radius: 18px; box-shadow: var(--shadow-card); }
+body.rev-app .stat-card, body.rev-app .kpi-card { border-radius: 16px; }
+body.rev-app .card:hover { transform: none; box-shadow: var(--shadow-card); }
+
+/* BOTÕES — pill (999px) em tudo, como no design. */
+body.rev-app .btn, body.rev-app .btn-primary, body.rev-app .btn-secondary,
+body.rev-app .btn-outline, body.rev-app .btn-gold {
+  border-radius: 999px;
+}
+body.rev-app .btn-primary { background: var(--rose); box-shadow: none; }
+body.rev-app .btn-primary:hover { transform: none; box-shadow: 0 4px 14px rgba(193,87,125,0.3); }
+body.rev-app .btn-outline, body.rev-app .btn-secondary {
+  background: #fff; border: 1.3px solid var(--rose); color: #a8456a;
+}
+
+/* CHIPS de filtro — 999px, borda 1.3px, ativo sólido rose. */
+body.rev-app .chip, body.rev-app .chip-filter, body.rev-app .chips .chip {
+  border-radius: 999px; padding: 8px 15px; font-size: 12.5px; font-weight: 600;
+  border: 1.3px solid var(--border); background: #fff; color: #5c5068;
+}
+body.rev-app .chip.active, body.rev-app .chip-filter.active, body.rev-app .chips .chip.active {
+  background: var(--rose); border-color: var(--rose); color: #fff;
+}
+
+/* CAMPOS — 12px de raio e borda cor de areia, como no design. */
+body.rev-app .search-input, body.rev-app input[type=text], body.rev-app input[type=tel],
+body.rev-app input[type=email], body.rev-app input[type=number], body.rev-app input[type=date],
+body.rev-app input[type=time], body.rev-app select, body.rev-app textarea {
+  border-radius: 12px; border: 1px solid var(--border); background: #fff;
+}
+
+/* BOTTOM SHEET — o modal do app já sobe de baixo com o canto arredondado e
+   já tem .modal-handle; aqui só ajustamos a alça às medidas do design. */
+body.rev-app .modal { background: #fdf9f3; }
+body.rev-app .modal-handle { width: 38px; height: 4px; background: #e3d5c8; margin: 0 auto 14px; }
+
+/* BADGES de status — as cores exatas do statusTagStyle() do design. */
+body.rev-app .badge {
+  font-size: 11.5px; font-weight: 600; padding: 5px 11px; border-radius: 999px;
+}
+body.rev-app .badge-aberta { background: #e6effa; color: #3568b0; }
+body.rev-app .badge-em_conserto, body.rev-app .badge-parcial { background: #faf1de; color: #b8822c; }
+body.rev-app .badge-pronta, body.rev-app .badge-quitado, body.rev-app .badge-ativo { background: #e5f6ec; color: #2f9e64; }
+body.rev-app .badge-entregue { background: #eeeaf2; color: #8b7fa0; }
+body.rev-app .badge-pendente { background: #f9e6ec; color: #c1577d; }
+
+/* KPIs em duas colunas (o design usa grade 2×2, não uma pilha). */
+body.rev-app .kpi-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+body.rev-app .kpi-card .kpi-ic { display: none; }
+
+/* KPIs de Pagamentos — mesmo tratamento dos demais cards/números. */
+body.rev-app .pag-resumo-card { border: none; border-radius: 16px; box-shadow: var(--shadow-linha); }
+body.rev-app .pag-resumo-valor { font-family: 'Poppins', sans-serif; font-weight: 700; font-size: 20px; color: var(--text); }
+body.rev-app .pag-resumo-valor.recv { color: var(--success); }
+body.rev-app .pag-resumo-valor.pend { color: var(--rose); }
+
+/* Lista de vendas em CARD (só revendedora — o staff segue na tabela larga).
+   Mesmas colunas da tabela, empilhadas: no celular a tabela só existia
+   rolando de lado. */
+.pag-card {
+  background: #fff; border-radius: 14px; padding: 14px; margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(44,31,56,0.05); cursor: pointer;
+}
+.pag-card-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.pag-card-nome { font-size: 14.5px; font-weight: 600; color: var(--text); min-width: 0; }
+.pag-card-meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.pag-card-linha {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 8px; font-size: 13px; color: var(--muted);
+}
+.pag-card-linha b { font-weight: 600; color: var(--text); }
+.pag-card-acao {
+  display: flex; align-items: center; gap: 6px; margin-top: 12px;
+  padding-top: 10px; border-top: 1px solid var(--border);
+  font-size: 12.5px; font-weight: 600; color: #128C7E;
+}
+
+/* Cartelas de fidelidade em CARD com barra (design), no lugar da tabela. */
+.fid-card {
+  background: #fff; border-radius: 14px; padding: 14px; margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(44,31,56,0.05); cursor: pointer;
+}
+.fid-card-topo { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+.fid-card-nome { font-size: 14.5px; font-weight: 600; color: var(--text); min-width: 0; }
+.fid-card-selos { font-size: 12px; color: var(--muted); flex: none; }
+.fid-card-tel { font-size: 12px; color: var(--muted); margin: -4px 0 8px; }
+.fid-bar { height: 6px; border-radius: 99px; background: #f3e2ea; overflow: hidden; }
+.fid-bar > div { height: 100%; border-radius: 99px; background: var(--rose); }
+
+/* Histórico já usa card (.hist-card): aqui só o acabamento do design —
+   sem contorno, nome em Playfair. Escopado, o staff não é afetado. */
+body.rev-app .hist-card { border: none; box-shadow: var(--shadow-linha); }
+body.rev-app .hist-card:hover { box-shadow: var(--shadow-linha); }
+body.rev-app .hist-nome { font-family: 'Playfair Display', serif; font-size: 16px; color: var(--text); }
+body.rev-app .hist-stats b { color: var(--text); font-weight: 600; }
+
+/* Ações do catálogo em largura total, acima da busca (design revendedora). */
+.c-acoes { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+.c-acoes .btn { width: 100%; justify-content: center; padding: 14px; font-size: 14px; }
+
+/* Catálogo em card (revendedora) — thumb, descrição, SKU/categoria e a ação. */
+.ciclo-card {
+  display: flex; align-items: center; gap: 12px;
+  background: #fff; border-radius: 14px; padding: 12px; margin-bottom: 10px;
+  box-shadow: 0 2px 8px rgba(44,31,56,0.05); cursor: pointer;
+}
+.ciclo-card.esgotado { opacity: 0.6; }
+.ciclo-card-foto {
+  width: 48px; height: 48px; border-radius: 10px; flex: none;
+  background: #f2ede2; color: #c9b6a4;
+  display: flex; align-items: center; justify-content: center;
+}
+.ciclo-card-foto .ico { width: 20px; height: 20px; }
+.ciclo-card-info { flex: 1; min-width: 0; }
+.ciclo-card-desc { font-size: 13.5px; font-weight: 600; color: var(--text); line-height: 1.3; }
+.ciclo-card-meta {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 5px;
+  font-size: 11px; color: #a89bb5;
+}
+.ciclo-card-preco { font-size: 13px; font-weight: 700; color: var(--rose); margin-top: 4px; }
+.ciclo-card-vendido {
+  background: #eeeaf2; color: #8b7fa0; font-size: 12px; font-weight: 600;
+  padding: 8px 14px; border-radius: 999px; flex: none;
+}
+body.rev-app .btn-vender {
+  background: var(--rose); color: #fff; border: none;
+  font-size: 12px; font-weight: 600; padding: 8px 14px; border-radius: 999px;
+  flex: none; cursor: pointer;
+}
+
+/* Busca do catálogo: no celular os dois filtros ficavam lado a lado com o
+   campo e espremiam tudo. Empilha. */
+body.rev-app #c-search-bar { display: block; }
+body.rev-app #c-search-bar .search-input { width: 100%; }
+body.rev-app #c-search-bar .filtro-vendidos { font-size: 12.5px; }

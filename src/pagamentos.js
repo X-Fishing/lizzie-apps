@@ -1,7 +1,7 @@
 // Pagamentos: lista de vendas, detalhe, registrar pagamento, excluir.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, parseMoneyBR, moneyToInput, hojeBR, brToISO, telValido, telFmt, telNormalizado, waMeLink } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, parseMoneyBR, moneyToInput, hojeBR, brToISO, telValido, telFmt, telNormalizado, waMeLink, ehFormaAReceber } from './utils.js';
 import { enviarCertificado, gerarCertificadoGarantia, gerarVersoGarantia, numeroCertificado } from './certificado.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 
@@ -68,9 +68,9 @@ export function filtrarPagamentos() {
     <button class="chip${scope === 'todos' ? ' active' : ''}" onclick="setPScope('todos')">Histórico</button>
   </div>`;
   const resumo = scopeToggle + `<div class="pag-resumo">
-    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('todos')"><div class="pag-resumo-label">Total vendas</div><div class="pag-resumo-valor">R$ ${totalGeral.toFixed(2)}</div></div>
-    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('quitado')"><div class="pag-resumo-label">Recebido</div><div class="pag-resumo-valor recv">R$ ${totalPago.toFixed(2)}</div></div>
-    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('pendente')"><div class="pag-resumo-label">A receber</div><div class="pag-resumo-valor pend">R$ ${totalPendente.toFixed(2)}</div></div>
+    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('todos')"><div class="pag-resumo-label">Total vendas</div><div class="pag-resumo-valor">${fmtBRL(totalGeral)}</div></div>
+    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('quitado')"><div class="pag-resumo-label">Recebido</div><div class="pag-resumo-valor recv">${fmtBRL(totalPago)}</div></div>
+    <div class="pag-resumo-card pag-kpi" onclick="setPFilterFromCard('pendente')"><div class="pag-resumo-label">A receber</div><div class="pag-resumo-valor pend">${fmtBRL(totalPendente)}</div></div>
   </div>`;
 
   if (!list.length) {
@@ -82,16 +82,39 @@ export function filtrarPagamentos() {
   const statusLabel = { pendente: 'Pendente', parcial: 'Parcial', quitado: 'Quitado' };
   const statusBadge = { pendente: 'badge-pendente', parcial: 'badge-parcial', quitado: 'badge-quitado' };
 
+  const zapBtn = v => `<button class="btn-icon" title="Cobrar no WhatsApp" style="color:#128C7E" onclick="event.stopPropagation();zapCobrancaCliente('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg></button>`;
+
+  // A tabela tem min-width 560px: no celular da revendedora ela só existe
+  // rolando de lado. O design entrega as mesmas colunas como card, então a
+  // lista dela vira card e o staff (telas largas) continua na tabela.
+  if (!ehStaff()) {
+    div.innerHTML = resumo + list.map(v => {
+      const pendente = Number(v.valor_total) - Number(v.valor_pago);
+      return `<div class="pag-card" onclick="verVenda('${v.id}')">
+        <div class="pag-card-topo">
+          <div class="pag-card-nome">${esc(v.nome_cliente)}</div>
+          <span class="badge ${statusBadge[v.status]}">${statusLabel[v.status]}</span>
+        </div>
+        <div class="pag-card-meta">${formatDate(v.data_venda)} · ${esc(v.forma_pagamento || '—')}</div>
+        <div class="pag-card-linha"><span>Total</span><b>${fmtBRL(v.valor_total)}</b></div>
+        <div class="pag-card-linha"><span>Pago</span><b class="pag-valor-pago">${fmtBRL(v.valor_pago)}</b></div>
+        ${pendente > 0 ? `<div class="pag-card-linha"><span>Pendente</span><b class="pag-valor-pendente">${fmtBRL(pendente)}</b></div>` : ''}
+        ${pendente > 0 && telValido(v.telefone_cliente) ? `<div class="pag-card-acao">${zapBtn(v)} <span>Cobrar no WhatsApp</span></div>` : ''}
+      </div>`;
+    }).join('');
+    return;
+  }
+
   const rows = list.map(v => {
     const pendente = Number(v.valor_total) - Number(v.valor_pago);
     return `<tr class="pag-row" onclick="verVenda('${v.id}')">
       <td class="pag-td"><div class="pag-cliente">${esc(v.nome_cliente)}</div><div class="pag-forma">${formatDate(v.data_venda)}</div></td>
-      <td class="pag-td"><span class="pag-valor">R$ ${Number(v.valor_total).toFixed(2)}</span></td>
+      <td class="pag-td"><span class="pag-valor">${fmtBRL(v.valor_total)}</span></td>
       <td class="pag-td"><span class="pag-forma">${v.forma_pagamento}</span></td>
-      <td class="pag-td"><span class="pag-valor pag-valor-pago">R$ ${Number(v.valor_pago).toFixed(2)}</span></td>
-      <td class="pag-td"><span class="pag-valor ${pendente>0?'pag-valor-pendente':''}">R$ ${pendente.toFixed(2)}</span></td>
+      <td class="pag-td"><span class="pag-valor pag-valor-pago">${fmtBRL(v.valor_pago)}</span></td>
+      <td class="pag-td"><span class="pag-valor ${pendente>0?'pag-valor-pendente':''}">${fmtBRL(pendente)}</span></td>
       <td class="pag-td"><span class="badge ${statusBadge[v.status]}">${statusLabel[v.status]}</span></td>
-      <td class="pag-td" style="text-align:right">${pendente > 0 && telValido(v.telefone_cliente) ? `<button class="btn-icon" title="Cobrar no WhatsApp" style="color:#128C7E" onclick="event.stopPropagation();zapCobrancaCliente('${v.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg></button>` : ''}</td>
+      <td class="pag-td" style="text-align:right">${pendente > 0 && telValido(v.telefone_cliente) ? zapBtn(v) : ''}</td>
     </tr>`;
   }).join('');
 
@@ -126,16 +149,18 @@ export async function verVenda(id) {
   const v = state.allVendas.find(x => x.id === id);
   if (!v) return;
 
-  const [itensRes, recebsRes] = await Promise.all([
+  const [itensRes, recebsRes, pgtosRes] = await Promise.all([
     state.vendaItensCache[id]
       ? Promise.resolve({ data: state.vendaItensCache[id] })
       : sbQ(sb.from('venda_itens').select('*').eq('venda_id', id).order('created_at')),
-    sbQ(sb.from('recebimentos').select('*').eq('venda_id', id).order('data_recebimento'))
+    sbQ(sb.from('recebimentos').select('*').eq('venda_id', id).order('data_recebimento')),
+    sbQ(sb.from('venda_pagamentos').select('*').eq('venda_id', id).order('created_at'))
   ]);
   if (itensRes.error) { toast('Erro ao carregar itens'); return; }
   const itens = itensRes.data || [];
   state.vendaItensCache[id] = itens;
   const recebimentos = (recebsRes.data) || [];
+  const pagamentos = (pgtosRes.data) || [];
 
   const restante = Number(v.valor_total) - Number(v.valor_pago);
   const itensHtml = itens.map(it => `
@@ -143,6 +168,18 @@ export async function verVenda(id) {
       <span>${it.quantidade}× ${esc(it.descricao)}${it.referencia ? ` <span style="color:var(--muted);font-size:11px">(${esc(it.referencia)})</span>` : ''}</span>
       <span>R$ ${(it.quantidade * Number(it.preco_unit)).toFixed(2)}</span>
     </div>`).join('');
+
+  // Rateio por forma (0051/0052). Só vale a pena mostrar quando a venda foi
+  // paga em mais de uma forma — com uma só, a linha "Forma" do grid acima já diz tudo.
+  const pgtosHtml = pagamentos.length > 1 ? `
+    <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Formas de pagamento</div>
+    <div style="background:#faf7f2;padding:10px 12px;border-radius:10px;margin-bottom:14px">
+      ${pagamentos.map(p => `
+        <div class="hist-item-row">
+          <span>${esc(p.forma)}${ehFormaAReceber(p.forma) ? ' <span style="color:var(--muted);font-size:11px">(a receber)</span>' : ''}</span>
+          <span>R$ ${Number(p.valor).toFixed(2)}</span>
+        </div>`).join('')}
+    </div>` : '';
 
   const recebsHtml = recebimentos.length
     ? recebimentos.map(r => `
@@ -174,6 +211,7 @@ export async function verVenda(id) {
     <div class="divider"></div>
     <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Itens da compra</div>
     <div style="background:#faf7f2;padding:10px 12px;border-radius:10px;margin-bottom:14px">${itensHtml}</div>
+    ${pgtosHtml}
     <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px">Recebimentos</div>
     <div style="background:#faf7f2;padding:10px 12px;border-radius:10px;margin-bottom:14px">${recebsHtml}</div>
     ${v.status !== 'quitado' ? `
@@ -347,6 +385,7 @@ export async function excluirVenda(id) {
     // CASCADE nas FKs (se o cascade existir, esses deletes sao inofensivos).
     await sbQ(sb.from('venda_itens').delete().eq('venda_id', id));
     await sbQ(sb.from('recebimentos').delete().eq('venda_id', id));
+    await sbQ(sb.from('venda_pagamentos').delete().eq('venda_id', id));
 
     const { error } = await sb.from('vendas').delete().eq('id', id);
     if (error) { toast('Erro ao excluir'); return; }

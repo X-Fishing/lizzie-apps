@@ -33,3 +33,6 @@ lizzie-apps/
 
 # Netlify CLI local
 .netlify/
+
+# Scripts temporarios de teste (Claude) - nunca commitar
+.scripts-temp/

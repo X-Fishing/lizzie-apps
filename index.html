@@ -11,7 +11,10 @@
 <link rel="apple-touch-icon" href="/icon-192.png">
 <title>Lizzie Semijoias</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<!-- Playfair Display + Poppins são do design "Lizzie Mobile Revendedora" e só
+     valem no app dela (escopo .rev-drawer). Cormorant/DM Sans continuam sendo
+     as fontes do desk — trocar lá mexeria em dezenas de telas não desenhadas. -->
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=DM+Sans:wght@300;400;500&family=Playfair+Display:wght@500;600&family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 
@@ -116,8 +119,67 @@
 
 <!-- MAIN APP -->
 <div id="app">
+  <!-- MENU GAVETA (revendedora) — o staff continua na nav inferior/sidebar.
+       Os grupos são recolhíveis; o que contém a tela ativa abre sozinho. -->
+  <div class="drawer-overlay" id="drawer-overlay" onclick="closeDrawer()"></div>
+  <aside class="drawer" id="drawer">
+    <div class="drawer-head">
+      <div class="drawer-logo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg> Lizzie</div>
+      <button class="btn-icon" onclick="closeDrawer()" title="Fechar" aria-label="Fechar menu"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 18 18M18 6 6 18"/></svg></button>
+    </div>
+    <div class="drawer-sep"></div>
+
+    <nav class="drawer-body">
+      <button class="drawer-item" data-drawer-panel="dashboard" onclick="drawerIr('dashboard')">
+        <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11 12 4l8 7v9h-6v-6h-4v6H4z"/></svg></span>Início
+      </button>
+
+      <button class="drawer-group" id="drawer-grp-maleta" onclick="drawerToggleGrupo('maleta')" aria-expanded="true">
+        <span class="drawer-group-label"><span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 8V6a4 4 0 0 1 8 0v2M4 8h16l-1.2 12.2A2 2 0 0 1 17 22H7a2 2 0 0 1-1.8-1.8z"/></svg></span>Minha Maleta</span>
+        <span class="drawer-caret"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+      </button>
+      <div class="drawer-sub" id="drawer-sub-maleta">
+        <button class="drawer-subitem" data-drawer-panel="consignados" onclick="drawerIr('consignados')">
+          <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/></svg></span>Catálogo
+        </button>
+        <button class="drawer-subitem" data-drawer-panel="garantias" onclick="drawerIr('garantias')">
+          <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 5-3.4 8.4-7 10-3.6-1.6-7-5-7-10V6z"/></svg></span>Garantias
+        </button>
+        <button class="drawer-subitem" data-drawer-panel="proxima-troca" onclick="drawerIr('proxima-troca')">
+          <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16M8 3v3M16 3v3"/></svg></span>Próxima troca
+        </button>
+      </div>
+
+      <button class="drawer-group" id="drawer-grp-vendas" onclick="drawerToggleGrupo('vendas')" aria-expanded="false">
+        <span class="drawer-group-label"><span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18M6 10V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3M4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9"/></svg></span>Vendas</span>
+        <span class="drawer-caret"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></span>
+      </button>
+      <div class="drawer-sub" id="drawer-sub-vendas">
+        <button class="drawer-subitem" data-drawer-panel="pagamentos" onclick="drawerIr('pagamentos')">
+          <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18M6 10V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3M4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9"/></svg></span>Pagamentos
+        </button>
+        <button class="drawer-subitem" data-drawer-panel="historico" onclick="drawerIr('historico')">
+          <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4l3 2"/></svg></span>Histórico de Clientes
+        </button>
+        <button class="drawer-subitem" data-drawer-panel="fidelidade" onclick="drawerIr('fidelidade')">
+          <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span>Fidelidade
+        </button>
+      </div>
+    </nav>
+
+    <div class="drawer-foot">
+      <div class="drawer-sep"></div>
+      <button class="drawer-sair" onclick="sb.auth.signOut().then(()=>location.reload())">
+        <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></span>Sair
+      </button>
+    </div>
+  </aside>
+
   <!-- TOP BAR -->
   <div class="topbar">
+    <!-- Hambúrguer: só revendedora (o staff navega pela sidebar/nav inferior).
+         auth.js liga junto com .rev-drawer no #app. -->
+    <button class="btn-icon drawer-burger" id="btn-drawer" onclick="toggleDrawer()" title="Menu" aria-label="Abrir menu" style="display:none"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
     <div class="topbar-logo"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg> Lizzie</div>
     <div class="topbar-crumb" id="topbar-crumb"></div>
     <div class="topbar-right">
@@ -182,9 +244,15 @@
         <div class="acts" style="justify-content:flex-end">
           <button class="btn btn-outline" id="btn-bling-sync" onclick="openBlingSync()" style="display:none"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Baixar Relação de Peças</button>
           <button class="btn btn-outline" id="btn-pdf-mostruario" onclick="baixarPdfMostruario()" style="display:none"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg> Baixar PDF</button>
+          <!-- Quem liga/desliga e o render (setBtnDivulgarTopo em consignados.js),
+               nao o auth.js: depende de ter maleta ativa, nao so do papel. -->
+          <button class="btn btn-primary" id="btn-divulgar-topo" onclick="abrirDivulgarMaleta()" style="display:none"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Divulgar catálogo</button>
           <button class="btn btn-primary" id="btn-novo-consig" onclick="openNovoConsignado()" style="display:none">+ Novo</button>
         </div>
       </div>
+      <!-- Ações em largura total ANTES da busca (design da revendedora).
+           Quem preenche é renderCicloRevendedora; para o staff fica vazio. -->
+      <div id="c-acoes-rev"></div>
       <div class="search-bar" id="c-search-bar" style="display:none">
         <input class="search-input" id="c-search" placeholder="Buscar por nome ou código..." oninput="renderCicloGrid()">
         <label class="filtro-vendidos" style="display:flex;align-items:center;gap:6px;margin-top:8px;font-size:13px;color:var(--muted);cursor:pointer;user-select:none">
@@ -264,6 +332,9 @@
     <div id="panel-marketing" style="display:none"></div>
     <div id="panel-bonus" style="display:none"></div>
     <div id="panel-fidelidade" style="display:none"></div>
+    <!-- Próxima troca: SÓ revendedora (a agenda dela). Todo o HTML vem de
+         loadProximaTroca() em src/proxima-troca.js. -->
+    <div id="panel-proxima-troca" style="display:none"></div>
     <div id="panel-funcionarios" style="display:none"></div>
     <div id="panel-perfis" style="display:none"></div>
     <div id="panel-formas-pagamento" style="display:none"></div>
@@ -303,6 +374,9 @@
     <button class="nav-item" id="nav-fidelidade" onclick="showPanel('fidelidade')" style="display:none">
       <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><path d="M11.5 6.5a4 4 0 0 0-8 0c0 2.5 3 4 3.5 6h1c.5-2 3.5-3.5 3.5-6z"/><circle cx="12" cy="12" r="10"/></svg></span>Fidelidade
     </button>
+    <button class="nav-item" id="nav-proxima-troca" onclick="showPanel('proxima-troca')" style="display:none">
+      <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 9h16M8 3v3M16 3v3"/></svg></span>Troca
+    </button>
     <button class="nav-item" id="nav-trocas" onclick="showPanel('trocas')" style="display:none">
       <span class="nav-icon"><svg class="ico" viewBox="0 0 24 24"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg></span>Trocas
     </button>
@@ -320,6 +394,17 @@
     </div>
     <div id="snav-menu"></div>
   </aside>
+</div>
+
+<!-- LEMBRETES (staff) — irmao de #app de proposito: o @media print ja esconde
+     todo body > * que nao seja #print-overlay, entao o painel some da
+     impressao sem regra nova; e fica fora dos display:none por painel do
+     nav.js. Quem monta e o lembretes.js, so para staff. -->
+<div id="lembretes" style="display:none">
+  <!-- caixa ANTES da bolha: com o wrapper ancorado por baixo, isso mantem a
+       bolha fixa no canto e faz o painel crescer pra cima ao abrir -->
+  <div id="lembretes-box" style="display:none"></div>
+  <button type="button" id="lembretes-bolha" onclick="toggleLembretes()" title="Lembretes"></button>
 </div>
 
 <!-- MODAL NOVA GARANTIA -->
@@ -542,29 +627,22 @@
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Forma de pagamento *</label>
-      <select id="f-forma" class="form-control" onchange="ajustarValorPago()">
-          <option value="Dinheiro">Dinheiro</option>
-          <option value="Pix" selected>Pix</option>
-          <option value="Cartão débito">Cartão débito</option>
-          <option value="Cartão crédito">Cartão crédito (à vista)</option>
-          <option value="Parcelado 2x">Parcelado 2x</option>
-          <option value="Parcelado 3x">Parcelado 3x</option>
-          <option value="Parcelado 4x">Parcelado 4x</option>
-          <option value="Parcelado 5x">Parcelado 5x</option>
-          <option value="Parcelado 6x">Parcelado 6x</option>
-          <option value="Fiado">Fiado</option>
-        </select>
+      <label class="form-label">Formas de pagamento *</label>
+      <!-- Linhas renderizadas por renderVendaPagamentos() (consignados.js).
+           A cliente pode pagar parte no Pix e parte no cartão: a soma das
+           linhas tem que fechar com o total do carrinho. Formas "A receber"
+           (Fiado, Fiado parcelado Nx) NAO contam como recebidas — sao o que
+           a cliente ainda deve. Cartao credito Nx e maquininha: recebido. -->
+      <div id="f-pgtos"></div>
+      <button type="button" id="f-pgto-add" class="btn-secondary" style="width:100%;margin-top:8px;font-size:13px" onclick="vendaPgtoAdd()">
+        + Adicionar outra forma
+      </button>
+      <div id="f-pgto-resumo" style="font-size:12px;margin-top:8px;min-height:18px"></div>
     </div>
     <div class="form-group" id="f-combinada-wrap" style="display:none">
       <label class="form-label">Data combinada de pagamento *</label>
       <input type="text" id="f-combinada" class="form-control" placeholder="dd/mm" maxlength="5" inputmode="numeric" oninput="maskDiaMes(this)">
       <div style="font-size:11px;color:var(--muted);margin-top:4px">Só o dia e o mês. Aparece na cobrança por WhatsApp da tela de Pagamentos.</div>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Valor recebido agora (R$)</label>
-      <input type="text" id="f-pago" class="form-control" inputmode="numeric" placeholder="0,00" oninput="maskMoneyBR(this)">
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">Deixe igual ao total para marcar como quitada</div>
     </div>
     <div class="form-group">
       <label class="form-label">Observação (opcional)</label>

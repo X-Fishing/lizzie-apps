@@ -2,7 +2,11 @@
 // como teclado + câmera via BarcodeDetector), acha o produto no catálogo-mestre
 // e monta a maleta (consignados) de uma revendedora. Só gestor/admin.
 import { sb } from './supabase.js';
-import { esc, toast, sbQ, fmtBRL, handleSupabaseError } from './utils.js';
+import { esc, toast, sbQ, fmtBRL, handleSupabaseError, isoEmDias, DIAS_CICLO_MOSTRUARIO } from './utils.js';
+
+// Sugestão padrão de data de troca: o ciclo de mostruário da Lizzie é de 35
+// dias. Fica só como sugestão — o campo continua editável e pode ir em branco.
+const DIAS_ATE_TROCA = DIAS_CICLO_MOSTRUARIO;
 
 const IC_TRASH = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>';
 const IC_GEM   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12l4 6-10 13L2 9z"/><path d="M11 3 8 9l4 13 4-13-3-6"/><path d="M2 9h20"/></svg>';
@@ -12,6 +16,12 @@ let revsAprovadas = [];
 let carrinho = [];          // [{produto_id, descricao, referencia, preco_venda, foto_url, qtd}]
 let maletasAbertas = [];    // maletas em aberto da revendedora selecionada: [{id,status,numero,created_at}]
 let maletaDestino = null;   // destino do envio: { nova:true } ou { id, status, numero }
+// Valor que o campo de data de troca assume quando ainda NÃO existe na tela
+// (primeiro render, ou logo após trocar o destino). Depois disso quem manda é
+// o que está no input — inclusive vazio, se a pessoa apagou de propósito.
+let dataTrocaPadrao = '';
+let horaTrocaPadrao = '';
+let localTrocaPadrao = '';
 
 const STATUS_LABEL = { ativa: 'Ativa', aguardando: 'Aguardando', finalizada: 'Finalizada' };
 
@@ -37,6 +47,9 @@ export async function loadLancador() {
   carrinho = [];
   maletasAbertas = [];
   maletaDestino = null;
+  dataTrocaPadrao = isoEmDias(DIAS_ATE_TROCA);
+  horaTrocaPadrao = '';
+  localTrocaPadrao = '';
   render();
 }
 
@@ -45,8 +58,11 @@ export async function lancadorSelecionarRev(revId) {
   maletaDestino = null;
   maletasAbertas = [];
   if (revId) {
+    // select('*') de propósito: precisamos de data_troca, e nomear a coluna
+    // quebraria a tela inteira em qualquer ambiente onde a migration 0050
+    // ainda não rodou. Com '*', a coluna ausente simplesmente não vem.
     const { data, error } = await sbQ(sb.from('maletas')
-      .select('id,status,numero,created_at')
+      .select('*')
       .eq('revendedora_id', revId)
       .in('status', ['ativa', 'aguardando'])
       .order('created_at'));
@@ -57,11 +73,35 @@ export async function lancadorSelecionarRev(revId) {
   render();
 }
 
+// Troca o valor do campo de data junto com o destino. Sem isso, continuar uma
+// maleta existente manteria na tela a sugestão de hoje+35 e o envio empurraria
+// a data de troca daquela maleta pra frente a cada bipe extra — perda de dado
+// silenciosa.
+function aplicarDataTroca(valor, hora, local) {
+  dataTrocaPadrao = valor || '';
+  const el = document.getElementById('lan-data-troca');
+  if (el) el.value = dataTrocaPadrao;
+  // A hora acompanha a data pelo mesmo motivo: continuar uma maleta existente
+  // sem isto sobrescreveria o horário já combinado com ela.
+  horaTrocaPadrao = (hora || '').slice(0, 5);   // 'HH:MM:SS' do Postgres → 'HH:MM'
+  const elH = document.getElementById('lan-hora-troca');
+  if (elH) elH.value = horaTrocaPadrao;
+  // Idem para o local (0054): sem isto, continuar uma maleta apagaria o que
+  // já estava combinado com ela.
+  localTrocaPadrao = local || '';
+  const elL = document.getElementById('lan-local-troca');
+  if (elL) elL.value = localTrocaPadrao;
+}
+
 // Escolha do destino pelos botões da tela.
-export function lancadorDestinoNova() { maletaDestino = { nova: true }; render(); }
+export function lancadorDestinoNova() {
+  maletaDestino = { nova: true };
+  aplicarDataTroca(isoEmDias(DIAS_ATE_TROCA), '', '');
+  render();
+}
 export function lancadorDestinoExistente(id) {
   const m = maletasAbertas.find(x => String(x.id) === String(id));
-  if (m) maletaDestino = { ...m };
+  if (m) { maletaDestino = { ...m }; aplicarDataTroca(m.data_troca, m.hora_troca, m.local_troca); }
   render();
 }
 export function lancadorTrocarDestino() { maletaDestino = null; render(); }
@@ -69,7 +109,14 @@ export function lancadorTrocarDestino() { maletaDestino = null; render(); }
 function render() {
   // preserva a revendedora escolhida entre renders (cada bipe re-renderiza tudo)
   const revSel = document.getElementById('lan-rev')?.value || '';
-  const dataTrocaSel = document.getElementById('lan-data-troca')?.value || '';
+  // Enquanto o campo existir na tela, ele é a verdade — inclusive vazio (a
+  // pessoa pode ter apagado). Só cai no padrão quando ainda não há campo.
+  const elDT = document.getElementById('lan-data-troca');
+  const dataTrocaSel = elDT ? elDT.value : dataTrocaPadrao;
+  const elHT = document.getElementById('lan-hora-troca');
+  const horaTrocaSel = elHT ? elHT.value : horaTrocaPadrao;
+  const elLT = document.getElementById('lan-local-troca');
+  const localTrocaSel = elLT ? elLT.value : localTrocaPadrao;
   const total = carrinho.reduce((s, i) => s + i.qtd, 0);
   const valor = carrinho.reduce((s, i) => s + i.qtd * (i.preco_venda || 0), 0);
   // Códigos repetidos no carrinho: destaca a linha inteira em rosa (blush) p/
@@ -115,9 +162,15 @@ function render() {
             <option value="">Selecione a revendedora...</option>
             ${revsAprovadas.map(r => `<option value="${r.id}" ${String(r.id) === revSel ? 'selected' : ''}>${esc(r.nome)}</option>`).join('')}
           </select></div>
-        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Data de troca</label>
+        <div class="form-group"><label class="form-label">Data de troca</label>
           <input type="date" id="lan-data-troca" class="form-control" value="${dataTrocaSel}">
-          <div style="font-size:11px;color:var(--muted);margin-top:4px">Aparece na tela de Trocas. Pode deixar em branco e definir depois.</div></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Sugerimos ${DIAS_ATE_TROCA} dias. Pode alterar ou deixar em branco.</div></div>
+        <div class="form-group"><label class="form-label">Horário</label>
+          <input type="time" id="lan-hora-troca" class="form-control" value="${horaTrocaSel}">
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Opcional. A revendedora vê data e horário no app dela.</div></div>
+        <div class="form-group" style="grid-column:1/-1"><label class="form-label">Local da troca</label>
+          <input type="text" id="lan-local-troca" class="form-control" value="${esc(localTrocaSel)}" placeholder="Ex.: Loja — Centro">
+          <div style="font-size:11px;color:var(--muted);margin-top:4px">Opcional. Aparece no app dela junto com a data.</div></div>
       </div>
       ${maletaPanelHtml(revSel)}
     </div>
@@ -272,12 +325,26 @@ export async function lancadorEnviar() {
     maletaId = mData.id;
   }
 
-  // Data de troca (opcional): grava na maleta. Best-effort — nao quebra o envio
-  // se a coluna data_troca ainda nao existir no banco.
+  // Data de troca: o campo é a fonte da verdade, então grava sempre — inclusive
+  // null, quando a pessoa apagou de propósito pra tirar a data. Fica FORA do
+  // insert da maleta nova de propósito: se a migration 0050 ainda não rodou, um
+  // insert com coluna inexistente derrubaria o envio inteiro; aqui o erro só
+  // vira aviso no console e as peças seguem. supabase-js não lança — devolve
+  // { error } —, por isso a checagem explícita (o try/catch anterior nunca
+  // disparava, e era por isso que a data sumia sem ninguém notar).
   const dataTroca = document.getElementById('lan-data-troca')?.value || null;
-  if (dataTroca) {
-    try { await sb.from('maletas').update({ data_troca: dataTroca }).eq('id', maletaId); } catch (e) { /* coluna ausente: ignora */ }
-  }
+  const horaTroca = document.getElementById('lan-hora-troca')?.value || null;
+  const { error: dtErr } = await sb.from('maletas')
+    .update({ data_troca: dataTroca, hora_troca: horaTroca }).eq('id', maletaId);
+  if (dtErr) console.warn('[lancador] nao gravou data/hora de troca (rodou as migrations 0050/0053?):', dtErr.message);
+
+  // Local em um update SEPARADO de propósito: junto com data/hora, um ambiente
+  // sem a 0054 derrubaria o update inteiro por coluna inexistente e a data
+  // pararia de ser gravada — regressão silenciosa exatamente como a que o
+  // comentário acima descreve.
+  const localTroca = (document.getElementById('lan-local-troca')?.value || '').trim() || null;
+  const { error: ltErr } = await sb.from('maletas').update({ local_troca: localTroca }).eq('id', maletaId);
+  if (ltErr) console.warn('[lancador] nao gravou o local da troca (rodou a migration 0054?):', ltErr.message);
 
   // 2) Insere as peças vinculadas à maleta.
   // ESTOQUE: hoje o envio NÃO baixa produtos.estoque_qtd. Quando a baixa

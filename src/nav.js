@@ -21,6 +21,10 @@ function hashDePanel(name) {
 // Guards de papel/permissao: devolve o painel EFETIVO (ou 'dashboard').
 function panelPermitido(name) {
   if (name === 'trocas' && !ehStaff()) return 'dashboard';
+  // Inverso do 'trocas': a agenda pessoal é da revendedora. Sem isto o staff
+  // chegaria por URL — e o guard de permissão abaixo não pega, porque
+  // podeAcessarPanel devolve true para painel fora do MENU.
+  if (name === 'proxima-troca' && ehStaff()) return 'dashboard';
   if (name === 'admin' && !ehGestor()) return 'dashboard';
   if (PANEIS_STAFF.includes(name) && !ehStaff()) return 'dashboard';
   if (name !== 'dashboard' && ehStaff() && !podeAcessarPanel(name)) {
@@ -32,7 +36,7 @@ function panelPermitido(name) {
 
 // Executor real: troca os paineis, sincroniza o menu ativo e dispara o loader.
 function aplicarTela(name) {
-  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin','fidelidade', ...PANEIS_STAFF].forEach(p => {
+  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin','fidelidade','proxima-troca', ...PANEIS_STAFF].forEach(p => {
     const el = document.getElementById('panel-' + p);
     if (el) el.style.display = p === name ? 'block' : 'none';
     const nav = document.getElementById('nav-' + p);
@@ -44,6 +48,7 @@ function aplicarTela(name) {
   // Entrada de Mercadoria usa a largura total da tela (grade larga).
   document.querySelector('.content')?.classList.toggle('tela-full', name === 'entrada-mercadoria');
   atualizarBreadcrumb(name);   // breadcrumb da topbar (global, menu.js)
+  drawerSincronizar(name);     // item ativo + grupo aberto na gaveta (revendedora)
 
   if (name === 'dashboard') loadDashboard();
   if (name === 'garantias') loadGarantias();
@@ -71,6 +76,7 @@ function aplicarTela(name) {
   if (name === 'precificacao') loadPrecificacao();
   if (name === 'entrada-mercadoria') loadEntradaMercadoria();
   if (name === 'fidelidade') loadFidelidade();
+  if (name === 'proxima-troca') loadProximaTroca();
   if (name === 'bonus') loadBonus();
   if (name === 'lancador') loadLancador();
   window.scrollTo(0, 0);

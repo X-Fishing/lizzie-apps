@@ -1,8 +1,8 @@
 // Programa de Fidelidade — cartela de selos da CLIENTE FINAL.
 // 1 selo a cada R$150 cheios da venda; 10 selos = R$300 em peças (retirada na
 // loja). Os selos são creditados no banco (trigger aplicar_fidelidade, 0029).
-// Staff vê todas as clientes; a revendedora só as clientes p/ quem já vendeu
-// (a RLS 0028 faz o filtro — a MESMA query serve os dois papéis).
+// Staff vê todas as clientes; a revendedora só as clientes p/ quem já vendeu.
+// Escopado NA QUERY (não só na RLS) — ver loadFidelidade().
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { esc, sbQ, toast, confirmarAcao, openModal, handleSupabaseError, fmtBRL, isoToBR, telFmt, telValido } from './utils.js';
@@ -33,10 +33,33 @@ export function renderCartelaFidelidade(selos) {
 
 export async function loadFidelidade() {
   panel().innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
+  const staff = ehStaff();
+  // A RLS de clientes/fidelidade_* escopa pelo PAPEL REAL gravado no banco
+  // (profiles.role) — mas "Entrar como Revendedora" (auth.js:escolherModo)
+  // só troca o papel NA MEMÓRIA da sessão, sem tocar no banco nem no
+  // auth.uid(). Uma funcionária que escolhe esse modo continua staff pra a
+  // RLS e receberia a base INTEIRA de clientes/selos aqui — mesmo a tela
+  // dizendo "suas clientes" (render() já usa ehStaff() pro texto). Por isso
+  // NÃO confiamos na RLS pra escopar: filtramos pelo papel EFETIVO da sessão,
+  // igual historico.js/pagamentos.js já fazem com vendas.revendedora_id.
+  let clienteIds = null;
+  if (!staff) {
+    const { data: minhasVendas, error: vErr } = await sbQ(sb.from('vendas')
+      .select('cliente_id').eq('revendedora_id', state.currentUser.id).not('cliente_id', 'is', null));
+    if (vErr) { if (await handleSupabaseError(vErr, 'Erro ao carregar fidelidade')) return; }
+    clienteIds = [...new Set((minhasVendas || []).map(v => v.cliente_id))];
+    if (!clienteIds.length) { cache = []; render(); return; }
+  }
   const [cRes, cartRes, premRes] = await Promise.all([
-    sbQ(sb.from('clientes').select('id,nome,celular').order('nome')),
-    sbQ(sb.from('fidelidade_cartelas').select('cliente_id,selos').eq('status', 'aberta')),
-    sbQ(sb.from('fidelidade_premios').select('cliente_id').eq('status', 'pendente')),
+    sbQ(clienteIds
+      ? sb.from('clientes').select('id,nome,celular').in('id', clienteIds).order('nome')
+      : sb.from('clientes').select('id,nome,celular').order('nome')),
+    sbQ(clienteIds
+      ? sb.from('fidelidade_cartelas').select('cliente_id,selos').eq('status', 'aberta').in('cliente_id', clienteIds)
+      : sb.from('fidelidade_cartelas').select('cliente_id,selos').eq('status', 'aberta')),
+    sbQ(clienteIds
+      ? sb.from('fidelidade_premios').select('cliente_id').eq('status', 'pendente').in('cliente_id', clienteIds)
+      : sb.from('fidelidade_premios').select('cliente_id').eq('status', 'pendente')),
   ]);
   if (cRes.error) {
     if (/relation|does not exist|schema cache/i.test(cRes.error.message || '')) {
@@ -80,6 +103,20 @@ function linhas() {
   if (!lista.length) {
     return `<div class="empty-state" style="padding:40px 0"><div class="empty-icon">${IC_STAMP}</div><p>${termo ? 'Nenhuma cliente encontrada' : 'Nenhuma cliente com fidelidade ainda'}</p></div>`;
   }
+  // A revendedora usa card com barra (design mobile); a tabela tem min-width
+  // 560px e no celular dela só existiria rolando de lado. Mesmos campos.
+  if (!ehStaff()) {
+    return lista.map(c => `
+      <div class="fid-card" onclick="fidelidadeVerCliente('${c.id}')">
+        <div class="fid-card-topo">
+          <div class="fid-card-nome">${esc(c.nome)}</div>
+          <div class="fid-card-selos">${c.selos}/10${c.premios ? ` · ${c.premios} prêmio${c.premios > 1 ? 's' : ''}` : ''}</div>
+        </div>
+        <div class="fid-card-tel">${esc(telFmt(c.celular))}${telRuim(c.celular) ? ' <span class="badge badge-pendente" title="Número fora do padrão — esta cartela pode misturar mais de uma pessoa.">Telefone inválido</span>' : ''}</div>
+        <div class="fid-bar"><div style="width:${Math.min(100, c.selos * 10)}%"></div></div>
+      </div>`).join('');
+  }
+
   return `<div class="pag-wrap"><table class="pag-table"><thead><tr>
     <th class="pag-th">Cliente</th><th class="pag-th">Telefone</th><th class="pag-th" style="text-align:center">Selos</th><th class="pag-th"></th>
   </tr></thead><tbody>${lista.map(c => `

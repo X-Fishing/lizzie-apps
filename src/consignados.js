@@ -1,9 +1,22 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado, ehFormaAReceber } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 import { abrirModalPosVenda } from './pos-venda.js';
+
+const IC_OLHO = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" width="15" height="15"><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></svg>';
+
+// Total vendido no ciclo fica escondido por padrão (é valor sensível do
+// negócio) — só aparece enquanto a pessoa segura o clique no olhinho.
+// Não usa estado em módulo: lê/escreve direto no elemento, então funciona
+// mesmo que o card seja re-renderizado entre o mousedown e o mouseup.
+export function cicloValorVisivel(mostrar) {
+  const el = document.getElementById('ciclo-total-valor');
+  if (!el) return;
+  el.textContent = mostrar ? el.dataset.valor : '•••••';
+}
+
 export async function loadConsignados() {
   confTelaAberta = false; fechTelaAberta = false;
   document.getElementById('c-list').innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
@@ -48,8 +61,28 @@ export function sortConsignados(col) {
   renderCicloGrid();
 }
 
+// O botão "Divulgar catálogo" mora no page-head, que é HTML estático, mas
+// quem decide se ele aparece é o render (só a revendedora, e só com maleta
+// ativa). Desligar por padrão aqui e deixar UM único ponto ligando
+// (renderCicloRevendedora) evita que ele sobreviva numa sub-tela — que é o
+// que aconteceria se cada caminho de saída tivesse que lembrar de escondê-lo.
+function setBtnDivulgarTopo(mostrar) {
+  const b = document.getElementById('btn-divulgar-topo');
+  if (b) b.style.display = mostrar ? 'inline-flex' : 'none';
+}
+
+// Divulgar + Fechamento em largura total, acima da busca — a ordem do design.
+// Só para a revendedora: no desk elas continuam no page-head/rodapé, onde o
+// staff já as procura. Mesmo ponto único de controle do setBtnDivulgarTopo.
+function setAcoesRev(html) {
+  const el = document.getElementById('c-acoes-rev');
+  if (el) el.innerHTML = html || '';
+}
+
 export function renderCicloGrid() {
   const div = document.getElementById('c-list');
+  setBtnDivulgarTopo(false);
+  setAcoesRev('');   // mesmo motivo: um único ponto liga, todo o resto desliga
   // Sub-telas (conferência/fechamento) renderizam no lugar do catálogo, na
   // largura normal centralizada (mesmo padrão do histórico de ciclos).
   if (confTelaAberta || fechTelaAberta) {
@@ -136,12 +169,41 @@ export function cicloRowHtml(c, isAdmin, historico = false) {
     <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${c.referencia ? esc(c.referencia) : '—'}</td>
     <td class="ciclo-td"><span class="ciclo-badge">${CAT_LABEL[cat] || cat}</span></td>
     <td class="ciclo-td"><span class="ciclo-num">${c.quantidade_enviada}</span></td>
-    <td class="ciclo-td">${c.preco_venda ? `<span class="ciclo-preco">R$ ${Number(c.preco_venda).toFixed(2)}</span>` : '—'}</td>
+    <td class="ciclo-td">${c.preco_venda ? `<span class="ciclo-preco">${fmtBRL(c.preco_venda)}</span>` : '—'}</td>
     <td class="ciclo-td ciclo-acao">${acao}</td>
   </tr>`;
 }
 
+// Catálogo da revendedora em CARD (design mobile). A tabela tem 6 colunas e
+// no celular dela as duas últimas — preço e o botão Vender — ficavam fora da
+// tela; era preciso rolar de lado para vender. Mesmos campos, empilhados.
+function cicloCardsHtml(list) {
+  return cicloSortRows(list).map(c => {
+    const disp = qtdDisp(c);
+    const cat = c.categoria || detectarCategoria(c.descricao);
+    const acao = disp > 0
+      ? `<button class="btn-vender" onclick="event.stopPropagation();openVenda('${c.id}')">Vender</button>`
+      : '<span class="ciclo-card-vendido">Vendido</span>';
+    return `<div class="ciclo-card${disp > 0 ? '' : ' esgotado'}" onclick="confVerFoto('${c.id}')">
+      <div class="ciclo-card-foto"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>
+      <div class="ciclo-card-info">
+        <div class="ciclo-card-desc">${esc(c.descricao)}</div>
+        <div class="ciclo-card-meta">
+          <span>${c.referencia ? esc(c.referencia) : '—'}</span>
+          <span class="ciclo-badge">${CAT_LABEL[cat] || cat}</span>
+          ${c.quantidade_enviada > 1 ? `<span>${c.quantidade_enviada} un.</span>` : ''}
+        </div>
+        ${c.preco_venda ? `<div class="ciclo-card-preco">${fmtBRL(c.preco_venda)}</div>` : ''}
+      </div>
+      ${acao}
+    </div>`;
+  }).join('');
+}
+
 export function cicloTableHtml(list, isAdmin, historico = false) {
+  // Só o catálogo ativo da revendedora vira card; o histórico e as telas do
+  // staff continuam na tabela (lá a comparação coluna a coluna é o ponto).
+  if (!isAdmin && !historico) return cicloCardsHtml(list);
   const rows = cicloSortRows(list).map(c => cicloRowHtml(c, isAdmin, historico)).join('');
   return `<div class="ciclo-wrap">
     <table class="ciclo-table">
@@ -166,12 +228,15 @@ export function renderCicloRevendedora() {
   let ativos = soAtivos(state.allConsignados);
   if (state.maletaAtivaId) ativos = ativos.filter(c => c.maleta_id === state.maletaAtivaId);
   const temAtivos = ativos.some(c => qtdDisp(c) > 0);
-  const btnDivulgar = temAtivos
-    ? `<button class="btn-primary" style="width:100%;margin-top:16px" onclick="abrirDivulgarMaleta()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Divulgar minha maleta</button>`
-    : '';
-  const btnFechamento = temAtivos
-    ? `<button class="btn-secondary" style="width:100%;margin-top:10px;border-color:var(--gold);color:var(--gold)" onclick="openFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do Catálogo</button>`
-    : '';
+  // As duas ações principais vão para o bloco acima da busca (design), em
+  // largura total. O botão do page-head fica desligado para não duplicar.
+  setBtnDivulgarTopo(false);
+  setAcoesRev(temAtivos
+    ? `<div class="c-acoes">
+         <button class="btn btn-primary" onclick="abrirDivulgarMaleta()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12a3 3 0 1 0 6 0 3 3 0 0 0-6 0z"/><path d="M4 12s3-6 8-6 8 6 8 6-3 6-8 6-8-6-8-6z"/></svg> Divulgar minha maleta</button>
+         <button class="btn btn-outline" onclick="openFechamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M12 11h4"/><path d="M12 16h4"/><path d="M8 11h.01"/><path d="M8 16h.01"/></svg> Fechamento do catálogo</button>
+       </div>`
+    : '');
 
   const historico = historicoCatalogosHtml(state.allConsignados);
   const cabecalho = pedidoLabelHtml(ativos, 12);
@@ -195,7 +260,7 @@ export function renderCicloRevendedora() {
           : `Nenhuma peça encontrada com "${termo}"`;
       return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>${msgVazio}</p></div>` + historico;
     }
-    return cabecalho + cicloTableHtml(lista, false) + btnDivulgar + btnFechamento + historico;
+    return cabecalho + cicloTableHtml(lista, false) + historico;
   }
 
   // Sem catálogo ativo: mostra aviso + histórico (se houver), em vez de tabela vazia.
@@ -203,7 +268,7 @@ export function renderCicloRevendedora() {
     return `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/></svg></div><p>Nenhum catálogo ativo no momento</p></div>` + historico;
   }
 
-  return cabecalho + cicloTableHtml(ativos, false) + btnDivulgar + btnFechamento + historico;
+  return cabecalho + cicloTableHtml(ativos, false) + historico;
 }
 
 export function agruparPorRevendedora() {
@@ -436,6 +501,7 @@ function cicloAdmCardsHtml() {
           <div style="height:100%;width:${Math.min(100, convPct)}%;background:linear-gradient(90deg,var(--rose),var(--gold))"></div>
         </div>
       </div>
+      ${ehGestor() && l.temAtivos ? `<button class="btn-secondary" style="width:100%;margin-top:10px;font-size:12px;padding:7px" onclick="event.stopPropagation();abrirDivulgarMaleta('${l.revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Divulgar</button>` : ''}
     </div>`;
   }).join('');
 }
@@ -459,8 +525,13 @@ export function renderCicloAdmin() {
 
   return `<button class="btn-secondary" style="width:100%;margin-bottom:14px;border-color:var(--rose);color:var(--rose)" onclick="openBuscaPeca()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg> Buscar peça — com quem está</button>
     <div style="background:linear-gradient(135deg,#1a0a2e,#5a2a44);border-radius:16px;padding:20px;color:#fff;margin-bottom:14px">
-      <div style="font-size:12px;opacity:.8;text-transform:uppercase;letter-spacing:.5px">Total vendido no ciclo</div>
-      <div style="font-family:'Cormorant Garamond',serif;font-size:40px;line-height:1.1;margin-top:4px">${fmtBRL(grandTotal)}</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div style="font-size:12px;opacity:.8;text-transform:uppercase;letter-spacing:.5px">Total vendido no ciclo</div>
+        <button type="button" title="Segure pra ver o valor" style="background:none;border:none;padding:2px;cursor:pointer;color:rgba(255,255,255,.65);display:inline-flex;line-height:0"
+          onmousedown="cicloValorVisivel(true)" onmouseup="cicloValorVisivel(false)" onmouseleave="cicloValorVisivel(false)"
+          ontouchstart="event.preventDefault();cicloValorVisivel(true)" ontouchend="cicloValorVisivel(false)" ontouchcancel="cicloValorVisivel(false)">${IC_OLHO}</button>
+      </div>
+      <div style="font-family:'Cormorant Garamond',serif;font-size:40px;line-height:1.1;margin-top:4px" id="ciclo-total-valor" data-valor="${fmtBRL(grandTotal)}">•••••</div>
       <div style="font-size:12px;opacity:.8;margin-top:4px">${totalRevsAtivas} revendedora${totalRevsAtivas!==1?'s':''} ativa${totalRevsAtivas!==1?'s':''}</div>
     </div>
     <div class="kpi-grid" style="margin-bottom:14px">
@@ -493,11 +564,18 @@ export function renderCicloAdminDetalhe(revId, list) {
   // Ações em evidência no topo do card (perto do "Vendido R$ ..."):
   // Link da maleta + Finalizar Mostruário. O rodapé fica só com
   // "Atualizar itens da maleta" e "Excluir maleta aguardando".
-  const acoesTopo = ehGestor()
-    ? `<div class="btn-group" style="margin-bottom:14px">
-        <button class="btn btn-outline" onclick="abrirDivulgarMaleta('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link da maleta</button>
-        ${temAtivos ? `<button class="btn btn-primary" onclick="abrirConferencia('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar Mostruário</button>` : ''}
-      </div>`
+  // "Imprimir vendidas" é só leitura, então vale pra qualquer staff que já
+  // enxergue a tela — a permissão do painel é o gate. As outras seguem em
+  // ehGestor() por serem ações que mexem em dado.
+  const btnImprimirVendidas = ativos.some(foiVendida)
+    ? `<button class="btn btn-outline" onclick="imprimirVendidasMaleta('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg> Imprimir vendidas</button>`
+    : '';
+  const acoesGestor = ehGestor()
+    ? `<button class="btn btn-outline" onclick="abrirDivulgarMaleta('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg> Link da maleta</button>
+        ${temAtivos ? `<button class="btn btn-primary" onclick="abrirConferencia('${revId}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Finalizar Mostruário</button>` : ''}`
+    : '';
+  const acoesTopo = (acoesGestor || btnImprimirVendidas)
+    ? `<div class="btn-group" style="margin-bottom:14px">${acoesGestor}${btnImprimirVendidas}</div>`
     : '';
   const acoes = ehGestor()
     ? `<div class="btn-group" style="margin-top:12px">
@@ -1636,6 +1714,70 @@ export function imprimirRelacaoVendidas() {
   setTimeout(() => window.print(), 300);
 }
 
+// Relação SÓ das peças vendidas, impressa direto da grid do desk — sem
+// precisar entrar no fechamento. Documento diferente do imprimirRelacaoVendidas
+// acima, de propósito:
+//   - lá o critério é `!c.devolvido` (veredito da conferência FÍSICA, só existe
+//     dentro dela); aqui é `foiVendida` = venda registrada no app.
+//   - lá a quantidade é a ENVIADA (a peça inteira voltou ou não voltou); aqui é
+//     a VENDIDA (o ciclo continua aberto, pode ter vendido parte).
+//   - aqui não vai comissão nem assinatura: é uma parcial de meio de ciclo,
+//     não um acerto fechado.
+export function imprimirVendidasMaleta(revId) {
+  const lista = state.allConsignados.filter(c => c.revendedora_id === revId);
+  const { ativos } = statsRevendedora(lista);
+  // Ignora de propósito a busca/filtros da tela: o papel é a relação completa
+  // do que foi vendido, não um recorte do que estava filtrado na hora.
+  const vendidas = ativos.filter(foiVendida);
+  if (!vendidas.length) { toast('Nenhuma peça vendida para imprimir.'); return; }
+
+  const nome = state.revNameMap[revId] || 'Revendedora';
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const unidades = vendidas.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
+  const total = vendidas.reduce((s, c) => s + (c.quantidade_vendida || 0) * Number(c.preco_venda || 0), 0);
+
+  const th = (txt, al) => `<th style="padding:10px 14px;text-align:${al};font-size:10px;text-transform:uppercase;letter-spacing:.8px;font-weight:600;color:#6d2947">${txt}</th>`;
+  const linhas = vendidas.map(c => {
+    const qtd = c.quantidade_vendida || 0;
+    const sub = qtd * Number(c.preco_venda || 0);
+    return `<tr style="border-bottom:1px solid #f0e8ee">
+      <td style="padding:9px 14px;font-size:11.5px;color:#9a8aa0;font-family:'DM Mono',monospace">${esc(c.referencia || '—')}</td>
+      <td style="padding:9px 14px;font-size:12.5px;color:#2d1f35">${esc(c.descricao)}</td>
+      <td style="padding:9px 14px;text-align:center;font-size:12.5px">${qtd}</td>
+      <td style="padding:9px 14px;text-align:right;font-size:12.5px;color:#6a5a70">${c.preco_venda ? 'R$ ' + Number(c.preco_venda).toFixed(2) : '—'}</td>
+      <td style="padding:9px 14px;text-align:right;font-size:12.5px;font-weight:600;color:#2d1f35">R$ ${sub.toFixed(2)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('print-content').innerHTML = `
+    <div style="font-family:'DM Sans',Arial,sans-serif;color:#2d1f35;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #6d2947;padding-bottom:16px;margin-bottom:18px">
+        <div>
+          <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:#c9748a;font-weight:600;margin-bottom:7px">Lizzie Semijoias</div>
+          <h1 style="font-family:'Cormorant Garamond',Georgia,serif;font-size:30px;font-weight:600;margin:0;line-height:1">Peças Vendidas</h1>
+        </div>
+        <div style="text-align:right;font-size:12px;color:#9a8aa0">
+          <div style="font-size:14px;color:#2d1f35;font-weight:600">${esc(nome)}</div>
+          <div style="margin-top:3px">${hoje}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:28px;margin-bottom:20px;font-size:12.5px">
+        <span style="color:#9a8aa0">Itens <strong style="color:#2d1f35;font-size:14px">${vendidas.length}</strong></span>
+        <span style="color:#9a8aa0">Unidades <strong style="color:#2d1f35;font-size:14px">${unidades}</strong></span>
+        <span style="color:#9a8aa0">Total <strong style="color:#a03a5d;font-size:14px">R$ ${total.toFixed(2)}</strong></span>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:#faf3f6;border-bottom:2px solid #e8d8e2;-webkit-print-color-adjust:exact;print-color-adjust:exact">
+          ${th('Código', 'left')}${th('Descrição', 'left')}${th('Qtd', 'center')}${th('Preço', 'right')}${th('Subtotal', 'right')}
+        </tr></thead>
+        <tbody>${linhas}</tbody>
+      </table>
+    </div>`;
+
+  document.getElementById('print-overlay').classList.add('show');
+  setTimeout(() => window.print(), 300);
+}
+
 // Ação destrutiva: exclui SOMENTE a maleta AGUARDANDO (a próxima já montada).
 // A maleta ATIVA (que está com a revendedora) nunca é tocada.
 export async function deletarCicloRev(revId) {
@@ -1705,6 +1847,7 @@ export async function excluirMaletaAdmin(revId) {
           // Filhos antes da venda (não depende de ON DELETE CASCADE nas FKs).
           await sbQ(sb.from('recebimentos').delete().in('venda_id', vendaIds));
           await sbQ(sb.from('venda_itens').delete().in('venda_id', vendaIds));
+          await sbQ(sb.from('venda_pagamentos').delete().in('venda_id', vendaIds));
           ({ error } = await sbQ(sb.from('vendas').delete().in('id', vendaIds)));
         }
         // Escopo sempre por maleta_id — nunca por revendedora solta.
@@ -1819,14 +1962,16 @@ export function abrirFinalizarVenda() {
   document.getElementById('f-tel').value = '';
   document.getElementById('f-nasc').value = '';
   document.getElementById('f-data').value = hojeBR();
-  document.getElementById('f-forma').value = 'Pix';
+  // Uma linha de pagamento já com o total: o caso comum (forma única) segue
+  // sendo 2 toques. Quem precisa dividir usa "+ Adicionar outra forma".
+  state.vendaPagamentos = [{ forma: 'Pix', valor: total }];
   document.getElementById('f-combinada').value = '';
   document.getElementById('f-obs').value = '';
   document.getElementById('f-cliente-status').innerHTML = '';
   const semZapEl = document.getElementById('f-sem-zap');
   if (semZapEl) { semZapEl.checked = false; vendaSemZapToggle(); }
   state.vendaClienteId = null;
-  ajustarValorPago();
+  renderVendaPagamentos();
   openModal('modal-finalizar');
   // Telefone é o gatilho do autocomplete → foca nele ao abrir.
   setTimeout(() => document.getElementById('f-tel')?.focus(), 120);
@@ -1935,13 +2080,110 @@ export function vendaNomeBlur() {
   setTimeout(() => { const el = document.getElementById('f-cliente-sugestoes'); if (el) el.innerHTML = ''; }, 150);
 }
 
-export function ajustarValorPago() {
-  const total = state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
-  const forma = document.getElementById('f-forma').value;
-  const aVista = ['Dinheiro', 'Pix', 'Cartão débito', 'Cartão crédito'].includes(forma);
-  document.getElementById('f-pago').value = aVista ? moneyToInput(total) : '';
-  // Data combinada só faz sentido no fiado.
-  document.getElementById('f-combinada-wrap').style.display = forma === 'Fiado' ? 'block' : 'none';
+// ── Formas de pagamento da venda (0051/0052) ────────────────────────────
+// Antes era um <select> único: "pagou R$ 100 no Pix e R$ 50 no cartão" não
+// tinha como ser lançado. Agora a venda tem N linhas {forma, valor} e a soma
+// precisa fechar com o total do carrinho.
+// "Cartão crédito Nx" é maquininha — dinheiro garantido, conta como recebido.
+// "Fiado parcelado Nx" é a revendedora parcelando DIRETO com a cliente — é
+// dívida, igual ao Fiado (ver ehFormaAReceber em utils.js).
+const FORMAS_RECEBIDO = ['Dinheiro', 'Pix', 'Cartão débito', 'Cartão crédito (à vista)',
+  'Cartão crédito 2x', 'Cartão crédito 3x', 'Cartão crédito 4x', 'Cartão crédito 5x', 'Cartão crédito 6x'];
+const FORMAS_A_RECEBER = ['Fiado', 'Fiado parcelado 2x', 'Fiado parcelado 3x',
+  'Fiado parcelado 4x', 'Fiado parcelado 5x', 'Fiado parcelado 6x'];
+const FORMAS_VENDA = [...FORMAS_RECEBIDO, ...FORMAS_A_RECEBER];
+
+const totalCarrinho = () => state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
+const somaPagamentos = () => state.vendaPagamentos.reduce((s, p) => s + Number(p.valor || 0), 0);
+
+export function renderVendaPagamentos() {
+  const wrap = document.getElementById('f-pgtos');
+  if (!wrap) return;
+  const podeRemover = state.vendaPagamentos.length > 1;
+  const optgroup = (label, formas, p) => `<optgroup label="${label}">
+    ${formas.map(f => `<option value="${f}"${f === p.forma ? ' selected' : ''}>${esc(f)}</option>`).join('')}
+  </optgroup>`;
+
+  wrap.innerHTML = state.vendaPagamentos.map((p, i) => `
+    <div class="form-row" style="align-items:flex-end;gap:8px;margin-bottom:8px">
+      <div class="form-group" style="flex:2;margin:0">
+        <select class="form-control" onchange="vendaPgtoSet(${i},'forma',this.value)">
+          ${optgroup('Recebido agora', FORMAS_RECEBIDO, p)}
+          ${optgroup('A receber', FORMAS_A_RECEBER, p)}
+        </select>
+      </div>
+      <div class="form-group" style="flex:1;margin:0">
+        <input type="text" class="form-control" inputmode="numeric" placeholder="0,00"
+               value="${moneyToInput(p.valor || 0)}"
+               oninput="maskMoneyBR(this);vendaPgtoSet(${i},'valor',this.value)">
+      </div>
+      ${podeRemover ? `<button type="button" class="btn-icon" title="Remover forma" onclick="vendaPgtoRemover(${i})"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>` : ''}
+    </div>`).join('');
+
+  atualizarResumoPagamentos();
+}
+
+// Separado do render porque redesenhar os inputs a cada tecla faria o campo
+// de valor perder o foco no meio da digitação.
+function atualizarResumoPagamentos() {
+  const total = totalCarrinho();
+  const falta = total - somaPagamentos();
+
+  // Data combinada é obrigatória em qualquer forma "a receber" (Fiado e Fiado
+  // parcelado): sem ela a venda não entra na cobrança automática (lembretes.js
+  // só enxerga vendas com data_combinada vencida).
+  const temAReceber = state.vendaPagamentos.some(p => ehFormaAReceber(p.forma));
+  const wrapComb = document.getElementById('f-combinada-wrap');
+  if (wrapComb) wrapComb.style.display = temAReceber ? 'block' : 'none';
+
+  // Nada a repartir quando a soma já fechou.
+  const btnAdd = document.getElementById('f-pgto-add');
+  if (btnAdd) btnAdd.disabled = Math.abs(falta) < 0.01;
+
+  const res = document.getElementById('f-pgto-resumo');
+  if (!res) return;
+  if (Math.abs(falta) < 0.01) {
+    res.innerHTML = `<span style="color:var(--success)">Fecha com o total: ${fmtBRL(total)}</span>`;
+  } else if (falta > 0) {
+    res.innerHTML = `<span style="color:var(--warning)">Faltam ${fmtBRL(falta)} de ${fmtBRL(total)}</span>`;
+  } else {
+    res.innerHTML = `<span style="color:var(--danger)">Passou ${fmtBRL(-falta)} do total</span>`;
+  }
+}
+
+export function vendaPgtoAdd() {
+  const falta = totalCarrinho() - somaPagamentos();
+  const usadas = new Set(state.vendaPagamentos.map(p => p.forma));
+  // A forma sugerida sai só do grupo "Recebido agora" — senão a 2ª linha
+  // podia nascer como dívida sem a revendedora escolher isso de propósito.
+  state.vendaPagamentos.push({
+    forma: FORMAS_RECEBIDO.find(f => !usadas.has(f)) || 'Dinheiro',
+    valor: falta > 0 ? falta : 0,
+  });
+  renderVendaPagamentos();
+}
+
+export function vendaPgtoRemover(i) {
+  if (state.vendaPagamentos.length <= 1) return;   // sempre resta uma linha
+  state.vendaPagamentos.splice(i, 1);
+  renderVendaPagamentos();
+}
+
+export function vendaPgtoSet(i, campo, valor) {
+  const linha = state.vendaPagamentos[i];
+  if (!linha) return;
+  if (campo === 'valor') {
+    linha.valor = parseMoneyBR(valor);
+    atualizarResumoPagamentos();   // NÃO re-renderiza: perderia o foco do input
+    return;
+  }
+  // Só UMA linha "a receber" por venda: Fiado e Fiado parcelado dependem da
+  // mesma data_combinada — duas dívidas não têm como ser cobradas separado.
+  if (ehFormaAReceber(valor)) {
+    state.vendaPagamentos.forEach((p, j) => { if (j !== i && ehFormaAReceber(p.forma)) p.forma = 'Dinheiro'; });
+  }
+  linha.forma = valor;
+  renderVendaPagamentos();
 }
 
 export async function confirmarVendaCarrinho(btn) {
@@ -1949,10 +2191,17 @@ export async function confirmarVendaCarrinho(btn) {
   const tel = soDigitos(document.getElementById('f-tel').value);
   const nasc = brToISO(document.getElementById('f-nasc').value);
   const data = brToISO(document.getElementById('f-data').value);
-  const forma = document.getElementById('f-forma').value;
-  const pago = parseMoneyBR(document.getElementById('f-pago').value);
   const obs = document.getElementById('f-obs').value.trim();
-  const combinada = forma === 'Fiado' ? diaMesParaISO(document.getElementById('f-combinada').value) : null;
+
+  // Rateio por forma. Formas "a receber" (Fiado, Fiado parcelado) entram na
+  // venda mas não somam em valor_pago — é o que a cliente ficou devendo.
+  const pgtos = state.vendaPagamentos
+    .filter(p => Number(p.valor || 0) > 0)
+    .map(p => ({ forma: p.forma, valor: Number(p.valor), data }));
+  const somaPgtos = pgtos.reduce((s, p) => s + p.valor, 0);
+  const pago = pgtos.filter(p => !ehFormaAReceber(p.forma)).reduce((s, p) => s + p.valor, 0);
+  const temAReceber = pgtos.some(p => ehFormaAReceber(p.forma));
+  const combinada = temAReceber ? diaMesParaISO(document.getElementById('f-combinada').value) : null;
 
   // "Não quis informar" é a saída honesta: sem ela a revendedora inventava um
   // número (00000000000), e como o telefone é a CHAVE da cliente isso fundia
@@ -1963,10 +2212,19 @@ export async function confirmarVendaCarrinho(btn) {
   if (!semZap && !telValido(tel)) { toast('Telefone inválido — informe um número real com DDD.'); return; }
   if (!semZap && !nasc) { toast('Informe o aniversário da cliente (dd/mm/aaaa)'); return; }
   if (!data) { toast('Data inválida (use dd/mm/aaaa)'); return; }
-  if (forma === 'Fiado' && !combinada) { toast('Informe a data combinada de pagamento'); return; }
   if (!state.carrinhoVenda.length) { toast('Carrinho vazio'); return; }
 
   const total = state.carrinhoVenda.reduce((s, i) => s + i.quantidade * i.preco_unit, 0);
+
+  // O rateio precisa fechar com o total: sem isso a venda nasce com valor_pago
+  // errado e o Financeiro/cobrança herdam o erro.
+  if (!pgtos.length) { toast('Informe ao menos uma forma de pagamento'); return; }
+  if (Math.abs(somaPgtos - total) > 0.01) {
+    toast(`As formas somam ${fmtBRL(somaPgtos)} e o total é ${fmtBRL(total)}. Ajuste os valores.`);
+    return;
+  }
+  if (temAReceber && !combinada) { toast('Informe a data combinada de pagamento'); return; }
+
   const status = pago >= total ? 'quitado' : pago > 0 ? 'parcial' : 'pendente';
 
   btn.disabled = true;
@@ -1981,9 +2239,12 @@ export async function confirmarVendaCarrinho(btn) {
       sb.rpc('registrar_venda', {
         p_cliente: cliente,
         p_data: data,
-        p_forma: forma,
+        // 'Misto' quando são 2+ formas — as telas de lista exibem esse campo
+        // e o detalhe da venda abre o rateio completo (venda_pagamentos).
+        p_forma: pgtos.length === 1 ? pgtos[0].forma : 'Misto',
         p_total: total,
         p_pago: pago,
+        p_pagamentos: pgtos,
         p_status: status,
         p_obs: obs || null,
         p_tel: semZap ? null : telNormalizado(tel),
@@ -2023,6 +2284,7 @@ export async function confirmarVendaCarrinho(btn) {
       itens: state.carrinhoVenda.map(i => ({ descricao: i.descricao, referencia: i.referencia || null, quantidade: i.quantidade })),
     };
     state.carrinhoVenda = [];
+    state.vendaPagamentos = [];
     resetBtn();
     closeModal('modal-finalizar');
     renderCartBar();

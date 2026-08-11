@@ -97,28 +97,33 @@ export async function carregarMaletasTroca() {
   state.maletasTrocaMap = {};
   const { data } = await sbQ(sb.from('maletas').select('*').eq('status', 'ativa'));
   (data || []).forEach(m => {
-    if (m.data_troca) state.maletasTrocaMap[m.revendedora_id] = { dataTroca: m.data_troca, criadaEm: m.created_at };
+    if (m.data_troca) state.maletasTrocaMap[m.revendedora_id] = {
+      dataTroca: m.data_troca, horaTroca: m.hora_troca || null, criadaEm: m.created_at, maletaId: m.id,
+    };
   });
 }
+
+// 'HH:MM:SS' (time do Postgres) → 'HH:MM'. Null/vazio vira ''.
+export const horaCurta = h => (h || '').slice(0, 5);
 
 // Info de troca a partir de uma data conhecida. refDate identifica o "ciclo" desta
 // troca (p/ saber se uma resolucao antiga ainda vale) — usa a criacao da maleta,
 // pra funcionar mesmo com data de troca no futuro.
-function infoDaData(dataIso, refDate) {
+export function infoDaData(dataIso, refDate, horaIso) {
   const hoje = new Date(); hoje.setHours(0, 0, 0, 0);
   const prev = new Date(dataIso + 'T00:00:00');
   const dias = Math.round((prev - hoje) / 86400000);
   let status = 'normal';
   if (dias < 0) status = 'vencida';
   else if (dias <= 7) status = 'proximo';
-  return { status, dataPrevista: dataIso, diasRestantes: dias, dataPedido: refDate || dataIso, abertos: 0, fonte: 'maleta' };
+  return { status, dataPrevista: dataIso, horaPrevista: horaCurta(horaIso), diasRestantes: dias, dataPedido: refDate || dataIso, abertos: 0, fonte: 'maleta' };
 }
 
 // Hibrido: se a revendedora tem maleta ativa no app com data_troca, ela manda;
 // senao cai no calculo do Bling.
 export function infoTrocaRev(r) {
   const m = state.maletasTrocaMap[r.id];
-  if (m) return infoDaData(m.dataTroca, m.criadaEm);
+  if (m) return infoDaData(m.dataTroca, m.criadaEm, m.horaTroca);
   return infoProximaTroca(r.bling_contato_id);
 }
 
@@ -260,6 +265,7 @@ export async function loadTrocasDashboard() {
   }
   const ok = await carregarProximasTrocas();
   await carregarMaletasTroca();
+  await carregarSolicitacoesTroca();
   if (!ok) {
     lista.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg></div><p>Erro ao consultar Bling.</p></div>';
     return;
@@ -297,6 +303,74 @@ export function renderTrocas() {
   renderTrocasLista();
 }
 
+// ── Pedidos de remarcação vindos do app da revendedora (0053) ──────────
+// Ela não pode escrever em `maletas` (maletas_update exige is_gestor), então
+// pede aqui e a staff aprova — só a aprovação move a data/hora da maleta.
+export async function carregarSolicitacoesTroca() {
+  state.solicitacoesTroca = [];
+  const { data, error } = await sbQ(sb.from('solicitacoes_troca')
+    .select('*').eq('status', 'pendente').order('created_at'));
+  if (error) { console.warn('[trocas] solicitacoes:', error.message); return; }
+  state.solicitacoesTroca = data || [];
+}
+
+function solicitacoesHtml() {
+  const sols = state.solicitacoesTroca || [];
+  if (!sols.length) return '';
+  const nomePor = Object.fromEntries((state.aprovadasCache || []).map(r => [r.id, r.nome]));
+  const linha = (s) => {
+    const de = s.data_atual
+      ? `${formatDate(s.data_atual)}${horaCurta(s.hora_atual) ? ' ' + horaCurta(s.hora_atual) : ''}`
+      : 'sem data';
+    const para = `${formatDate(s.data_solicitada)}${horaCurta(s.hora_solicitada) ? ' ' + horaCurta(s.hora_solicitada) : ''}`;
+    return `<div class="card" style="border-left:3px solid var(--warning)">
+      <div style="display:flex;gap:12px;align-items:flex-start">
+        <div class="rev-avatar">${esc((nomePor[s.revendedora_id] || '?').charAt(0).toUpperCase())}</div>
+        <div style="flex:1;min-width:0">
+          <div class="rev-nome">${esc(nomePor[s.revendedora_id] || 'Revendedora')}</div>
+          <div class="rev-cidade">quer remarcar <b>${esc(de)}</b> → <b style="color:var(--plum)">${esc(para)}</b></div>
+          ${s.motivo ? `<div style="font-size:11.5px;color:var(--muted);font-style:italic;margin-top:4px">“${esc(s.motivo)}”</div>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-primary" style="flex:1;justify-content:center;gap:6px" onclick="aprovarSolicitacaoTroca('${s.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Aprovar</button>
+        <button class="btn btn-outline" style="justify-content:center;gap:6px" onclick="recusarSolicitacaoTroca('${s.id}')">Recusar</button>
+      </div>
+    </div>`;
+  };
+  return `<div class="trocas-secao" style="margin-bottom:18px">
+    <div class="section-title" style="color:var(--warning)">Pedidos de remarcação (${sols.length})</div>
+    ${sols.map(linha).join('')}
+  </div>`;
+}
+
+async function resolverSolicitacao(id, aprovar) {
+  const { error } = await sbQ(sb.rpc('resolver_solicitacao_troca', {
+    p_id: id, p_aprovar: aprovar, p_resposta: null,
+  }));
+  if (error) {
+    toast(/does not exist|schema cache/i.test(error.message || '')
+      ? 'Rode a migração 0053 no Supabase para ativar os pedidos de troca.'
+      : (error.message || 'Não foi possível resolver'), 'erro');
+    return;
+  }
+  toast(aprovar ? 'Remarcação aprovada — a agenda dela já mudou.' : 'Pedido recusado.');
+  state.aprovadasCache = [];
+  loadTrocasDashboard();
+}
+
+export function aprovarSolicitacaoTroca(id) {
+  const s = (state.solicitacoesTroca || []).find(x => String(x.id) === String(id));
+  const para = s ? `${formatDate(s.data_solicitada)}${horaCurta(s.hora_solicitada) ? ' às ' + horaCurta(s.hora_solicitada) : ''}` : 'a nova data';
+  confirmarAcao('Aprovar remarcação', `Mudar a troca para ${para}?\n\nA agenda da revendedora é atualizada na hora.`, 'Aprovar',
+    () => resolverSolicitacao(id, true));
+}
+
+export function recusarSolicitacaoTroca(id) {
+  confirmarAcao('Recusar pedido', 'Recusar esta remarcação?\n\nA data e o horário combinados continuam valendo.', 'Recusar',
+    () => resolverSolicitacao(id, false));
+}
+
 // Só a lista (agrupada por urgência). A busca chama SÓ isto, preservando o foco.
 function renderTrocasLista() {
   const lista = document.getElementById('trocas-lista');
@@ -321,11 +395,14 @@ function renderTrocasLista() {
     { itens: g.sem, label: 'Sem data / vínculo', cor: 'var(--muted)' },
   ].filter(s => s.itens.length);
 
+  // Pedidos de remarcação vêm ANTES da agenda: é o que exige ação da staff.
+  const pendentes = solicitacoesHtml();
+
   if (!secoes.length) {
-    lista.innerHTML = '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div><p>Nenhuma revendedora encontrada.</p></div>';
+    lista.innerHTML = pendentes + '<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg></div><p>Nenhuma revendedora encontrada.</p></div>';
     return;
   }
-  lista.innerHTML = secoes.map(s => {
+  lista.innerHTML = pendentes + secoes.map(s => {
     s.itens.sort(compararPorTroca);
     return `<div style="margin:18px 0 10px;display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px;color:var(--plum)">
         <span style="width:9px;height:9px;border-radius:50%;background:${s.cor};display:inline-block"></span>${s.label}
@@ -374,7 +451,7 @@ export function renderTrocaRow(r, cor = 'var(--muted)') {
         <div class="rev-cidade">${tel ? esc(tel) : 'sem telefone'} · ${ultima}</div>
       </div>
       <div style="text-align:right;white-space:nowrap">
-        <div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:${dcor}">${dataTxt}</div>
+        <div style="font-family:'Cormorant Garamond',serif;font-size:16px;color:${dcor}">${dataTxt}${info.horaPrevista ? ` <span style="font-size:13px">${info.horaPrevista}</span>` : ''}</div>
         ${diasTxt ? `<div style="font-size:10.5px;color:${dcor};text-transform:uppercase;letter-spacing:.3px">${diasTxt}</div>` : ''}
       </div>
     </div>
