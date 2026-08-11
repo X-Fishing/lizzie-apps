@@ -30,3 +30,24 @@ verify_jwt = false
 # EXIGE JWT: a função ainda confere no banco se quem chamou é admin/gestor.
 [functions.criar-acesso-revendedora]
 verify_jwt = true
+
+# ── Nuvemshop (sincronização de estoque do site) ──────────────────────
+# Guarda store_id/access_token. EXIGE JWT e ainda confere no banco se é admin.
+[functions.nuvemshop-set-token]
+verify_jwt = true
+
+# Sincroniza o estoque. Tem modo cron (autentica com a service role key) e
+# modo manual (JWT de gestor) — por isso o portão fica aberto e a checagem
+# é feita dentro da função, senão o cron seria barrado.
+[functions.nuvemshop-sync-estoque]
+verify_jwt = false
+
+# Busca produtos na loja para a tela de vínculo. Confere o JWT de gestor
+# internamente (portão aberto só para o erro sair legível em JSON).
+[functions.nuvemshop-buscar-produtos]
+verify_jwt = false
+
+# Webhook order/paid — a Nuvemshop não manda JWT do Supabase. A autenticidade
+# vem do HMAC-SHA256 (secret NUVEMSHOP_CLIENT_SECRET).
+[functions.nuvemshop-webhook-pedido]
+verify_jwt = false

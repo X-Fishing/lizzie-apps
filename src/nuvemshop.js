@@ -1,0 +1,290 @@
+// Loja do site (Nuvemshop) — conexão, status e vínculo manual dos produtos.
+//
+// O estoque que vai para o site é o DISPONÍVEL: saldo central menos o que
+// está em maleta ativa de revendedora. A conta é feita no banco (RPC
+// estoque_disponivel_site); aqui só configuramos a conexão e o de-para
+// produto ↔ variante da loja.
+//
+// O access_token nunca volta do servidor: depois de salvo, a tela só mostra
+// "Conectado desde ...". O campo fica sempre vazio.
+import { sb, SUPABASE_URL, SUPABASE_KEY } from './supabase.js';
+import { esc, toast, sbQ, fetchPaginado, handleSupabaseError } from './utils.js';
+
+const IC_LINK = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+const IC_COPY = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+const IC_STORE = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m2 7 2-5h16l2 5"/><path d="M4 7v13a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V7"/><path d="M2 7h20"/></svg>';
+
+const WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/nuvemshop-webhook-pedido`;
+
+// Alvo do vínculo em edição: { tipo: 'produto'|'variacao', id, nome }
+let vincAlvo = null;
+let vincResultados = [];
+let semParCache = [];
+
+function panel() { return document.getElementById('panel-nuvemshop'); }
+
+async function chamarFn(caminho, opcoes = {}) {
+  const { data: { session } } = await sb.auth.getSession();
+  const resp = await fetch(`${SUPABASE_URL}/functions/v1/${caminho}`, {
+    ...opcoes,
+    headers: {
+      'Content-Type': 'application/json',
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${session?.access_token || SUPABASE_KEY}`,
+      ...(opcoes.headers ?? {}),
+    },
+  });
+  const j = await resp.json().catch(() => ({}));
+  return { ok: resp.ok && !j.error, status: resp.status, ...j };
+}
+
+// ── Tela ────────────────────────────────────────────────────────────
+export async function loadNuvemshop() {
+  panel().innerHTML = '<div class="loading"><div class="spinner"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div><br>Carregando...</div>';
+
+  const { data: st, error } = await sbQ(sb.rpc('nuvemshop_status'));
+  if (error) { if (await handleSupabaseError(error, 'Erro ao ler o status da loja')) return; }
+  const status = Array.isArray(st) ? st[0] : st;
+
+  await carregarSemPar();
+  render(status);
+}
+
+async function carregarSemPar() {
+  const { data: prods } = await fetchPaginado(() => sb.from('produtos')
+    .select('id,nome,sku,formato,nuvemshop_variant_id,nuvemshop_sync_status')
+    .eq('ativo', true).order('nome'));
+
+  const { data: vars } = await fetchPaginado(() => sb.from('produto_variacoes')
+    .select('id,produto_id,atributo,valor,sku,nuvemshop_variant_id'));
+
+  const varsPor = new Map();
+  for (const v of (vars || [])) {
+    const k = String(v.produto_id);
+    if (!varsPor.has(k)) varsPor.set(k, []);
+    varsPor.get(k).push(v);
+  }
+
+  const lista = [];
+  for (const p of (prods || [])) {
+    if (p.formato === 'variacao') {
+      for (const v of (varsPor.get(String(p.id)) || [])) {
+        if (!v.nuvemshop_variant_id) {
+          lista.push({ tipo: 'variacao', id: v.id, produto_id: p.id, nome: `${p.nome} — ${v.atributo}: ${v.valor}`, sku: v.sku });
+        }
+      }
+    } else if (!p.nuvemshop_variant_id) {
+      lista.push({ tipo: 'produto', id: p.id, nome: p.nome, sku: p.sku });
+    }
+  }
+  semParCache = lista;
+}
+
+function render(status) {
+  const conectado = !!status?.conectado;
+  const desde = status?.conectado_em
+    ? new Date(status.conectado_em).toLocaleString('pt-BR')
+    : null;
+
+  panel().innerHTML = `
+    <div class="page-head">
+      <div><h2>Loja do site (Nuvemshop)</h2>
+        <div class="sub">O site mostra o estoque disponível — o que está em maleta com revendedora não aparece.</div></div>
+    </div>
+
+    <div class="card" style="max-width:560px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span style="color:var(--rose)">${IC_STORE}</span>
+        <b>Conexão</b>
+        ${conectado
+          ? `<span class="badge badge-ativo" style="margin-left:auto">Conectado</span>`
+          : `<span class="badge badge-pendente" style="margin-left:auto">Não conectado</span>`}
+      </div>
+      ${conectado ? `<div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">
+        Loja <b>${esc(String(status.store_id ?? ''))}</b> — conectada desde ${esc(desde || '—')}.
+        Por segurança o token não é exibido; preencha de novo só para trocá-lo.
+      </div>` : ''}
+
+      <div class="form-group"><label class="form-label">ID da loja (store_id)</label>
+        <input type="text" id="ns-store" class="form-control" inputmode="numeric"
+          placeholder="ex.: 1234567" value="${conectado ? esc(String(status.store_id ?? '')) : ''}"></div>
+
+      <div class="form-group"><label class="form-label">Access token</label>
+        <input type="password" id="ns-token" class="form-control" autocomplete="new-password"
+          placeholder="${conectado ? 'deixe em branco para manter o atual' : 'cole o token da Nuvemshop'}"></div>
+
+      <button class="btn-primary" style="width:100%" onclick="nuvemshopSalvarToken(this)">Salvar e conectar</button>
+    </div>
+
+    <div class="card" style="max-width:560px;margin-bottom:16px">
+      <div style="margin-bottom:8px"><b>Webhook de pedidos</b></div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:10px">
+        No admin da Nuvemshop, em <b>Configurações → Notificações</b>, cadastre esta URL
+        para o evento <b>order/paid</b>. É o que dá baixa no estoque quando a venda sai pelo site.
+      </div>
+      <div style="display:flex;gap:8px">
+        <input type="text" class="form-control" readonly value="${esc(WEBHOOK_URL)}"
+          style="flex:1;font-size:12px" onclick="this.select()">
+        <button class="btn-secondary btn-sm" onclick="nuvemshopCopiarWebhook(this)">${IC_COPY} Copiar</button>
+      </div>
+    </div>
+
+    <div class="card" style="max-width:760px">
+      <div style="margin-bottom:8px"><b>Produtos sem vínculo</b>
+        <span class="ciclo-badge" style="margin-left:6px">${semParCache.length}</span></div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">
+        Enquanto não estiverem vinculados a uma variante da loja, o estoque destes produtos não é enviado ao site.
+      </div>
+      <div id="ns-sempar">${semParHTML()}</div>
+    </div>`;
+}
+
+function semParHTML() {
+  if (!semParCache.length) {
+    return '<div style="font-size:13px;color:var(--muted)">Todos os produtos ativos estão vinculados.</div>';
+  }
+  return `<div class="pag-wrap"><table class="pag-table"><thead><tr>
+      <th class="pag-th">Produto</th>
+      <th class="pag-th">SKU</th>
+      <th class="pag-th" style="text-align:right">Vínculo</th>
+    </tr></thead><tbody>
+    ${semParCache.slice(0, 200).map(item => `
+      <tr class="ciclo-row">
+        <td class="ciclo-td"><div class="ciclo-desc">${esc(item.nome)}</div></td>
+        <td class="ciclo-td" style="font-size:12.5px;color:var(--muted)">${item.sku ? esc(item.sku) : '—'}</td>
+        <td class="ciclo-td" style="text-align:right">
+          <button class="btn-secondary btn-sm" onclick="nuvemshopAbrirVinculo('${item.tipo}','${item.id}')">${IC_LINK} Vincular</button>
+        </td>
+      </tr>`).join('')}
+    </tbody></table></div>
+    ${semParCache.length > 200 ? `<div style="font-size:12px;color:var(--muted);margin-top:8px">Mostrando os 200 primeiros de ${semParCache.length}.</div>` : ''}
+    <div id="ns-vinculo"></div>`;
+}
+
+// ── Conexão ─────────────────────────────────────────────────────────
+export async function nuvemshopSalvarToken(btn) {
+  const storeId = document.getElementById('ns-store')?.value.trim();
+  const token = document.getElementById('ns-token')?.value.trim();
+  if (!storeId) { toast('Informe o ID da loja.'); return; }
+  if (!token) { toast('Cole o access token da Nuvemshop.'); return; }
+
+  const original = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Conectando...'; }
+  const r = await chamarFn('nuvemshop-set-token', {
+    method: 'POST',
+    body: JSON.stringify({ store_id: Number(storeId), access_token: token }),
+  });
+  if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = original; }
+
+  if (!r.ok) { toast('Não conectou: ' + (r.error || r.status)); return; }
+  toast('Loja conectada.', 'erro');
+  await loadNuvemshop();
+}
+
+export function nuvemshopCopiarWebhook(btn) {
+  navigator.clipboard.writeText(WEBHOOK_URL).then(() => {
+    toast('URL copiada.', 'erro');
+  }).catch(() => {
+    toast('Não foi possível copiar — selecione e copie à mão.');
+  });
+  if (btn) btn.blur();
+}
+
+// ── Vínculo manual ──────────────────────────────────────────────────
+export function nuvemshopAbrirVinculo(tipo, id) {
+  const item = semParCache.find(i => i.tipo === tipo && String(i.id) === String(id));
+  if (!item) return;
+  vincAlvo = item;
+  vincResultados = [];
+  renderVinculo();
+  document.getElementById('ns-busca')?.focus();
+}
+
+export function nuvemshopFecharVinculo() {
+  vincAlvo = null;
+  vincResultados = [];
+  renderVinculo();
+}
+
+function renderVinculo() {
+  const alvo = document.getElementById('ns-vinculo');
+  if (!alvo) return;
+  if (!vincAlvo) { alvo.innerHTML = ''; return; }
+
+  alvo.innerHTML = `
+    <div class="card" style="margin-top:14px;background:rgba(201,116,138,0.045)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <b>Vincular: ${esc(vincAlvo.nome)}</b>
+        <button class="btn-secondary btn-sm" style="margin-left:auto" onclick="nuvemshopFecharVinculo()">Fechar</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input type="text" id="ns-busca" class="form-control" style="flex:1"
+          placeholder="Buscar na loja por nome ou SKU..."
+          onkeydown="if(event.key==='Enter')nuvemshopBuscar(this.value)">
+        <button class="btn-primary btn-sm" onclick="nuvemshopBuscar(document.getElementById('ns-busca').value)">Buscar</button>
+      </div>
+      <div id="ns-resultados">${resultadosHTML()}</div>
+    </div>`;
+}
+
+function resultadosHTML() {
+  if (!vincResultados.length) {
+    return '<div style="font-size:12.5px;color:var(--muted)">Busque o produto na loja e escolha a variante correspondente.</div>';
+  }
+  return vincResultados.map(p => `
+    <div style="padding:10px 0;border-top:1px solid var(--border)">
+      <div class="ciclo-desc">${esc(p.nome)}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px">
+        ${(p.variantes || []).map(v => `
+          <button class="btn-secondary btn-sm"
+            onclick="nuvemshopVincular('${p.id}','${v.id}')"
+            title="Estoque na loja hoje: ${esc(String(v.stock ?? '—'))}">
+            ${esc(v.nome || 'única')}${v.sku ? ` · ${esc(v.sku)}` : ''}
+          </button>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+export async function nuvemshopBuscar(query) {
+  const q = (query || '').trim();
+  if (!q) { toast('Digite algo para buscar.'); return; }
+  const alvo = document.getElementById('ns-resultados');
+  if (alvo) alvo.innerHTML = '<div style="font-size:12.5px;color:var(--muted)">Buscando na loja...</div>';
+
+  const r = await chamarFn(`nuvemshop-buscar-produtos?query=${encodeURIComponent(q)}`);
+  if (!r.ok) {
+    vincResultados = [];
+    if (alvo) alvo.innerHTML = `<div style="font-size:12.5px;color:var(--danger)">${esc(r.error || 'Falha na busca')}</div>`;
+    return;
+  }
+  vincResultados = r.produtos || [];
+  if (alvo) alvo.innerHTML = vincResultados.length
+    ? resultadosHTML()
+    : '<div style="font-size:12.5px;color:var(--muted)">Nada encontrado com esse texto.</div>';
+}
+
+export async function nuvemshopVincular(productId, variantId) {
+  if (!vincAlvo) return;
+  const tabela = vincAlvo.tipo === 'variacao' ? 'produto_variacoes' : 'produtos';
+  const { error } = await sbQ(sb.from(tabela).update({
+    nuvemshop_product_id: Number(productId),
+    nuvemshop_variant_id: Number(variantId),
+    nuvemshop_sync_status: 'pendente',
+    nuvemshop_sync_erro: null,
+  }).eq('id', vincAlvo.id));
+
+  if (error) { if (await handleSupabaseError(error, 'Erro ao vincular: ' + error.message)) return; }
+
+  // Enfileira na hora. Sem isto o produto recém-vinculado só iria pro site
+  // quando o estoque dele mudasse por acaso (os triggers só olham estoque_qtd).
+  const produtoId = vincAlvo.tipo === 'variacao' ? vincAlvo.produto_id : vincAlvo.id;
+  const variacaoId = vincAlvo.tipo === 'variacao' ? vincAlvo.id : null;
+  const { error: errFila } = await sbQ(sb.rpc('nuvemshop_enfileirar_produto', {
+    p_produto_id: produtoId, p_variacao_id: variacaoId,
+  }));
+  if (errFila) console.error('Enfileirar vínculo:', errFila);
+
+  toast('Produto vinculado — o estoque vai para o site na próxima sincronização.', 'erro');
+  vincAlvo = null;
+  await loadNuvemshop();
+}

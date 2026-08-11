@@ -9,6 +9,9 @@ dev-dist/
 .env
 .env.*
 !.env.example
+# Modelo dos secrets das Edge Functions (sem valores) — este pode versionar.
+# O preenchido (supabase/.env.nuvemshop) continua ignorado pelo .env.* acima.
+!supabase/.env.nuvemshop.example
 *.pem
 *.key
 *.crt

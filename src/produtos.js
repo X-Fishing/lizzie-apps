@@ -116,6 +116,7 @@ const IC_SHEET = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path 
 const IC_DOWN  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>';
 
 const IC_COPY  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
+const IC_SYNC  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>';
 
 let produtosCache = [];
 // Seleção em massa da grid — ids de produto. Sobrevive a troca de filtro/página
@@ -189,7 +190,7 @@ export async function loadProdutos() {
   // fetchPaginado: o PostgREST devolve no máx. 1000 linhas por chamada — sem
   // isso, catálogo acima de 1000 produtos aparece truncado na grid.
   const { data, error } = await fetchPaginado(() => sb.from('produtos')
-    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,custo_compra,estoque_qtd,foto_url,descricao_curta,ativo,categoria_id,colecao_id,fornecedor_id,formato')
+    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,custo_compra,estoque_qtd,foto_url,descricao_curta,ativo,categoria_id,colecao_id,fornecedor_id,formato,nuvemshop_product_id,nuvemshop_variant_id,nuvemshop_sync_status,nuvemshop_sync_erro')
     .order('nome', { ascending: true }));
   if (error) { if (await handleSupabaseError(error, 'Erro ao carregar produtos')) return; }
   produtosCache = data || [];
@@ -197,7 +198,7 @@ export async function loadProdutos() {
 
   // Variações (produtos formato 'variacao') aparecem na grid como sub-linhas
   const { data: vars } = await fetchPaginado(() => sb.from('produto_variacoes')
-    .select('id,produto_id,atributo,valor,sku,codigo_barras,preco_venda,estoque_qtd')
+    .select('id,produto_id,atributo,valor,sku,codigo_barras,preco_venda,estoque_qtd,nuvemshop_product_id,nuvemshop_variant_id,nuvemshop_sync_status,nuvemshop_sync_erro')
     .order('created_at'));
   variacoesPorProduto.clear();
   for (const v of (vars || [])) {
@@ -246,6 +247,42 @@ function acoesProdutoHTML(id) {
 const badgeInativo = p => p.ativo === false
   ? '<span class="ciclo-badge" style="margin-left:6px;background:var(--border);color:var(--muted)">inativo</span>' : '';
 
+// ── Coluna "Site" (sincronização do estoque com a Nuvemshop) ────────
+// Bolinha de status, sem emoji. O estoque que vai pro site é o disponível
+// (saldo central menos o que está em maleta ativa) — a conta é do banco.
+const SITE_STATUS = {
+  ok:       { cor: 'var(--success)', txt: 'Sincronizado com o site' },
+  pendente: { cor: 'var(--warning)', txt: 'Aguardando sincronização' },
+  erro:     { cor: 'var(--danger)',  txt: 'Falha ao sincronizar' },
+  sem_par:  { cor: 'var(--border)',  txt: 'Sem vínculo com a loja do site' },
+};
+
+function siteDotHTML(status, erro) {
+  const s = SITE_STATUS[status] || SITE_STATUS.pendente;
+  const titulo = status === 'erro' && erro ? `${s.txt}: ${erro}` : s.txt;
+  return `<span class="pending-dot" style="background:${s.cor};margin-right:0" title="${esc(titulo)}"></span>`;
+}
+
+// Célula da coluna, com o botão de sincronizar na hora. `alvo` é o produto
+// (o botão sempre sincroniza o produto inteiro — variação não tem endpoint
+// próprio no nosso fluxo, a função expande as variações sozinha).
+function tdSiteHTML(row, produtoId) {
+  const semPar = !row.nuvemshop_variant_id;
+  const status = semPar ? 'sem_par' : (row.nuvemshop_sync_status || 'pendente');
+  return `
+    <td class="ciclo-td" style="text-align:center;white-space:nowrap">
+      ${siteDotHTML(status, row.nuvemshop_sync_erro)}
+      ${produtoId ? `<button class="btn-icon" title="Sincronizar agora" onclick="produtoSincronizarSite('${produtoId}', this)" style="color:var(--plum)">${IC_SYNC}</button>` : ''}
+    </td>`;
+}
+
+// Status agregado de um produto com variações: erro > pendente > sem_par > ok.
+function siteStatusVars(vars) {
+  const st = vars.map(v => !v.nuvemshop_variant_id ? 'sem_par' : (v.nuvemshop_sync_status || 'pendente'));
+  for (const nivel of ['erro', 'pendente', 'sem_par']) if (st.includes(nivel)) return nivel;
+  return 'ok';
+}
+
 // Linha padrão de produto (sub=true = membro de grupo, com recuo)
 function linhaProdutoHTML(p, sub = false) {
   return `
@@ -261,6 +298,7 @@ function linhaProdutoHTML(p, sub = false) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${p.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(p.preco_venda)}</span></td>
+      ${tdSiteHTML(p, p.id)}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">${acoesProdutoHTML(p.id)}</td>
     </tr>`;
 }
@@ -277,6 +315,7 @@ function linhaVariacaoHTML(p, v) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${v.sku ? esc(v.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${v.estoque_qtd ?? 0}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(v.preco_venda ?? p.preco_venda)}</span></td>
+      ${tdSiteHTML(v, null)}
       <td class="ciclo-td" style="text-align:right;white-space:nowrap">
         <button class="btn-icon" title="Editar (abre o produto)" onclick="produtoEditar('${p.id}')" style="color:var(--rose)">${IC_EDIT}</button>
       </td>
@@ -303,6 +342,10 @@ function linhaVarProdHTML(p, vars, aberto) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
+      <td class="ciclo-td" style="text-align:center;white-space:nowrap" onclick="event.stopPropagation()">
+        ${siteDotHTML(siteStatusVars(vars), vars.find(v => v.nuvemshop_sync_erro)?.nuvemshop_sync_erro)}
+        <button class="btn-icon" title="Sincronizar agora (todas as variações)" onclick="produtoSincronizarSite('${p.id}', this)" style="color:var(--plum)">${IC_SYNC}</button>
+      </td>
       <td class="ciclo-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">${acoesProdutoHTML(p.id)}</td>
     </tr>`;
 }
@@ -330,6 +373,7 @@ function linhaGrupoHTML(g, aberto) {
       <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">—</td>
       <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoque}</span></td>
       <td class="ciclo-td"><span class="ciclo-preco">${preco}</span></td>
+      <td class="ciclo-td" style="text-align:center;color:var(--muted)">—</td>
       <td class="ciclo-td" style="text-align:right;white-space:nowrap;font-size:11px;color:var(--muted)">${aberto ? 'fechar' : 'ver aros'}</td>
     </tr>`;
 }
@@ -418,7 +462,7 @@ function tabelaHTML() {
       .map(m => linhaProdutoHTML(m.p, true)).join('');
     return html;
   }).join('') :
-    `<tr><td colspan="6"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor || filtroCaract) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
+    `<tr><td colspan="7"><div class="empty-state" style="padding:28px 0"><div class="empty-icon">${IC_GEM}</div><p>${(f || filtroColecao || filtroCategoria || filtroFornecedor || filtroCaract) ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado ainda'}</p></div></td></tr>`;
 
   const pager = pagerHTML(paginaAtual, totalPaginas, totalFiltrado, 'produtoPagina');
 
@@ -438,6 +482,7 @@ function tabelaHTML() {
       ${thOrd(ordProdutos, 'sku', 'SKU', 'produtoOrdenar')}
       ${thOrd(ordProdutos, 'estoque', 'Estoque', 'produtoOrdenar', 'text-align:center')}
       ${thOrd(ordProdutos, 'preco', 'Preço', 'produtoOrdenar')}
+      <th class="pag-th" style="text-align:center" title="Estoque publicado no site (Nuvemshop)">Site</th>
       <th class="pag-th" style="text-align:right">Ações</th>
     </tr></thead><tbody>${linhas}</tbody></table></div>
     ${pager}`;
@@ -488,6 +533,7 @@ function renderLista() {
         <button class="btn-secondary btn-sm" onclick="produtoImportarBling()">${IC_BARCODE} Importar do Bling</button>
         <button class="btn-secondary btn-sm" onclick="produtoImportFotos()">${IC_CAM} Importar fotos em lote</button>
         ${ehGestor() ? `<button class="btn-secondary btn-sm" onclick="produtoPlanilha()">${IC_SHEET} Planilha</button>` : ''}
+        ${ehGestor() ? `<button class="btn-secondary btn-sm" onclick="produtoSincronizarTudo(this)" title="Envia o estoque disponível de todos os produtos vinculados para o site">${IC_SYNC} Sincronizar site</button>` : ''}
         <button class="btn-primary btn-sm" onclick="produtoNovo()">${IC_PLUS} Novo produto</button>
       </div>
     </div>
@@ -656,6 +702,37 @@ export function produtoOrdenar(col) {
   alternarOrdenacao(ordProdutos, col);
   paginaAtual = 1;   // trocar de critério com a página 7 aberta desorienta
   renderTabela();
+}
+
+// ── Sincronização com o site (Nuvemshop) ────────────────────────────
+// Manda o estoque DISPONÍVEL (saldo central menos o que está em maleta
+// ativa) para a loja. A conta é feita no banco; aqui só disparamos.
+export async function produtoSincronizarSite(id, btn) {
+  const original = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = '…'; }
+  try {
+    const { data: { session } } = await sb.auth.getSession();
+    const resp = await fetch(`${SUPABASE_URL}/functions/v1/nuvemshop-sync-estoque?produto_id=${encodeURIComponent(id)}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${session?.access_token || SUPABASE_KEY}` },
+    });
+    const j = await resp.json().catch(() => ({}));
+    if (!resp.ok || j.error) { toast('Falha ao sincronizar: ' + (j.error || resp.status)); return; }
+    toast('Estoque enviado para o site.', 'erro');
+    await loadProdutos();   // recarrega para a bolinha refletir o novo status
+  } finally {
+    if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = original; }
+  }
+}
+
+// Enfileira todos os produtos ativos já vinculados. O cron processa em lote.
+export async function produtoSincronizarTudo(btn) {
+  const original = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.textContent = 'Enfileirando...'; }
+  const { data, error } = await sbQ(sb.rpc('nuvemshop_enfileirar_tudo'));
+  if (btn && btn.isConnected) { btn.disabled = false; btn.innerHTML = original; }
+  if (error) { if (await handleSupabaseError(error, 'Erro ao enfileirar: ' + error.message)) return; }
+  toast(`${data ?? 0} item(ns) na fila — o site atualiza em até 2 minutos.`, 'erro');
 }
 export function produtoToggleGrupo(chave) {
   const base = decodeURIComponent(chave);

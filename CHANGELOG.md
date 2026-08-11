@@ -5,6 +5,32 @@ ficam no `CLAUDE.md`; aqui fica o histórico do que mudou e quando.
 
 ---
 
+## Sessão — Agosto/2026
+
+**Sincronização de estoque App ↔ Site (Nuvemshop)**
+
+O app passa a controlar sozinho o estoque visível no site. O Bling **não**
+participa: `produtos.estoque_qtd` é a fonte de verdade.
+
+- **Regra central**: `estoque no site = estoque_qtd − Σ(enviada − vendida − devolvida)` dos consignados **ativos**. Peça em maleta com revendedora nunca aparece disponível no site; volta a contar na devolução ou no fim do catálogo.
+  - O casamento com `consignados` é por `produto_id` **ou** pelo SKU em `referencia` — peça importada do Bling tem `produto_id` nulo, e olhar só o id deixaria a peça publicada indevidamente.
+- **Fila + cron**: triggers em `consignados` / `produtos` / `produto_variacoes` enfileiram o produto; a Edge Function `nuvemshop-sync-estoque` processa em lote a cada 2 min (respeita rate limit, 5 tentativas e desiste para não travar a fila).
+- **Venda no site** dá baixa em `estoque_qtd` pelo webhook `order/paid` (não `order/created`). Idempotente e atômico: reivindicação do evento + baixa de todos os itens numa transação só, então reenvio da Nuvemshop não desconta duas vezes.
+- **Tela nova "Loja do site"** (Configurações, admin): conexão, URL do webhook para copiar e vínculo manual produto ↔ variante da loja.
+- **Coluna "Site"** na tela de Produtos: bolinha de status (ok / pendente / erro com o motivo / sem vínculo), "Sincronizar agora" por linha e "Sincronizar site" no topo.
+- **Segurança**: o `access_token` nunca volta pro navegador (a tela só mostra "Conectado desde..."); `nuvemshop_tokens` e `nuvemshop_sync_queue` com RLS e zero policies; webhook exige HMAC (`NUVEMSHOP_CLIENT_SECRET`) e recusa se o secret não estiver configurado.
+
+**Como colocar no ar** (nesta ordem):
+1. SQL Editor → rodar `nuvemshop-estoque-schema.sql` inteiro.
+2. Secrets: `npx supabase secrets set NUVEMSHOP_CLIENT_SECRET=...` (obrigatório pro webhook).
+3. `npx supabase functions deploy nuvemshop-set-token nuvemshop-sync-estoque nuvemshop-buscar-produtos nuvemshop-webhook-pedido`
+4. App → Configurações → Loja do site: `store_id` + access token.
+5. Admin da Nuvemshop → Configurações → Notificações: cadastrar a URL do webhook no evento `order/paid`.
+6. Agendar o cron: bloco comentado no fim do `nuvemshop-estoque-schema.sql` (precisa colar a service role key à mão — por isso não fica no arquivo).
+7. Vincular os produtos na tela nova (os `sem vínculo` aparecem listados).
+
+---
+
 ## Sessão — Julho/2026
 
 ### Features grandes
