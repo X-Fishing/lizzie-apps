@@ -79,6 +79,7 @@ export const MENU = [
       { chave: 'cad_faixas_comissao', panel: 'faixas-comissao', label: 'Faixas de Comissão',  icon: IC.percent },
       { chave: 'cad_etiquetas',       panel: 'etiquetas-config', label: 'Impressora de Etiquetas', icon: IC.printer },
       { chave: 'cad_nuvemshop',       panel: 'nuvemshop',       label: 'Loja do site',        icon: IC.tag, admin_only: true },
+      { chave: 'cad_auditoria',       panel: 'auditoria',       label: 'Auditoria',           icon: IC.shield, admin_only: true },
   ]},
 ];
 

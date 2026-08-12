@@ -39,6 +39,7 @@ import { abrirModalPosVenda, posVendaEnviarSelos, posVendaEnviarGarantia, closeM
 import { loadClientes, clienteBuscar, clienteVer, clienteNovo, clienteEditar, clienteSalvar, clienteExcluir } from './clientes.js';
 import { loadBonus, bonusFiltro } from './bonus.js';
 import { toggleLembretes, lembretesIrPara } from './lembretes.js';
+import { loadAuditoria, auditFiltrar, auditVerDetalhe } from './auditoria.js';
 
 // ═══════════════════════════════════════════════
 // INIT
@@ -136,7 +137,8 @@ Object.assign(window, { toggleLembretes, lembretesIrPara, renderAprovadas, rende
   loadPerfis, funcNovo, funcEditar, funcSalvar, funcUpdate, funcExcluir, perfilNovo, perfilEditar, perfilSalvar, perfilExcluir, perfilAbrir, perfilFechar, perfilSalvarPermissoes,
   loadLancador, lancadorBipar, lancadorSetQtd, lancadorRemover, lancadorEnviar, lancadorCamera, fecharCamera, scanBarcodeInto, lancadorSelecionarRev, lancadorDestinoNova, lancadorDestinoExistente, lancadorTrocarDestino, lancadorAbrirBusca, lancadorFecharBusca, lancadorBuscaInput, lancadorBuscaTeclas, lancadorBuscaAdicionar,
   abrirDivulgarMaleta, copiarLinkMaleta, mostrarQrMaleta, regenerarLinkMaleta,
-  toggleDrawer, closeDrawer, drawerIr, drawerToggleGrupo, drawerSincronizar });
+  toggleDrawer, closeDrawer, drawerIr, drawerToggleGrupo, drawerSincronizar,
+  loadAuditoria, auditFiltrar, auditVerDetalhe });
 
 // START
 init();
