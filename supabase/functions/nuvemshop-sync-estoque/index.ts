@@ -133,8 +133,24 @@ Deno.serve(async (req) => {
       return json({ error: 'sem permissão para sincronizar' }, 403)
     }
   } else {
-    // Cron: só com a service role key.
-    if (auth !== SERVICE_KEY) return json({ error: 'apenas o agendador chama este modo' }, 403)
+    // Cron: segredo dedicado no header x-cron-secret.
+    //
+    // Antes isto comparava com a service role key, o que se mostrou frágil: o
+    // projeto tem os dois formatos de chave convivendo (JWT legado e
+    // sb_secret_*), a plataforma injeta a sua própria, e qualquer rotação
+    // quebrava o agendamento em silêncio — a fila parava sem ninguém notar.
+    // Um segredo próprio não depende de formato nem de rotação de chave.
+    const segredoCron = Deno.env.get('NUVEMSHOP_CRON_SECRET') ?? ''
+    if (!segredoCron) {
+      return json({ error: 'NUVEMSHOP_CRON_SECRET não configurado' }, 503)
+    }
+    const enviado = req.headers.get('x-cron-secret') ?? ''
+    // Comparação em tempo constante.
+    let diff = enviado.length ^ segredoCron.length
+    for (let i = 0; i < Math.max(enviado.length, segredoCron.length); i++) {
+      diff |= (enviado.charCodeAt(i) || 0) ^ (segredoCron.charCodeAt(i) || 0)
+    }
+    if (diff !== 0) return json({ error: 'apenas o agendador chama este modo' }, 403)
   }
 
   const conta = await contaNuvemshop(admin)

@@ -15,7 +15,7 @@ export const API_BASE = Deno.env.get('NUVEMSHOP_API_BASE') ?? 'https://api.nuvem
 // A Nuvemshop EXIGE User-Agent identificando a aplicação e um e-mail de
 // contato — requisições sem isso são recusadas.
 export const USER_AGENT = Deno.env.get('NUVEMSHOP_USER_AGENT')
-  ?? 'Lizzie Semijoias App (rondoncoutinho@gmail.com)'
+  ?? 'Integração App Lizzie x Nuvemshop (lizziesemijoias2017@gmail.com)'
 
 export const cors = {
   'Access-Control-Allow-Origin': '*',

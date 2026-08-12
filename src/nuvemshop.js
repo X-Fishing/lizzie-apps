@@ -20,6 +20,7 @@ const WEBHOOK_URL = `${SUPABASE_URL}/functions/v1/nuvemshop-webhook-pedido`;
 let vincAlvo = null;
 let vincResultados = [];
 let semParCache = [];
+let filtroSemPar = '';
 
 function panel() { return document.getElementById('panel-nuvemshop'); }
 
@@ -143,12 +144,34 @@ function semParHTML() {
   if (!semParCache.length) {
     return '<div style="font-size:13px;color:var(--muted)">Todos os produtos ativos estão vinculados.</div>';
   }
+  // Campo de busca fica FORA de #ns-sempar-lista de propósito: ao filtrar,
+  // só a lista é repintada, senão o input perderia o foco a cada tecla.
+  return `
+    <input type="text" id="ns-sempar-busca" class="form-control" style="margin-bottom:10px"
+      placeholder="Filtrar por SKU ou nome..." value="${esc(filtroSemPar)}"
+      oninput="nuvemshopFiltrarSemPar(this.value)">
+    <div id="ns-sempar-lista">${listaSemParHTML()}</div>
+    <div id="ns-vinculo"></div>`;
+}
+
+function semParFiltrados() {
+  const f = filtroSemPar.trim().toLowerCase();
+  if (!f) return semParCache;
+  return semParCache.filter(i =>
+    (i.sku || '').toLowerCase().includes(f) || (i.nome || '').toLowerCase().includes(f));
+}
+
+function listaSemParHTML() {
+  const lista = semParFiltrados();
+  if (!lista.length) {
+    return `<div style="font-size:13px;color:var(--muted)">Nenhum produto sem vínculo casa com "${esc(filtroSemPar)}".</div>`;
+  }
   return `<div class="pag-wrap"><table class="pag-table"><thead><tr>
       <th class="pag-th">Produto</th>
       <th class="pag-th">SKU</th>
       <th class="pag-th" style="text-align:right">Vínculo</th>
     </tr></thead><tbody>
-    ${semParCache.slice(0, 200).map(item => `
+    ${lista.slice(0, 200).map(item => `
       <tr class="ciclo-row">
         <td class="ciclo-td"><div class="ciclo-desc">${esc(item.nome)}</div></td>
         <td class="ciclo-td" style="font-size:12.5px;color:var(--muted)">${item.sku ? esc(item.sku) : '—'}</td>
@@ -157,8 +180,13 @@ function semParHTML() {
         </td>
       </tr>`).join('')}
     </tbody></table></div>
-    ${semParCache.length > 200 ? `<div style="font-size:12px;color:var(--muted);margin-top:8px">Mostrando os 200 primeiros de ${semParCache.length}.</div>` : ''}
-    <div id="ns-vinculo"></div>`;
+    ${lista.length > 200 ? `<div style="font-size:12px;color:var(--muted);margin-top:8px">Mostrando os 200 primeiros de ${lista.length}.</div>` : ''}`;
+}
+
+export function nuvemshopFiltrarSemPar(valor) {
+  filtroSemPar = valor;
+  const alvo = document.getElementById('ns-sempar-lista');
+  if (alvo) alvo.innerHTML = listaSemParHTML();
 }
 
 // ── Conexão ─────────────────────────────────────────────────────────
@@ -198,6 +226,9 @@ export function nuvemshopAbrirVinculo(tipo, id) {
   vincResultados = [];
   renderVinculo();
   document.getElementById('ns-busca')?.focus();
+  // O SKU costuma ser o mesmo nos dois lados — já busca sozinho pra poupar
+  // uma digitação. Sem SKU, fica esperando o texto.
+  if (item.sku) nuvemshopBuscar(item.sku);
 }
 
 export function nuvemshopFecharVinculo() {
@@ -219,7 +250,7 @@ function renderVinculo() {
       </div>
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <input type="text" id="ns-busca" class="form-control" style="flex:1"
-          placeholder="Buscar na loja por nome ou SKU..."
+          placeholder="Buscar na loja por nome ou SKU..." value="${esc(vincAlvo.sku || '')}"
           onkeydown="if(event.key==='Enter')nuvemshopBuscar(this.value)">
         <button class="btn-primary btn-sm" onclick="nuvemshopBuscar(document.getElementById('ns-busca').value)">Buscar</button>
       </div>
