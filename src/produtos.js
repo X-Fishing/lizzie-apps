@@ -1147,6 +1147,7 @@ export async function produtoFotosImportar() {
 // branco NÃO altera nada. Categoria/Coleção/Fornecedor casam pelo NOME.
 // ════════════════════════════════════════════════════════════════════
 const PLANILHA_COLS = ['sku', 'nome', 'codigo_barras', 'preco_venda', 'custo_compra', 'estoque_qtd', 'descricao_curta', 'categoria', 'colecao', 'fornecedor', 'codigo_fornecedor', 'peso_liquido', 'peso_bruto', 'largura', 'altura', 'profundidade', 'ativo'];
+const PLANILHA_COL_SINONIMOS = { estoque_qtd: ['estoque', 'qtd', 'qtde', 'quantidade', 'saldo'] };
 let planilhaAnalise = null;
 
 // nome do cadastro a partir do id (categorias/colecoes/fornecedores)
@@ -1288,8 +1289,15 @@ export async function produtoPlanilhaArquivo(input) {
 
   const header = linhas[0].map(h => (h || '').trim().toLowerCase());
   const idx = {};
-  PLANILHA_COLS.forEach(c => { const i = header.indexOf(c); if (i >= 0) idx[c] = i; });
+  PLANILHA_COLS.forEach(c => {
+    let i = header.indexOf(c);
+    if (i < 0 && PLANILHA_COL_SINONIMOS[c]) {
+      for (const alt of PLANILHA_COL_SINONIMOS[c]) { i = header.indexOf(alt); if (i >= 0) break; }
+    }
+    if (i >= 0) idx[c] = i;
+  });
   if (idx.sku == null) { area.innerHTML = impErro('Falta a coluna "sku" no cabeçalho. Baixe a planilha modelo e use o mesmo cabeçalho.'); return; }
+  const colunasFaltando = PLANILHA_COLS.filter(c => c !== 'sku' && idx[c] == null);
 
   const atualizar = [], criar = [], avisos = [];
   let semMudanca = 0;
@@ -1337,15 +1345,21 @@ export async function produtoPlanilhaArquivo(input) {
     else semMudanca++;
   }
 
-  planilhaAnalise = { atualizar, criar, avisos, semMudanca, total: linhas.length - 1 };
+  planilhaAnalise = { atualizar, criar, avisos, semMudanca, total: linhas.length - 1, colunasFaltando };
   renderPlanilhaRelatorio();
 }
 
 function renderPlanilhaRelatorio() {
   const area = document.getElementById('planilha-area');
-  const { atualizar, criar, avisos, semMudanca, total } = planilhaAnalise;
+  const { atualizar, criar, avisos, semMudanca, total, colunasFaltando } = planilhaAnalise;
   const podeCriar = criar.filter(c => !c.faltaNome).length;
   const semNome = criar.length - podeCriar;
+
+  const blocoColunasFaltando = colunasFaltando && colunasFaltando.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:${colunasFaltando.includes('estoque_qtd') && podeCriar ? 'var(--danger)' : 'var(--gold)'};margin-bottom:8px">Colunas do modelo não encontradas no cabeçalho — ${colunasFaltando.length}</div>
+      <p style="font-size:12px;color:var(--muted);margin:0">${esc(colunasFaltando.join(', '))}. Essas colunas serão ignoradas em todas as linhas${podeCriar ? ' — produtos novos criados a partir desta planilha não terão esses campos preenchidos' : ''}.</p>
+    </div>` : '';
 
   const blocoAtualizar = `
     <div class="card" style="margin-bottom:12px">
@@ -1368,7 +1382,7 @@ function renderPlanilhaRelatorio() {
     </div>` : '';
 
   const nada = !atualizar.length && !podeCriar;
-  area.innerHTML = blocoAtualizar + blocoCriar + blocoAvisos + `
+  area.innerHTML = blocoColunasFaltando + blocoAtualizar + blocoCriar + blocoAvisos + `
     <div class="card">
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Linhas na planilha: ${total} · Atualizar: ${atualizar.length} · Sem mudança: ${semMudanca} · Novos: ${criar.length}</div>
       <button class="btn-primary" id="planilha-btn-aplicar" ${nada ? 'disabled style="opacity:.5"' : ''} onclick="produtoPlanilhaAplicar()">Aplicar ${atualizar.length} alteraç${atualizar.length !== 1 ? 'ões' : 'ão'}</button>
