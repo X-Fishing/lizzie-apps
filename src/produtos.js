@@ -725,8 +725,35 @@ export async function produtoSincronizarSite(id, btn) {
   }
 }
 
+// Limiar a partir do qual pedimos confirmação explícita antes de mandar tudo
+// de uma vez: enquanto o catálogo legado do Bling não passa por inventário,
+// boa parte dos produtos vinculados pode estar com estoque_qtd = 0 sem ser
+// real — sincronizar tudo tiraria essas peças de venda no site sem motivo.
+const LIMIAR_ZERADOS_AVISO = 0.3;
+
 // Enfileira todos os produtos ativos já vinculados. O cron processa em lote.
 export async function produtoSincronizarTudo(btn) {
+  const { data: resumoRaw, error: errResumo } = await sbQ(sb.rpc('nuvemshop_resumo_vinculados'));
+  if (errResumo) { if (await handleSupabaseError(errResumo, 'Erro ao conferir os vínculos: ' + errResumo.message)) return; }
+  const resumo = Array.isArray(resumoRaw) ? resumoRaw[0] : resumoRaw;
+  const total = resumo?.total_vinculados ?? 0;
+  const zerados = resumo?.zerados ?? 0;
+
+  if (total > 0 && zerados / total >= LIMIAR_ZERADOS_AVISO) {
+    confirmarAcao(
+      'Muitos produtos vinculados estão com estoque zero',
+      `${zerados} de ${total} produtos vinculados à loja estão com estoque 0 no app. ` +
+      `Sincronizar agora vai tirá-los de venda no site. Se o zero não for real ` +
+      `(catálogo importado do Bling, sem inventário ainda), confira antes de continuar.`,
+      `Sincronizar mesmo assim (${total})`,
+      () => produtoSincronizarTudoConfirmado(btn)
+    );
+    return;
+  }
+  await produtoSincronizarTudoConfirmado(btn);
+}
+
+async function produtoSincronizarTudoConfirmado(btn) {
   const original = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Enfileirando...'; }
   const { data, error } = await sbQ(sb.rpc('nuvemshop_enfileirar_tudo'));

@@ -596,4 +596,34 @@ create trigger produto_variacoes_enfileira_nuvemshop
 -- A função exige exatamente a service role key no modo cron (sem
 -- ?produto_id). Com qualquer outra credencial ela responde 403.
 
+-- ════════════════════════════════════════════════════════════════════
+-- Resumo pré-sincronização em massa — trava contra zerar a loja
+-- ════════════════════════════════════════════════════════════════════
+-- Enquanto o catálogo legado (importado do Bling) não passa por um
+-- inventário físico, boa parte dos produtos vinculados pode estar com
+-- estoque_qtd = 0 sem ser real. "Sincronizar tudo" mandaria 0 pra todos
+-- eles de uma vez — tirando peça de venda no site sem necessidade. Esta
+-- RPC dá pro app decidir se pede confirmação antes de enfileirar tudo.
+create or replace function public.nuvemshop_resumo_vinculados()
+returns table (total_vinculados integer, zerados integer)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*)::int as total_vinculados,
+         count(*) filter (where estoque_qtd = 0)::int as zerados
+  from (
+    select estoque_qtd from public.produtos
+     where ativo = true and formato <> 'variacao' and nuvemshop_variant_id is not null
+    union all
+    select v.estoque_qtd from public.produto_variacoes v
+      join public.produtos p on p.id = v.produto_id
+     where p.ativo = true and v.nuvemshop_variant_id is not null
+  ) alvo
+  where public.is_gestor();
+$$;
+revoke all on function public.nuvemshop_resumo_vinculados() from public, anon;
+grant execute on function public.nuvemshop_resumo_vinculados() to authenticated;
+
 -- FIM
