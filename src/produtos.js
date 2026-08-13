@@ -1150,6 +1150,17 @@ const PLANILHA_COLS = ['sku', 'nome', 'codigo_barras', 'preco_venda', 'custo_com
 const PLANILHA_COL_SINONIMOS = { estoque_qtd: ['estoque', 'qtd', 'qtde', 'quantidade', 'saldo'] };
 let planilhaAnalise = null;
 
+// Valida o FORMATO antes de chamar parseMoneyBR — ela nunca devolve NaN (cai
+// pra 0 em qualquer lixo), então sem validar antes, entradas mal formadas
+// ("--1", "1,,2", "-") viravam 0 silencioso (podendo sobrescrever valor real
+// ao atualizar um produto existente). Aceita "12", "-3", "10,00", "1.234" e
+// "1.234,56" (milhar + decimal); rejeita o resto.
+const RE_NUM_BR = /^-?(\d+|\d{1,3}(?:\.\d{3})+)(,\d+)?$/;
+function parseNumBR(v) {
+  const limpo = String(v).replace(/[^\d,.-]/g, '');
+  return RE_NUM_BR.test(limpo) ? parseMoneyBR(limpo) : NaN;
+}
+
 // nome do cadastro a partir do id (categorias/colecoes/fornecedores)
 function nomeCadastro(tabela, id) {
   const c = (cadastroCache[tabela] || []).find(x => String(x.id) === String(id));
@@ -1181,9 +1192,21 @@ function baixarCSV(nomeArquivo, matriz) {
 }
 
 // ── Parser CSV (aspas, separador auto ; ou , pela 1ª linha) ──
+// Conta ocorrências de um separador FORA de campos entre aspas (senão vírgulas
+// dentro de um nome de coluna com aspas confundem a detecção de separador).
+function contarForaDeAspas(linha, ch) {
+  let n = 0, aspas = false;
+  for (let i = 0; i < linha.length; i++) {
+    const c = linha[i];
+    if (c === '"') { if (aspas && linha[i + 1] === '"') { i++; continue; } aspas = !aspas; }
+    else if (c === ch && !aspas) n++;
+  }
+  return n;
+}
+
 function parseCSV(texto) {
   const primeira = (texto.split(/\r?\n/)[0] || '');
-  const sep = primeira.split(';').length >= primeira.split(',').length ? ';' : ',';
+  const sep = contarForaDeAspas(primeira, ';') >= contarForaDeAspas(primeira, ',') ? ';' : ',';
   const linhas = [];
   let campo = '', linha = [], aspas = false;
   for (let i = 0; i < texto.length; i++) {
@@ -1311,10 +1334,13 @@ export async function produtoPlanilhaArquivo(input) {
     for (const c of ['nome', 'codigo_barras', 'descricao_curta', 'codigo_fornecedor']) { const v = get(c); if (v !== '') campos[c] = v; }
     for (const c of ['preco_venda', 'custo_compra']) {
       const v = get(c); if (v === '') continue;
-      const n = parseMoneyBR(v);
-      if (n != null && !isNaN(n)) campos[c] = n; else avisosLinha.push(`${c} inválido ("${v}")`);
+      const n = parseNumBR(v);
+      if (!isNaN(n)) campos[c] = n; else avisosLinha.push(`${c} inválido ("${v}")`);
     }
-    { const v = get('estoque_qtd'); if (v !== '') { const n = parseInt(v.replace(/[^\d-]/g, ''), 10); if (!isNaN(n)) campos.estoque_qtd = n; else avisosLinha.push('estoque inválido'); } }
+    { const v = get('estoque_qtd'); if (v !== '') {
+      const n = parseNumBR(v);
+      if (!isNaN(n)) campos.estoque_qtd = Math.round(n); else avisosLinha.push('estoque inválido');
+    } }
     for (const c of ['peso_liquido', 'peso_bruto', 'largura', 'altura', 'profundidade']) {
       const v = get(c); if (v === '') continue;
       const n = parseFloat(v.replace(',', '.'));
@@ -1334,7 +1360,16 @@ export async function produtoPlanilhaArquivo(input) {
     avisosLinha.forEach(m => avisos.push({ linha: r + 1, msg: `SKU ${sku}: ${m}` }));
 
     const prod = acharProduto(sku);
-    if (!prod) { criar.push({ sku, campos, nome: campos.nome || '', faltaNome: !campos.nome }); continue; }
+    if (!prod) {
+      // "célula em branco não altera nada" só faz sentido pra ATUALIZAR — em
+      // produto novo não há nada prévio, então fica 0 (default do banco) sem
+      // avisar em lugar nenhum. Aqui, avisa.
+      if (idx.estoque_qtd != null && campos.estoque_qtd === undefined) {
+        avisos.push({ linha: r + 1, msg: `SKU ${sku}: estoque em branco — produto novo vai nascer com estoque 0` });
+      }
+      criar.push({ sku, campos, nome: campos.nome || '', faltaNome: !campos.nome });
+      continue;
+    }
     const diff = {}, resumo = [];
     for (const [k, v] of Object.entries(campos)) {
       const atual = prod[k];
