@@ -51,3 +51,9 @@ verify_jwt = false
 # vem do HMAC-SHA256 (secret NUVEMSHOP_CLIENT_SECRET).
 [functions.nuvemshop-webhook-pedido]
 verify_jwt = false
+
+# Cria produtos novos na loja a partir do catálogo do app. Só modo manual
+# (sem cron) — confere o JWT de admin/func_completo internamente, portão
+# aberto só para o erro sair legível em JSON (mesmo padrão das irmãs acima).
+[functions.nuvemshop-criar-produtos]
+verify_jwt = false
