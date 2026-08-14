@@ -264,7 +264,7 @@ grant execute on function public.sincronizar_maleta(uuid,text,jsonb) to authenti
 
 -- ════════════════════════════════════════════════════════════════════
 -- MALETA PÚBLICA — link exclusivo por revendedora no site-catálogo
--- (lizzie-catalogo.netlify.app/maleta?t=<share_token>)
+-- (catalogo.lizzie.com.br/maleta?t=<share_token>)
 -- ════════════════════════════════════════════════════════════════════
 
 -- Token de compartilhamento por profile (link público da maleta).
