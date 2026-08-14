@@ -143,8 +143,18 @@ async function criarProduto(admin: any, conta: Conta, p: Produto, variacoes: Var
 // `.select()` só pode ser chamado uma vez por builder — os dois pontos que
 // precisam do mesmo filtro (buscar o lote e depois contar os restantes)
 // aplicam este filtro em cima de um `.select()` próprio, cada um o seu.
+//
+// Exclui quem já falhou antes (nuvemshop_sync_status='erro'): sem isso, como
+// a ordem é sempre created_at ascendente e falha não tira o produto da fila,
+// um produto com erro permanente (ex.: foto do Bling com link expirado)
+// ficava sendo re-tentado pra sempre, travando o processamento de tudo que
+// vem depois dele na fila (confirmado rodando contra a loja de verdade: uma
+// leva de produtos antigos com foto expirada bloqueou o avanço do lote).
+// Depois de corrigir a foto, corrigir manualmente o status do produto (ou
+// religar/desfazer o vínculo) volta a colocá-lo na fila.
 function filtroCandidatos(qb: any) {
-  return qb.eq('ativo', true).not('foto_url', 'is', null).neq('foto_url', '').is('nuvemshop_product_id', null)
+  return qb.eq('ativo', true).not('foto_url', 'is', null).neq('foto_url', '')
+    .is('nuvemshop_product_id', null).neq('nuvemshop_sync_status', 'erro')
 }
 
 Deno.serve(async (req) => {
