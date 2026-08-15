@@ -110,7 +110,7 @@ function linhas() {
   // 560px e no celular dela só existiria rolando de lado. Mesmos campos.
   if (!ehStaff()) {
     return lista.map(c => `
-      <div class="fid-card" onclick="abrirCliente('${c.id}')">
+      <div class="fid-card" onclick="abrirCliente('${esc(c.id)}')">
         <div class="fid-card-topo">
           <div class="fid-card-nome">${esc(c.nome)}</div>
           <div class="fid-card-selos">${c.selos}/10${c.premios ? ` · ${c.premios} prêmio${c.premios > 1 ? 's' : ''}` : ''}</div>
@@ -123,7 +123,7 @@ function linhas() {
   return `<div class="pag-wrap"><table class="pag-table"><thead><tr>
     <th class="pag-th">Cliente</th><th class="pag-th">Telefone</th><th class="pag-th" style="text-align:center">Selos</th><th class="pag-th"></th>
   </tr></thead><tbody>${lista.map(c => `
-    <tr class="pag-row" style="cursor:pointer" onclick="abrirCliente('${c.id}')">
+    <tr class="pag-row" style="cursor:pointer" onclick="abrirCliente('${esc(c.id)}')">
       <td class="pag-td"><span class="ciclo-desc">${esc(c.nome)}</span></td>
       <td class="pag-td">${esc(telFmt(c.celular))}${telRuim(c.celular) ? '<span class="badge badge-pendente" style="margin-left:6px" title="Número fora do padrão — esta cartela pode misturar mais de uma pessoa.">Telefone inválido</span>' : ''}</td>
       <td class="pag-td" style="text-align:center"><span class="fid-progresso">${c.selos}/10</span></td>

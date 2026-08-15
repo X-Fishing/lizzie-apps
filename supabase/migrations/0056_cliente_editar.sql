@@ -30,9 +30,13 @@ alter table public.clientes
 -- ── 2) A RPC ─────────────────────────────────────────────────────────
 --   Autorização no SERVIDOR (a UI é só conveniência):
 --     staff  OU  a revendedora que já vendeu para esta cliente.
---   Passar '' (string vazia) em cidade/email/observação LIMPA o campo;
---   passar NULL mantém o que está lá. Sem isso não há como apagar um dado
---   errado, e com null-como-limpeza a UI apagaria tudo sem querer.
+--   CONVENÇÃO DOS PARÂMETROS (leia antes de escrever outro chamador):
+--     • cidade / email / observacao → '' LIMPA o campo, NULL MANTÉM o que está
+--       lá. Sem isso não há como apagar um dado errado, e com null-como-limpeza
+--       a UI apagaria tudo sem querer.
+--     • nome / telefone / aniversário → são SEMPRE gravados com o que veio.
+--       Passar p_tel = null APAGA o celular — que é a chave da cartela de
+--       fidelidade. Todo chamador tem de mandar o cadastro inteiro.
 create or replace function public.cliente_editar(
   p_cliente_id uuid,
   p_nome       text,
@@ -51,9 +55,8 @@ declare
 begin
   if auth.uid() is null then raise exception 'nao autenticado'; end if;
 
-  select * into v_atual from clientes where id = p_cliente_id for update;
-  if not found then raise exception 'Cliente nao encontrada'; end if;
-
+  -- Permissão ANTES do lock: sem isso quem não pode editar ainda conseguiria
+  -- segurar um lock de linha em qualquer cliente até a exceção estourar.
   v_pode := public.is_staff()
          or exists (select 1 from vendas v
                      where v.cliente_id = p_cliente_id
@@ -61,6 +64,9 @@ begin
   if not v_pode then
     raise exception 'Voce so pode editar as clientes para quem ja vendeu';
   end if;
+
+  select * into v_atual from clientes where id = p_cliente_id for update;
+  if not found then raise exception 'Cliente nao encontrada'; end if;
 
   if coalesce(btrim(p_nome), '') = '' then
     raise exception 'Informe o nome da cliente';
@@ -73,9 +79,16 @@ begin
     raise exception 'Telefone invalido — informe um numero real com DDD';
   end if;
 
+  -- Compara NORMALIZADO, não a string crua. A 0038:83-99 normaliza
+  -- clientes.celular em modo tudo-ou-nada: se algum par ficaria duplicado, ela
+  -- NÃO altera nada e só avisa. Ou seja, é um estado previsto do banco existir
+  -- '5511999998888' ao lado de '11999998888'. Comparando string crua, os dois
+  -- passam pelo exists E pela UNIQUE — duas pessoas com o mesmo número real na
+  -- mesma cartela, exatamente a fusão que esta trava existe para impedir.
   if v_cel is not null and v_cel is distinct from v_atual.celular
      and exists (select 1 from clientes
-                  where celular = v_cel and id <> p_cliente_id) then
+                  where public.tel_normalizado(celular) = v_cel
+                    and id <> p_cliente_id) then
     raise exception 'Este WhatsApp ja e de outra cliente — fale com a administracao para juntar os cadastros';
   end if;
 
@@ -96,6 +109,13 @@ begin
    where id = p_cliente_id;
 
   return to_jsonb((select c from clientes c where c.id = p_cliente_id));
+
+-- Cinto e suspensório: o exists acima não trava a linha RIVAL, então duas
+-- edições simultâneas podem passar as duas e a UNIQUE pegar a segunda. Sem
+-- este handler a revendedora receberia "duplicate key value violates unique
+-- constraint clientes_celular_key" na tela.
+exception when unique_violation then
+  raise exception 'Este WhatsApp ja e de outra cliente — fale com a administracao para juntar os cadastros';
 end; $$;
 revoke all on function public.cliente_editar(uuid,text,text,int,int,text,text,text) from public, anon;
 grant  execute on function public.cliente_editar(uuid,text,text,int,int,text,text,text) to authenticated;

@@ -12,7 +12,7 @@
 // da sessão, então para o banco a funcionária continua staff).
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, sbQ, handleSupabaseError, fmtBRL, fmtDiaMes, telFmt, telValido } from './utils.js';
+import { esc, sbQ, fetchPaginado, handleSupabaseError, fmtBRL, fmtDiaMes, telFmt, telValido } from './utils.js';
 import { abrirEdicaoCliente } from './cliente-form.js';
 
 const IC_USERS = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>';
@@ -28,11 +28,19 @@ export async function loadMinhasClientes() {
   panel().innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
 
   // 1) As vendas DELA dizem quem são "as clientes dela" e já trazem os totais.
-  const { data: minhas, error: vErr } = await sbQ(sb.from('vendas')
+  //    Paginado: o PostgREST corta em 1000 linhas por requisição, e sem isso
+  //    clientes antigas sumiriam da lista sem nenhum aviso. O .order() garante
+  //    ordem estável entre as páginas (senão o range() repete/pula linhas).
+  const { data: minhas, error: vErr } = await fetchPaginado(() => sb.from('vendas')
     .select('cliente_id,valor_total')
     .eq('revendedora_id', state.currentUser.id)
-    .not('cliente_id', 'is', null));
-  if (vErr) { if (await handleSupabaseError(vErr, 'Erro ao carregar suas clientes')) return; }
+    .not('cliente_id', 'is', null)
+    .order('id'));
+  if (vErr) {
+    if (await handleSupabaseError(vErr, 'Erro ao carregar suas clientes')) return;
+    panel().innerHTML = `<div class="empty-state"><div class="empty-icon">${IC_USERS}</div><p>Não foi possível carregar suas clientes. Tente de novo.</p></div>`;
+    return;
+  }
 
   const agg = new Map();
   for (const v of (minhas || [])) {
@@ -92,20 +100,20 @@ function linhas() {
       termo ? 'Nenhuma cliente encontrada' : 'Você ainda não tem clientes. Elas aparecem aqui depois da primeira venda com WhatsApp informado.'}</p></div>`;
   }
   return lista.map(c => `
-    <div class="hist-card" onclick="abrirCliente('${c.id}')">
+    <div class="hist-card" onclick="abrirCliente('${esc(c.id)}')">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
         <div style="flex:1;min-width:0">
           <div class="hist-nome">${esc(c.nome)}</div>
           <div class="hist-stats">
             ${esc(telFmt(c.celular))}${telRuim(c.celular) ? ' <span class="badge badge-pendente">telefone inválido</span>' : ''}
-            ${fmtDiaMes(c.aniversario_dia, c.aniversario_mes) ? ' · 🎂 ' + fmtDiaMes(c.aniversario_dia, c.aniversario_mes) : ''}
+            ${fmtDiaMes(c.aniversario_dia, c.aniversario_mes) ? ' · 🎂 ' + esc(fmtDiaMes(c.aniversario_dia, c.aniversario_mes)) : ''}
           </div>
           <div class="hist-stats">
-            <b>${c.compras}</b> compra${c.compras !== 1 ? 's' : ''} · ${fmtBRL(c.total)} · <b>${c.selos}/10</b> selos
+            <b>${esc(c.compras)}</b> compra${c.compras !== 1 ? 's' : ''} · ${fmtBRL(c.total)} · <b>${esc(c.selos)}/10</b> selos
           </div>
         </div>
         <button class="btn-icon" title="Editar cadastro" style="color:var(--rose)"
-                onclick="event.stopPropagation();minhaClienteEditar('${c.id}')">${IC_EDIT}</button>
+                onclick="event.stopPropagation();minhaClienteEditar('${esc(c.id)}')">${IC_EDIT}</button>
       </div>
     </div>`).join('');
 }

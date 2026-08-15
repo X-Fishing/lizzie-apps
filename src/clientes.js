@@ -10,7 +10,7 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { esc, sbQ, fetchPaginado, toast, confirmarAcao, openModal, closeModal, handleSupabaseError,
-         isoToBR, formatDate, fmtBRL, diaMesPartes, fmtDiaMes, telFmt, telValido, telNormalizado } from './utils.js';
+         formatDate, fmtBRL, diaMesPartes, fmtDiaMes, telFmt, telValido, telNormalizado } from './utils.js';
 import { abrirEdicaoCliente } from './cliente-form.js';
 // maskTelBR/maskDiaMes são usados só em handlers inline (oninput=) via window.
 
@@ -32,26 +32,38 @@ const telRuim = c => !!c && !telValido(c);
 
 export async function loadClientes() {
   panel().innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
-  // fetchPaginado nas vendas: o PostgREST corta em 1000 linhas, e sem paginar
-  // as clientes antigas apareceriam com "0 compras" sem nenhum aviso.
-  const [{ data, error }, vendas, { data: profs }] = await Promise.all([
-    sbQ(sb.from('clientes').select('*').order('nome')),
+  // TUDO paginado: o PostgREST corta em 1000 linhas por requisição. Sem isso a
+  // lista de clientes trunca e — pior — as clientes antigas apareceriam com
+  // "0 compras" sem nenhum aviso. O .order() não é cosmético: sem ordem
+  // estável o Postgres pode repetir/pular linhas entre as páginas do range().
+  const [cliRes, vendRes, profRes] = await Promise.all([
+    fetchPaginado(() => sb.from('clientes').select('*').order('nome').order('id')),
     fetchPaginado(() => sb.from('vendas')
       .select('cliente_id,valor_total,data_venda,revendedora_id')
-      .not('cliente_id', 'is', null)),
-    sbQ(sb.from('profiles').select('id,nome')),
+      .not('cliente_id', 'is', null).order('id')),
+    fetchPaginado(() => sb.from('profiles').select('id,nome').order('id')),
   ]);
+  const { data, error } = cliRes;
   if (error) {
     if (/relation|does not exist|schema cache/i.test(error.message || '')) {
       panel().innerHTML = `<div class="empty-state"><div class="empty-icon">${IC_USERS}</div><p>Rode a migração <b>0021_clientes.sql</b> no Supabase para ativar a base de clientes.</p></div>`;
       return;
     }
     if (await handleSupabaseError(error, 'Erro ao carregar clientes')) return;
+    panel().innerHTML = `<div class="empty-state"><div class="empty-icon">${IC_USERS}</div><p>Não foi possível carregar os clientes. Tente de novo.</p></div>`;
+    return;
+  }
+  // Falha nas vendas/perfis NÃO pode passar em silêncio: a tela mostraria
+  // "0 compras" para todo mundo e ninguém saberia que o número está errado.
+  if (vendRes.error || profRes.error) {
+    console.error('clientes: agregado de vendas/perfis', vendRes.error || profRes.error);
+    toast('Não foi possível carregar o histórico de compras — os totais podem estar incompletos.', 'erro');
   }
 
-  const nomeRev = new Map((profs || []).map(p => [String(p.id), p.nome]));
+  const vendas = vendRes.data || [];
+  const nomeRev = new Map((profRes.data || []).map(p => [String(p.id), p.nome]));
   const agg = new Map();
-  for (const v of (vendas || [])) {
+  for (const v of vendas) {
     const a = agg.get(v.cliente_id) || { compras: 0, total: 0, ultima: null, revs: new Set() };
     a.compras += 1;
     a.total += Number(v.valor_total || 0);
@@ -105,17 +117,17 @@ function linhasClientes() {
         .some(v => (v || '').toLowerCase().includes(termo)))
     : cache;
   return lista.length ? lista.map(c => `
-    <tr class="pag-row" style="cursor:pointer" onclick="abrirCliente('${c.id}')">
+    <tr class="pag-row" style="cursor:pointer" onclick="abrirCliente('${esc(c.id)}')">
       <td class="pag-td"><span class="ciclo-desc">${esc(c.nome)}</span>${c.cidade ? `<div style="font-size:11px;color:var(--muted)">${esc(c.cidade)}</div>` : ''}</td>
       <td class="pag-td">${esc(telFmt(c.celular))}${telRuim(c.celular) ? BADGE_TEL_RUIM : ''}</td>
       <td class="pag-td">${c.revendedoras.length ? esc(c.revendedoras.join(', ')) : '—'}</td>
-      <td class="pag-td" style="text-align:center">${c.compras || '—'}</td>
+      <td class="pag-td" style="text-align:center">${c.compras ? esc(c.compras) : '—'}</td>
       <td class="pag-td" style="text-align:right">${c.compras ? fmtBRL(c.total) : '—'}</td>
-      <td class="pag-td">${c.ultima ? formatDate(c.ultima) : '—'}</td>
-      <td class="pag-td">${fmtDiaMes(c.aniversario_dia, c.aniversario_mes) || '—'}</td>
+      <td class="pag-td">${c.ultima ? esc(formatDate(c.ultima)) : '—'}</td>
+      <td class="pag-td">${esc(fmtDiaMes(c.aniversario_dia, c.aniversario_mes)) || '—'}</td>
       <td class="pag-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
-        <button class="btn-icon" title="Editar" onclick="clienteEditar('${c.id}')" style="color:var(--rose)">${IC_EDIT}</button>
-        <button class="btn-icon" title="Excluir" onclick="clienteExcluir('${c.id}')" style="color:var(--danger)">${IC_TRASH}</button>
+        <button class="btn-icon" title="Editar" onclick="clienteEditar('${esc(c.id)}')" style="color:var(--rose)">${IC_EDIT}</button>
+        <button class="btn-icon" title="Excluir" onclick="clienteExcluir('${esc(c.id)}')" style="color:var(--danger)">${IC_TRASH}</button>
       </td>
     </tr>`).join('')
     : `<tr><td colspan="8"><div class="empty-state" style="padding:40px 0"><div class="empty-icon">${IC_USERS}</div><p>${termo ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado ainda'}</p></div></td></tr>`;

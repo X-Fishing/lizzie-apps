@@ -9,6 +9,17 @@ import { gerarCertificadoGarantia, uploadCertificado, enviarCertificado, numeroC
 
 const primeiroNome = n => (n || '').trim().split(/\s+/)[0] || 'cliente';
 
+// A partir de 0057 as compras SOMAM dentro do ciclo da maleta: uma venda de
+// R$ 75 gera 0 selos e o valor fica guardado. Sem dizer quanto falta, o
+// "+0 selos" parece defeito e a revendedora deixa de confiar na regra.
+function textoFaltaSelo(fid) {
+  const falta = Number(fid?.falta_para_selo);
+  if (!Number.isFinite(falta) || falta <= 0) return '';
+  return `<div style="font-size:12.5px;color:var(--plum);text-align:center;background:var(--blush);border-radius:12px;padding:10px 12px;margin:10px 0">
+    Faltam <b>${fmtBRL(falta)}</b> em compras nesta maleta para a cliente ganhar o próximo selo.
+  </div>`;
+}
+
 // ret = retorno do registrar_venda (jsonb novo OU uuid string do banco antigo).
 // O modal SEMPRE abre: a garantia funciona só com o id da venda; a fidelidade
 // aparece quando o retorno traz o resumo (registrar_venda em jsonb).
@@ -32,6 +43,7 @@ export function abrirModalPosVenda(ret, snapshot) {
       <div class="fid-progresso" style="font-size:20px">+${fid.selos_ganhos} selo${fid.selos_ganhos !== 1 ? 's' : ''} nesta compra</div>
       <div style="font-size:12px;color:var(--muted)">Cartela: ${fid.cartela_selos ?? 0}/10</div>
     </div>
+    ${textoFaltaSelo(fid)}
     ${renderCartelaFidelidade(fid.cartela_selos ?? 0)}
     ${fid.completou ? `<div style="text-align:center;background:rgba(212,168,75,.12);border:1px solid var(--gold);border-radius:12px;padding:12px;margin-top:14px;color:var(--plum);font-size:13px"><b>Cartela completa!</b><br>A cliente ganhou R$ 300 em peças para retirar na loja.</div>` : ''}
   ` : `<div style="font-size:12px;color:var(--muted);text-align:center;margin:14px 0">Venda registrada.</div>`;
@@ -76,7 +88,15 @@ export function posVendaEnviarSelos() {
   const fim = c.fid.completou
     ? 'cartela completa! Você ganhou R$ 300 em joias para retirar na loja 🎁'
     : `faltam ${10 - x} selo${10 - x !== 1 ? 's' : ''} para ganhar R$ 300 em joias`;
-  const mensagem = `Oi ${nome}! 💗 Sua compra de ${fmtBRL(c.total)} na Lizzie Semijoias valeu +${c.fid.selos_ganhos} selo${c.fid.selos_ganhos !== 1 ? 's' : ''} no cartão fidelidade. Você está com ${x} de 10 selos — ${fim}.`;
+  // Com a soma por ciclo (0057) a compra pode valer 0 selos e o valor ficar
+  // guardado. Dizer "+0 selos" soaria como se a compra não tivesse contado.
+  const ganhos = c.fid.selos_ganhos || 0;
+  const falta = Number(c.fid.falta_para_selo);
+  const inicio = ganhos > 0
+    ? `Sua compra de ${fmtBRL(c.total)} na Lizzie Semijoias valeu +${ganhos} selo${ganhos !== 1 ? 's' : ''} no cartão fidelidade.`
+    : `Sua compra de ${fmtBRL(c.total)} na Lizzie Semijoias já está contando no cartão fidelidade${
+        Number.isFinite(falta) && falta > 0 ? ` — faltam ${fmtBRL(falta)} para o próximo selo` : ''}.`;
+  const mensagem = `Oi ${nome}! 💗 ${inicio} Você está com ${x} de 10 selos — ${fim}.`;
   enviarWhatsApp({ telefone: c.tel, mensagem });
 }
 

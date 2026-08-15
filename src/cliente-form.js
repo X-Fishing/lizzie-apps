@@ -7,6 +7,11 @@
 // valida permissão NO SERVIDOR: staff, ou a revendedora que já vendeu para
 // esta cliente. Não existe policy de UPDATE em `clientes` para a revendedora —
 // escrita barrada pela RLS voltaria "200 com lista vazia", em silêncio.
+//
+// ⚠️ A RPC grava nome/telefone/aniversário SEMPRE com o que recebe (só
+// cidade/e-mail/observação tratam null como "não mexe"). Por isso este
+// formulário manda o cadastro INTEIRO: um chamador que omitisse p_tel
+// apagaria o celular — que é a chave da cartela de fidelidade.
 import { sb } from './supabase.js';
 import { esc, sbQ, toast, openModal, closeModal, fmtDiaMes, diaMesPartes,
          telFmt, telValido, telNormalizado } from './utils.js';
@@ -28,7 +33,8 @@ export function abrirEdicaoCliente(cliente, callback) {
       <input type="text" id="cf-nome" class="form-control" value="${esc(cliente.nome || '')}"></div>
     <div class="form-group"><label class="form-label">WhatsApp (com DDD)</label>
       <input type="tel" id="cf-cel" class="form-control" inputmode="numeric" maxlength="16" placeholder="(11) 98765-4321" value="${esc(telFmt(cliente.celular) === '—' ? '' : telFmt(cliente.celular))}" oninput="maskTelBR(this)">
-      <div style="font-size:11.5px;color:var(--muted);margin-top:4px">É por ele que a Lizzie reconhece a cliente e conta os selos. Se o número novo já for de outra cliente, o sistema recusa — fale com a administração para juntar os cadastros.</div></div>
+      <div style="font-size:11.5px;color:var(--muted);margin-top:4px">É por ele que a Lizzie reconhece a cliente e conta os selos. Se o número novo já for de outra cliente, o sistema recusa — fale com a administração para juntar os cadastros.</div>
+      ${cliente.celular && !telValido(cliente.celular) ? `<div style="font-size:11.5px;color:var(--danger);margin-top:4px">Este número não é válido, então nada pode ser salvo enquanto ele estiver aí. Corrija-o — ou apague o campo — para conseguir salvar o resto do cadastro.</div>` : ''}</div>
     <div class="form-group"><label class="form-label">Aniversário</label>
       <input type="text" id="cf-nasc" class="form-control" inputmode="numeric" maxlength="5" placeholder="dd/mm" value="${esc(fmtDiaMes(cliente.aniversario_dia, cliente.aniversario_mes))}" oninput="maskDiaMes(this)"></div>
     <div class="form-group"><label class="form-label">Cidade</label>
@@ -60,9 +66,9 @@ export async function clienteFormSalvar() {
 
   const btn = document.getElementById('cad-modal-salvar');
   btn.disabled = true; btn.textContent = 'Salvando...';
-  // Strings vazias (e não null) em cidade/e-mail/observação: a RPC trata null
-  // como "não mexe" e '' como "limpa" — sem isso não haveria como apagar um
-  // dado errado.
+  // Strings vazias (e não null) em cidade/e-mail/observação: SÓ nesses três a
+  // RPC trata null como "não mexe" e '' como "limpa" — sem isso não haveria
+  // como apagar um dado errado.
   const { error } = await sbQ(sb.rpc('cliente_editar', {
     p_cliente_id: atual.id,
     p_nome: nome,

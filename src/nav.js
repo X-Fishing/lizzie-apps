@@ -128,7 +128,23 @@ export function abrirRevendedora(id) { navegar('/revendedoras/' + encodeURICompo
 
 // Abrir a tela de uma cliente final (compras + fidelidade). Usada pela
 // Fidelidade, pelo CRUD de Clientes e por Minhas Clientes.
-export function abrirCliente(id) { navegar('/cliente/' + encodeURIComponent(id)); }
+// Guarda de onde veio: history.back() sozinho nao serve, porque history.length
+// conta a aba INTEIRA — abrir o app direto em #/cliente/:id e clicar Voltar
+// sairia do app e deixaria a tela em branco (pior ainda no PWA standalone).
+export function abrirCliente(id) {
+  const atual = location.hash.slice(1);
+  state.clienteVoltarPara = (atual && !atual.startsWith('/cliente/')) ? atual : null;
+  navegar('/cliente/' + encodeURIComponent(id));
+}
+
+// Para onde o botao Voltar da tela da cliente leva. Sem origem conhecida
+// (link direto, F5), cai na tela que faz sentido para o papel.
+export function voltarDaCliente() {
+  const destino = state.clienteVoltarPara;
+  state.clienteVoltarPara = null;
+  if (destino) { navegar(destino, { replace: true }); return; }
+  navegar(hashDePanel(ehStaff() ? 'clientes' : 'minhas-clientes'), { replace: true });
+}
 
 // Registra as rotas e liga o router. Chamado no login (usuario ja carregado).
 export function iniciarRoteamento() {

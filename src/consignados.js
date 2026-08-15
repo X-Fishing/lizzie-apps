@@ -2253,6 +2253,12 @@ export async function confirmarVendaCarrinho(btn) {
         p_nasc_dia: semZap ? null : (nasc?.dia ?? null),
         p_nasc_mes: semZap ? null : (nasc?.mes ?? null),
         p_combinada: combinada,
+        // Ciclo (maleta) da venda. O servidor resolve a maleta ATIVA sozinho e
+        // só aceita este id se ele for da própria pessoa — mandamos por ser o
+        // que a tela está mostrando, mas quem manda é o banco. A fidelidade
+        // por ciclo (0057) depende de a maleta estar no INSERT: o trigger de
+        // selos é AFTER INSERT e não enxerga um UPDATE posterior.
+        p_maleta_id: state.maletaAtivaId || null,
         p_itens: state.carrinhoVenda.map(it => ({
           consignado_id: it.consignado_id,
           descricao: it.descricao,
@@ -2266,20 +2272,17 @@ export async function confirmarVendaCarrinho(btn) {
     if (errRpc) {
       console.error('Erro ao registrar venda (RPC):', errRpc);
       const msg = /registrar_venda|function|does not exist|schema cache/i.test(errRpc.message || '')
-        ? 'Função do banco não encontrada — rode db-functions.sql no Supabase.'
+        ? 'Função do banco não encontrada — rode as migrações 0055 e 0057 no Supabase.'
         : ('Erro: ' + (errRpc.message || 'tente novamente'));
       toast(msg);
       resetBtn();
       return;
     }
 
-    // Vincula a venda à maleta ATIVA (ciclo atual) — best-effort, não bloqueia.
-    // Escopo de "maleta atual" em Pagamentos/Dashboard depende disso.
-    const vendaId = vendaRet?.venda_id || (typeof vendaRet === 'string' ? vendaRet : null);
-    if (vendaId && state.maletaAtivaId) {
-      sbQ(sb.from('vendas').update({ maleta_id: state.maletaAtivaId }).eq('id', vendaId))
-        .then(({ error }) => { if (error) console.warn('venda.maleta_id:', error.message); });
-    }
+    // A maleta (ciclo) já veio gravada no INSERT pela própria RPC — o UPDATE
+    // fire-and-forget que existia aqui saiu: além de poder falhar em silêncio
+    // (era só um console.warn), ele acontecia DEPOIS do trigger de fidelidade,
+    // que então creditava os selos no ciclo errado.
 
     // Snapshot da venda ANTES de zerar o carrinho (o modal pós-venda usa).
     const snapshot = {

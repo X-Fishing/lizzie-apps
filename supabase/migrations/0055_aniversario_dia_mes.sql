@@ -19,9 +19,17 @@
 -- ⚠️ NÃO TOCA em `revendedora_docs.data_nascimento` — aquela é a data de
 -- nascimento da REVENDEDORA, usada no contrato, e precisa do ano.
 --
+-- ⚠️ ORDEM DE DEPLOY — RODE ESTA MIGRAÇÃO **ANTES** DE PUBLICAR O APP.
+-- Ela troca a assinatura de `registrar_venda` (p_nasc date → p_nasc_dia/mes).
+-- Se o Netlify publicar primeiro, TODA venda falha em campo até a migração
+-- rodar. Mesmo cuidado que a 0023 já pedia.
+--
 -- ⚠️ ANTES DE RODAR: faça um dump das três tabelas. O drop da coluna é
 -- irreversível e leva o ano junto.
 --   pg_dump ... -t public.clientes -t public.vendas -t public.garantias
+-- Atenção ao restaurar esse dump sozinho: as constraints *_aniversario_chk
+-- chamam public.aniversario_valido, então a FUNÇÃO precisa existir antes das
+-- tabelas. Restaure num banco que já tenha rodado o item 1 desta migração.
 -- ════════════════════════════════════════════════════════════════════
 
 -- ── 1) Regra de validade (a MESMA de src/utils.js diaMesPartes) ──────
@@ -83,7 +91,10 @@ create index if not exists idx_clientes_aniversario_mes
 
 -- ── 3) cliente_upsert_para_venda — dia/mês no lugar do date ──────────
 --   Mesma blindagem da 0038: telefone inválido → null (venda segue sem
---   cliente); nome só ENRIQUECE; aniversário só preenche se estava VAZIO.
+--   cliente) e nome só ENRIQUECE. O aniversário mantém a regra da 0038:156 —
+--   o valor NOVO vence quando vem preenchido (é assim que a revendedora
+--   corrige um aniversário errado pelo PDV; o nome é que não pode ser trocado,
+--   porque nome trocado apagaria a evidência de dois cadastros fundidos).
 --   A assinatura muda (date → 2 int) ⇒ drop da antiga, senão o overload
 --   ambíguo derruba as chamadas existentes.
 drop function if exists public.cliente_upsert_para_venda(text, text, date);
@@ -114,12 +125,11 @@ begin
                    then btrim(excluded.nome)
                  else clientes.nome
                end,
-        -- Só enriquece: nunca sobrescreve um aniversário já gravado. Os dois
-        -- campos andam juntos, senão a constraint aniversario_chk quebra.
-        aniversario_dia = case when clientes.aniversario_mes is null
-                               then excluded.aniversario_dia else clientes.aniversario_dia end,
-        aniversario_mes = case when clientes.aniversario_mes is null
-                               then excluded.aniversario_mes else clientes.aniversario_mes end,
+        -- Regra da 0038:156 preservada: o valor novo vence quando vem
+        -- preenchido. Os dois campos andam SEMPRE juntos (o par já foi
+        -- saneado acima), senão a constraint aniversario_chk quebraria.
+        aniversario_dia = coalesce(excluded.aniversario_dia, clientes.aniversario_dia),
+        aniversario_mes = coalesce(excluded.aniversario_mes, clientes.aniversario_mes),
         telefone_invalido = false
   returning id into v_id;
   return v_id;
@@ -190,12 +200,21 @@ declare
   v_pago       numeric := coalesce(p_pago, 0);
   v_status     text    := p_status;
   v_n          int     := 0;
+  v_dia        int     := p_nasc_dia;
+  v_mes        int     := p_nasc_mes;
 begin
   if auth.uid() is null then
     raise exception 'nao autenticado';
   end if;
   if p_itens is null or jsonb_array_length(p_itens) = 0 then
     raise exception 'venda sem itens';
+  end if;
+
+  -- Aniversário é dado de MARKETING: par inválido (31/02, dia sem mês) vira
+  -- "sem aniversário" em vez de estourar a constraint vendas_aniversario_chk
+  -- e derrubar a venda inteira. Fidelidade e aniversário nunca derrubam venda.
+  if not public.aniversario_valido(v_dia, v_mes) then
+    v_dia := null; v_mes := null;
   end if;
 
   -- Quando vierem linhas de pagamento, elas mandam em forma/valor_pago/status.
@@ -217,7 +236,7 @@ begin
                      else 'pendente' end;
   end if;
 
-  v_cliente_id := public.cliente_upsert_para_venda(p_cliente, p_tel, p_nasc_dia, p_nasc_mes);
+  v_cliente_id := public.cliente_upsert_para_venda(p_cliente, p_tel, v_dia, v_mes);
 
   insert into vendas (
     revendedora_id, nome_cliente, data_venda, forma_pagamento,
@@ -226,7 +245,7 @@ begin
   ) values (
     auth.uid(), p_cliente, p_data, v_forma,
     p_total, v_pago, v_status, p_obs,
-    p_tel, p_nasc_dia, p_nasc_mes, p_combinada, v_cliente_id
+    p_tel, v_dia, v_mes, p_combinada, v_cliente_id
   )
   returning id into v_venda_id;
 
@@ -306,8 +325,11 @@ create or replace function public.completar_venda_cliente(
 language plpgsql security definer set search_path = public as $$
 declare v_venda record; v_cliente_id uuid; v_pode boolean; v_cel text; v_fid jsonb;
         v_antigo uuid; v_realocou boolean := false;
+        v_dia int := p_dia; v_mes int := p_mes;
 begin
   if auth.uid() is null then raise exception 'nao autenticado'; end if;
+  -- Par inválido vira "sem aniversário" (não derruba a correção da venda).
+  if not public.aniversario_valido(v_dia, v_mes) then v_dia := null; v_mes := null; end if;
 
   select id, revendedora_id, cliente_id into v_venda
     from vendas where id = p_venda_id for update;
@@ -332,7 +354,7 @@ begin
     raise exception 'Telefone invalido — informe um numero real com DDD';
   end if;
 
-  v_cliente_id := public.cliente_upsert_para_venda(p_nome, v_cel, p_dia, p_mes);
+  v_cliente_id := public.cliente_upsert_para_venda(p_nome, v_cel, v_dia, v_mes);
   if v_cliente_id is null then
     raise exception 'Nao foi possivel registrar a cliente';
   end if;
@@ -348,8 +370,10 @@ begin
   update vendas
      set nome_cliente     = btrim(p_nome),
          telefone_cliente = v_cel,
-         aniversario_dia  = coalesce(p_dia, aniversario_dia),
-         aniversario_mes  = coalesce(p_mes, aniversario_mes),
+         -- Par ATÔMICO: coalesce campo a campo poderia montar dia-sem-mês e
+         -- estourar a constraint vendas_aniversario_chk.
+         aniversario_dia  = case when v_mes is null then aniversario_dia else v_dia end,
+         aniversario_mes  = case when v_mes is null then aniversario_mes else v_mes end,
          cliente_id       = v_cliente_id,
          atualizado_por   = auth.uid(),
          atualizado_em    = now(),
