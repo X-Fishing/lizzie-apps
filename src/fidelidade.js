@@ -9,7 +9,7 @@
 // o resgate do prêmio e as compras dela.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, escAttrJs, sbQ, handleSupabaseError, telFmt, telValido } from './utils.js';
+import { esc, escAttrJs, sbQ, toast, handleSupabaseError, telFmt, telValido } from './utils.js';
 import { ehStaff } from './auth.js';
 
 const IC_CHECK = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg>';
@@ -81,6 +81,13 @@ export async function loadFidelidade() {
     await handleSupabaseError(cRes.error, 'Erro ao carregar fidelidade');
     erroTela();
     return;
+  }
+  // Falha em cartelas/prêmios NÃO pode passar em silêncio: sem isto a tela
+  // mostra "0/10 selos" e "0 prêmios pendentes" para TODA cliente, com cara de
+  // dado real. É pior que spinner — alguém pode negar um prêmio com base nisso.
+  if (cartRes.error || premRes.error) {
+    console.error('fidelidade: cartelas/premios', cartRes.error || premRes.error);
+    toast('Não foi possível carregar os selos — os números abaixo podem estar errados.', 'erro');
   }
   const selosPorCli = {};
   (cartRes.data || []).forEach(c => { selosPorCli[c.cliente_id] = c.selos; });

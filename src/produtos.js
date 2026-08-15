@@ -329,7 +329,7 @@ function linhaVarProdHTML(p, vars, aberto) {
   const pMin = Math.min(...precos), pMax = Math.max(...precos);
   const preco = pMin === pMax ? fmtBRL(pMin) : `${fmtBRL(pMin)} – ${fmtBRL(pMax)}`;
   return `
-    <tr class="ciclo-row" style="cursor:pointer" onclick="produtoToggleGrupo('${encodeURIComponent('var:' + p.id)}')">
+    <tr class="ciclo-row" style="cursor:pointer" onclick="produtoToggleGrupo('${escAttrJs(encodeURIComponent('var:' + p.id))}')">
       ${tdCheck([p.id])}
       <td class="ciclo-td">
         <div style="display:flex;align-items:center;gap:10px">
@@ -358,7 +358,11 @@ function linhaGrupoHTML(g, aberto) {
   const preco = pMin === pMax ? fmtBRL(pMin) : `${fmtBRL(pMin)} – ${fmtBRL(pMax)}`;
   const estoque = g.membros.reduce((s, m) => s + (m.p.estoque_qtd ?? 0), 0);
   const foto = g.membros.find(m => m.p.foto_url)?.p.foto_url || null;
-  const chave = encodeURIComponent(g.base);
+  // encodeURIComponent NÃO escapa ' ( ) - . — e dá para montar expressão
+  // executável só com esses. Como isto entra numa string JS dentro de um
+  // atributo onclick, precisa de escAttrJs por cima (produtos.nome é texto
+  // livre vindo do cadastro/Bling).
+  const chave = escAttrJs(encodeURIComponent(g.base));
   return `
     <tr class="ciclo-row" style="cursor:pointer" onclick="produtoToggleGrupo('${chave}')">
       ${tdCheck(g.membros.map(m => m.p.id))}

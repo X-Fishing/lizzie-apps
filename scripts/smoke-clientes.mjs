@@ -18,6 +18,9 @@
 //   node scripts/smoke-clientes.mjs revendedora
 //   node scripts/smoke-clientes.mjs admin
 import { chromium } from 'playwright';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 
 const BASE = process.env.SMOKE_URL || 'http://localhost:5199';
 const PAPEL = process.argv[2] || 'revendedora';
@@ -121,6 +124,19 @@ await page.route('**/rest/v1/**', r => {
 });
 await page.route('**/storage/v1/**', r => r.fulfill({ status: 200, body: '{}' }));
 
+// O servidor da porta é MESMO o deste checkout? Já aconteceu de outro Vite
+// estar na porta servindo outra árvore — o smoke passou verde testando código
+// que não era o auditado. Compara um trecho do fonte servido com o do disco.
+const RAIZ = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const noDisco = fs.readFileSync(path.join(RAIZ, 'src/cliente-compras.js'), 'utf8');
+const servido = await (await fetch(BASE + '/src/cliente-compras.js')).text();
+const marca = s => (s.match(/export (?:async )?function \w+/g) || []).join('|');
+if (marca(noDisco) !== marca(servido)) {
+  console.error(`\nABORTADO: o servidor em ${BASE} está servindo OUTRA árvore.`);
+  console.error('Suba o Vite a partir de ' + RAIZ + ' (ou use SMOKE_URL=...).');
+  await browser.close(); process.exit(2);
+}
+
 await page.goto(BASE + '/', { waitUntil: 'networkidle' });
 const chave = await page.evaluate(() => window.sb?.storageKey);
 if (!chave) { console.error('NAO DESCOBRI A CHAVE DE SESSAO'); await browser.close(); process.exit(1); }
@@ -220,11 +236,39 @@ for (const alvo of (EH_STAFF ? ['clientes'] : ['vendas', 'clientes'])) {
   check(`erro em /${alvo} mostra estado de erro na Fidelidade`,
     t.includes(ERRO_NA_TELA) && !t.includes('Carregando'), JSON.stringify(t.slice(0, 120)));
 }
+// Falha em fidelidade_cartelas é PIOR que spinner: a tela renderia "0/10" para
+// toda cliente, com cara de dado real, e alguém poderia negar um prêmio com
+// base nisso. Tem de avisar.
+falharQuery = 'fidelidade_cartelas';
+await ir('#/fidelidade', 2000);
+const avisou = await page.evaluate(() => {
+  const t = document.getElementById('toast');
+  return !!t && t.classList.contains('show') && /selos|errad/i.test(t.textContent || '');
+});
+check('erro em /fidelidade_cartelas avisa em vez de mostrar 0/10 calado', avisou,
+  await page.evaluate(() => document.getElementById('toast')?.textContent || '(sem toast)'));
 falharQuery = null;
 
-// Fidelidade saudável tem de listar a cliente e navegar ao clicar.
+// Fidelidade saudável tem de listar a cliente E NAVEGAR AO CLICAR. O clique é
+// a razão de existir da tela da cliente; sem exercitá-lo, transformar o
+// onclick num no-op passaria despercebido.
 await ir('#/fidelidade');
 check('Fidelidade lista a cliente', (await texto('#panel-fidelidade')).includes('Ana'));
+await page.click(EH_STAFF ? '#panel-fidelidade tr.pag-row' : '#panel-fidelidade .fid-card');
+await page.waitForTimeout(1100);
+check('clicar na cliente na Fidelidade abre a tela dela',
+  (await page.evaluate(() => location.hash)).startsWith('#/cliente/')
+  && (await visiveis()).includes('panel-cliente-compras'),
+  await page.evaluate(() => location.hash));
+
+// Itens da compra: erro aqui não pode deixar "Carregando itens…" para sempre.
+falharQuery = 'venda_itens';
+await ir(`#/cliente/${CLI}`, 2000);
+await page.click('#cc-compras .hist-card');
+await page.waitForTimeout(600);
+check('erro em /venda_itens nao trava os itens em "Carregando itens…"',
+  !(await texto('#cc-compras')).includes('Carregando itens'), await texto('#cc-compras'));
+falharQuery = null;
 
 check('nenhum erro de pagina', erros.length === 0, erros.slice(0, 3).join(' | '));
 

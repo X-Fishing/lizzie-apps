@@ -178,7 +178,18 @@ export function clienteCompraToggle(id) {
 
 async function carregarItens(ids, meu = req) {
   const { data, error } = await sbQ(sb.from('venda_itens').select('*').in('venda_id', ids).order('created_at'));
-  if (error || meu !== req) return;
+  if (meu !== req) return;   // guard de corrida: outra cliente já está na tela
+  // O erro NÃO pode sair pelo mesmo return do guard: a linha da compra já está
+  // mostrando "Carregando itens…" e ficaria assim para sempre. Marca cada
+  // venda com lista vazia (que renderiza "Sem itens registrados") e avisa.
+  if (error) {
+    console.warn('venda_itens:', error.message);
+    ids.forEach(id => { itens[id] = []; });
+    const box = document.getElementById('cc-compras');
+    if (box) box.innerHTML = listaCompras();
+    toast('Não foi possível carregar os itens das compras.', 'erro');
+    return;
+  }
   ids.forEach(id => { itens[id] = []; });
   (data || []).forEach(it => { (itens[it.venda_id] ||= []).push(it); });
   const el = document.getElementById('cc-compras');

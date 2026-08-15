@@ -4,7 +4,7 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { esc, sbQ, toast, handleSupabaseError, isAuthError, confirmarAcao, openModal, closeModal, formatDate,
-         maskCpf, maskCep, cpfValido, buscarCep, maskDateBR, isoToBR, brToISO, hojeBR, telWa55 } from './utils.js';
+         maskCpf, maskCep, cpfValido, buscarCep, maskDateBR, isoToBR, brToISO, hojeBR, telWa55, escAttrJs } from './utils.js';
 import { ROLE_LABELS, maskTelBR } from './auth.js';
 import { carregarProximasTrocas, compararPorTroca, atualizarBadgesTroca } from './trocas.js';
 
@@ -560,7 +560,7 @@ export async function criarAcessoRev(id, btn) {
       <div style="font-family:monospace;font-size:22px;color:var(--rose);font-weight:600">${esc(data.senha)}</div>
     </div>
     <div style="font-size:12.5px;color:var(--muted);margin-bottom:12px">Ela entra pela aba <b>"Entrar"</b> (não é "Cadastrar"). Depois pode trocar a senha em "Esqueci minha senha".</div>
-    ${num ? `<button class="btn-secondary" style="width:100%;border-color:#25D366;color:#128C7E" onclick="window.open('https://wa.me/${num}?text=${encodeURIComponent(recado)}','_blank')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Enviar no WhatsApp</button>` : '<div style="font-size:12px;color:var(--warning)">Sem telefone no cadastro — copie os dados acima.</div>'}`;
+    ${num ? `<button class="btn-secondary" style="width:100%;border-color:#25D366;color:#128C7E" onclick="window.open('https://wa.me/${escAttrJs(num)}?text=${escAttrJs(encodeURIComponent(recado))}','_blank')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Enviar no WhatsApp</button>` : '<div style="font-size:12px;color:var(--warning)">Sem telefone no cadastro — copie os dados acima.</div>'}`;
   const btnOk = document.getElementById('cad-modal-salvar');
   btnOk.textContent = 'Fechar';
   btnOk.setAttribute('onclick', "closeModal('modal-cadastro')");

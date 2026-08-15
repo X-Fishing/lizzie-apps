@@ -273,13 +273,16 @@ create trigger fidelidade_venda_removida_trg
 --   exceção, derrubaria a VENDA INTEIRA. A regra do projeto é a inversa:
 --   fidelidade nunca derruba venda. Por isso o resumo mora aqui, e qualquer
 --   erro vira um jsonb mínimo em vez de exceção.
+--   O BALDE NÃO VEM POR PARÂMETRO: é derivado da própria venda. Recebê-lo
+--   deixaria a revendedora passar a maleta de OUTRA e ler o saldo do ciclo
+--   alheio daquela cliente.
 create or replace function public.fidelidade_resumo_venda(
-  p_venda_id uuid, p_cliente_id uuid, p_bucket_id uuid
+  p_venda_id uuid, p_cliente_id uuid
 ) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
   VALOR_POR_SELO constant numeric := 150;
-  v_ganhos int; v_acum numeric; v_ja int;
+  v_ganhos int; v_acum numeric; v_ja int; p_bucket_id uuid;
 begin
   if p_cliente_id is null then
     return jsonb_build_object('selos_ganhos', 0, 'tem_ciclo', false);
@@ -292,7 +295,9 @@ begin
   -- A venda tem de ser DESTA cliente: sem amarrar as duas chaves, quem tem
   -- acesso a uma cliente qualquer poderia passar o uuid de uma venda alheia e
   -- ler os selos dela.
-  if not exists (select 1 from vendas v where v.id = p_venda_id and v.cliente_id = p_cliente_id) then
+  select coalesce(v.maleta_id, v.id) into p_bucket_id
+    from vendas v where v.id = p_venda_id and v.cliente_id = p_cliente_id;
+  if p_bucket_id is null then
     return jsonb_build_object('selos_ganhos', 0, 'tem_ciclo', false);
   end if;
   if not (public.is_staff()
@@ -329,8 +334,9 @@ exception when others then
   raise warning 'fidelidade_resumo_venda falhou (venda %): %', p_venda_id, sqlerrm;
   return jsonb_build_object('selos_ganhos', 0, 'tem_ciclo', false);
 end; $$;
-revoke all on function public.fidelidade_resumo_venda(uuid,uuid,uuid) from public, anon;
-grant  execute on function public.fidelidade_resumo_venda(uuid,uuid,uuid) to authenticated;
+drop function if exists public.fidelidade_resumo_venda(uuid,uuid,uuid);
+revoke all on function public.fidelidade_resumo_venda(uuid,uuid) from public, anon;
+grant  execute on function public.fidelidade_resumo_venda(uuid,uuid) to authenticated;
 
 -- ── 4) registrar_venda v8: resolve a MALETA no servidor ──────────────
 --   Corpo da v7 (0055) + p_maleta_id e a resolução do ciclo. O parâmetro é só
@@ -489,8 +495,7 @@ begin
   -- esta aqui é SECURITY INVOKER e `authenticated` não tem privilégio em
   -- fidelidade_acumulos — ler direto daria "permission denied" e derrubaria a
   -- venda. A venda já está gravada neste ponto; o resumo é só informação.
-  v_fid := public.fidelidade_resumo_venda(
-             v_venda_id, v_cliente_id, coalesce(v_maleta, v_venda_id));
+  v_fid := public.fidelidade_resumo_venda(v_venda_id, v_cliente_id);
 
   return jsonb_build_object('venda_id', v_venda_id, 'cliente_id', v_cliente_id, 'fidelidade', v_fid);
 end;

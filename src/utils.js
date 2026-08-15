@@ -13,13 +13,20 @@ export function esc(s) {
 // o caso de `onclick="minhaFn('${...}')"`. Aqui esc() NÃO basta: ele vira a
 // aspa em &#39;, mas o parser de HTML decodifica a entidade ANTES de o JS
 // rodar, então a aspa volta, fecha a string e o que vier depois EXECUTA.
-// Ordem: escapa para JS primeiro (a aspa vira \x27, que não é entidade) e só
-// então escapa para o atributo HTML.
+//
+// Ordem: escapa para JS primeiro (as duas aspas viram \x27/\x22, que não são
+// entidades) e só então escapa para o atributo HTML. Escapar a aspa DUPLA como
+// &quot; não serviria pelo mesmo motivo — ela voltaria antes de o JS rodar.
+//
+// ⚠️ encodeURIComponent NÃO é escapador de string JS: ele deixa passar
+// ' ( ) - . ! ~ * _ , e dá para montar expressão executável só com eles.
+// Se precisar dos dois, componha: escAttrJs(encodeURIComponent(v)).
 export function escAttrJs(v) {
   const HTML = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
   const js = String(v ?? '')
     .replace(/\\/g, '\\\\')
     .replace(/'/g, '\\x27')
+    .replace(/"/g, '\\x22')
     .replace(/[\r\n\u2028\u2029]/g, '');   // quebra de linha encerraria o statement
   return js.replace(/[&<>"]/g, c => HTML[c]);
 }

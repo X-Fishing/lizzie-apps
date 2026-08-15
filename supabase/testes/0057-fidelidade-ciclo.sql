@@ -314,6 +314,55 @@ begin
   end;
   raise notice 'T10 OK — venda legada com cartela ja fechada nao e creditada de novo';
 
+  -- ══ T11 — venda legada, caso PURO: TODOS os selos na cartela fechada
+  --   e NENHUMA cartela aberta depois. Este e o unico cenario em que o indice
+  --   unico (venda_id, cartela_id) nao protege NADA: sem cartela aberta, a 2a
+  --   passagem CRIA uma e o par (venda, cartela nova) e inedito.
+  --   O T10 nao cobre isto — la a venda tambem tem selo na cartela aberta, e o
+  --   proprio indice ja barraria. Ou seja: T10 passa mesmo sem a correcao de
+  --   venda legada; T11 e o que de fato a exercita.
+  declare v_m6 uuid; v_v9 uuid; v_falta2 int; v_antes2 int; v_abertas int; begin
+    insert into public.maletas (revendedora_id, status) values (v_rev, 'finalizada') returning id into v_m6;
+
+    -- leva a cartela aberta a 9
+    select coalesce(selos, 0) into v_antes2 from public.fidelidade_cartelas
+     where cliente_id = v_cli and status = 'aberta';
+    v_falta2 := 9 - coalesce(v_antes2, 0);
+    if v_falta2 > 0 then
+      insert into public.vendas (revendedora_id, nome_cliente, data_venda, forma_pagamento,
+                                 valor_total, valor_pago, status, cliente_id, maleta_id)
+      values (v_rev, 'ZZ Teste', current_date, 'Pix', v_falta2 * 150, v_falta2 * 150, 'quitado', v_cli, v_m6);
+    end if;
+
+    -- R$150 exatos: 1 selo fecha a cartela e o laco sai SEM abrir a proxima
+    insert into public.vendas (revendedora_id, nome_cliente, data_venda, forma_pagamento,
+                               valor_total, valor_pago, status, cliente_id, maleta_id)
+    values (v_rev, 'ZZ Teste', current_date, 'Pix', 150, 150, 'quitado', v_cli, v_m6)
+    returning id into v_v9;
+
+    select count(*) into v_abertas from public.fidelidade_cartelas
+     where cliente_id = v_cli and status = 'aberta';
+    if v_abertas <> 0 then
+      raise exception 'T11 PREPARO FALHOU: deveria ter 0 cartela aberta, tem %', v_abertas;
+    end if;
+
+    -- envelhece a venda (estado do dia do deploy)
+    delete from public.fidelidade_acumulo_vendas where venda_id = v_v9;
+    delete from public.fidelidade_acumulos where cliente_id = v_cli and bucket_id = v_m6;
+
+    v_ret := public.aplicar_fidelidade_venda(v_v9);
+    if coalesce((v_ret->>'selos_ganhos')::int, -1) <> 0 then
+      raise exception 'T11a FALHOU: venda legada (cartela fechada, sem aberta) gerou % selo(s), esperado 0',
+        coalesce((v_ret->>'selos_ganhos')::int, -1);
+    end if;
+    select count(*) into v_abertas from public.fidelidade_cartelas
+     where cliente_id = v_cli and status = 'aberta';
+    if v_abertas <> 0 then
+      raise exception 'T11b FALHOU: reprocessar a venda legada ABRIU uma cartela nova (% aberta(s))', v_abertas;
+    end if;
+  end;
+  raise notice 'T11 OK — venda legada sem cartela aberta nao recredita (caso puro)';
+
   raise notice '';
   raise notice '════════ TODOS OS TESTES PASSARAM ════════';
 end $$;
