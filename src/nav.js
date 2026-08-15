@@ -36,7 +36,7 @@ function panelPermitido(name) {
 
 // Executor real: troca os paineis, sincroniza o menu ativo e dispara o loader.
 function aplicarTela(name) {
-  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin','fidelidade','proxima-troca', ...PANEIS_STAFF].forEach(p => {
+  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin','fidelidade','proxima-troca','cliente-compras', ...PANEIS_STAFF].forEach(p => {
     const el = document.getElementById('panel-' + p);
     if (el) el.style.display = p === name ? 'block' : 'none';
     const nav = document.getElementById('nav-' + p);
@@ -92,6 +92,15 @@ function irPara(panel) {
   aplicarTela(efetivo);
 }
 
+// Tela da cliente final como rota propria (#/cliente/:id). Os dois papeis
+// acessam: o proprio loader escopa as compras (staff ve todas, revendedora so
+// as dela) e recusa a cliente sem vinculo — por isso nao entra em PANEIS_STAFF.
+function irParaCliente(id) {
+  if (!state.currentUser) return;
+  aplicarTela('cliente-compras');
+  loadClienteCompras(id);   // global (cliente-compras.js)
+}
+
 // Detalhe/edicao de revendedora como rota propria (#/revendedoras/:id).
 function irParaDetalheRev(id) {
   if (!state.currentUser) return;
@@ -113,11 +122,16 @@ export function showPanel(name) { navegar(hashDePanel(name)); }
 // Abrir o detalhe de uma revendedora navegando (o "voltar" fecha o detalhe).
 export function abrirRevendedora(id) { navegar('/revendedoras/' + encodeURIComponent(id)); }
 
+// Abrir a tela de uma cliente final (compras + fidelidade). Usada pela
+// Fidelidade, pelo CRUD de Clientes e por Minhas Clientes.
+export function abrirCliente(id) { navegar('/cliente/' + encodeURIComponent(id)); }
+
 // Registra as rotas e liga o router. Chamado no login (usuario ja carregado).
 export function iniciarRoteamento() {
   registrar('/', () => irPara(panelInicial()));
   registrar('/revendedoras', () => irPara('admin'));
   registrar('/revendedoras/:id', ({ id }) => irParaDetalheRev(id));
+  registrar('/cliente/:id', ({ id }) => irParaCliente(id));
   registrar('/:panel', ({ panel }) => irPara(panel));
   iniciar();
 }

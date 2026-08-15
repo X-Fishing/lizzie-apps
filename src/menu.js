@@ -166,7 +166,7 @@ function btnItem(item) {
 }
 
 // Breadcrumb da topbar (staff): "Grupo / Tela" a partir do painel ativo.
-const CRUMB_EXTRA = { pagamentos: 'Pagamentos', historico: 'Histórico de Vendas' };
+const CRUMB_EXTRA = { pagamentos: 'Pagamentos', historico: 'Histórico de Vendas', 'cliente-compras': 'Cliente' };
 export function atualizarBreadcrumb(panel) {
   const el = document.getElementById('topbar-crumb');
   if (!el) return;
