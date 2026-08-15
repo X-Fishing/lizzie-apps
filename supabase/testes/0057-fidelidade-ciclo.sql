@@ -25,11 +25,6 @@ declare
   v_premios int;
   v_acum   numeric;
   v_ret    jsonb;
-
-  procedure_nome text;
-
-  -- helper inline: cria uma venda já com maleta e aplica a fidelidade
-  function _ignora() returns void as $x$ begin end $x$ language plpgsql;
 begin
   raise notice '--- preparando dados de teste ---';
 
