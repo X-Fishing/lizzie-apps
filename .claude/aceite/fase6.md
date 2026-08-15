@@ -23,9 +23,16 @@ com o troco de cada venda descartado. 10 selos = prêmio de R$ 300.
 7. A venda é gravada **já com `maleta_id`**. O gatilho de selos é `AFTER INSERT`: se a
    maleta só for gravada depois, os selos caem no ciclo errado. Um `UPDATE` posterior de
    `maleta_id` no front é REPROVAÇÃO.
-8. A maleta ativa é resolvida **no servidor** (não pode depender de o front mandar o id):
-   venda lançada por staff/admin, onde o front não tem maleta ativa em memória, ainda
-   assim precisa cair na maleta certa.
+8. A maleta ativa é resolvida **no servidor** (não pode depender de o front mandar o id).
+   A maleta resolvida tem de ser a da MESMA pessoa gravada em `vendas.revendedora_id`.
+
+   > Correção deste critério (era mal formulado): a versão original exigia que "venda
+   > lançada por staff caia na maleta da mostruarista". Isso é impossível e não era o
+   > comportamento anterior — `registrar_venda` sempre grava `revendedora_id = auth.uid()`,
+   > então a venda feita por staff **é do staff**, e não existe maleta de outra pessoa a
+   > que ela devesse pertencer. Venda de staff fica sem maleta e vira balde de venda
+   > única, exatamente como antes desta migração. O que importa verificar é a coerência
+   > entre a maleta escolhida e o `revendedora_id` gravado.
 9. Se o front mandar um `p_maleta_id` que **não é da própria pessoa**, ele é ignorado
    (senão a venda entraria no ciclo de outra revendedora).
 
@@ -54,7 +61,9 @@ com o troco de cada venda descartado. 10 selos = prêmio de R$ 300.
 
 ### A regra tem de ser explicável na tela
 20. Quando a venda gera 0 selos porque o valor ficou acumulado, o modal pós-venda diz
-    **quanto falta** para o próximo selo — "+0 selos" sozinho parece defeito.
+    **quanto falta** para o próximo selo — "+0 selos" sozinho parece defeito. E essa
+    mensagem **não pode aparecer em venda sem maleta**: ali o troco não é guardado (o
+    balde é a própria venda), então dizer "faltam R$ X nesta maleta" seria mentira.
 21. A mensagem de WhatsApp dos selos não diz "+0 selos": ela explica que a compra está
     contando.
 22. A tela da cliente mostra o saldo acumulado no ciclo atual e quanto falta.

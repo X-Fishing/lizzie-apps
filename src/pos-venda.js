@@ -13,6 +13,10 @@ const primeiroNome = n => (n || '').trim().split(/\s+/)[0] || 'cliente';
 // R$ 75 gera 0 selos e o valor fica guardado. Sem dizer quanto falta, o
 // "+0 selos" parece defeito e a revendedora deixa de confiar na regra.
 function textoFaltaSelo(fid) {
+  // tem_ciclo=false → a venda não está numa maleta, então o troco NÃO fica
+  // guardado para a próxima compra. Dizer "faltam R$ X nesta maleta" ali seria
+  // mentira: o valor morre com a venda (é a regra antiga).
+  if (!fid?.tem_ciclo) return '';
   const falta = Number(fid?.falta_para_selo);
   if (!Number.isFinite(falta) || falta <= 0) return '';
   return `<div style="font-size:12.5px;color:var(--plum);text-align:center;background:var(--blush);border-radius:12px;padding:10px 12px;margin:10px 0">
@@ -92,10 +96,11 @@ export function posVendaEnviarSelos() {
   // guardado. Dizer "+0 selos" soaria como se a compra não tivesse contado.
   const ganhos = c.fid.selos_ganhos || 0;
   const falta = Number(c.fid.falta_para_selo);
+  const acumula = !!c.fid.tem_ciclo && Number.isFinite(falta) && falta > 0;
   const inicio = ganhos > 0
     ? `Sua compra de ${fmtBRL(c.total)} na Lizzie Semijoias valeu +${ganhos} selo${ganhos !== 1 ? 's' : ''} no cartão fidelidade.`
     : `Sua compra de ${fmtBRL(c.total)} na Lizzie Semijoias já está contando no cartão fidelidade${
-        Number.isFinite(falta) && falta > 0 ? ` — faltam ${fmtBRL(falta)} para o próximo selo` : ''}.`;
+        acumula ? ` — faltam ${fmtBRL(falta)} para o próximo selo` : ''}.`;
   const mensagem = `Oi ${nome}! 💗 ${inicio} Você está com ${x} de 10 selos — ${fim}.`;
   enviarWhatsApp({ telefone: c.tel, mensagem });
 }

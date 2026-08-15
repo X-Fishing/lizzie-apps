@@ -31,11 +31,22 @@
 -- passado é recalculado. Confira rodando o diagnóstico do fim do arquivo antes
 -- e depois: sum(selos) e count(premios) têm de ficar idênticos.
 --
--- ── LIMITE CONHECIDO (decisão registrada) ───────────────────────────
--- Excluir uma venda NÃO devolve o "troco". Cliente com 2×R$75 = 1 selo; se uma
--- das vendas for excluída, o selo volta apenas se ainda estiver numa cartela
--- ABERTA (mesmo comportamento de sempre — 0029:104-117 nunca desfez cartela
--- completa). A válvula é o ajuste manual ±1 do admin, que já existe.
+-- ── LIMITES CONHECIDOS (decisões registradas) ───────────────────────
+-- 1) Excluir uma venda NÃO devolve o "troco". Cliente com 2×R$75 = 1 selo; se
+--    uma das vendas for excluída, o selo volta apenas se ainda estiver numa
+--    cartela ABERTA (mesmo comportamento de sempre — 0029:104-117 nunca desfez
+--    cartela completa). A válvula é o ajuste manual ±1 do admin.
+-- 2) Corolário do (1): se o selo estava em cartela COMPLETA, ele fica de pé e
+--    `selos_gerados` do balde também — então o balde passa a exigir R$150 a
+--    mais para o PRÓXIMO selo. É o preço de nunca desfazer prêmio sozinho.
+--    Ex.: cliente com 9 selos, venda de R$150 fecha a cartela; excluindo essa
+--    venda, o balde volta a R$0 mas continua devendo 1 selo — a próxima compra
+--    de R$150 não gera selo. Se isso incomodar num caso real, o ajuste manual
+--    resolve.
+-- 3) A maleta é resolvida para quem está REGISTRANDO a venda (auth.uid()), que
+--    é a mesma pessoa gravada em vendas.revendedora_id. Venda lançada por staff
+--    fica sem maleta e vira balde de venda única — exatamente como antes desta
+--    migração, porque o front nunca teve maleta ativa nesse caminho.
 -- ════════════════════════════════════════════════════════════════════
 
 -- ── 1) O balde: quanto já foi somado e quantos selos já saíram dele ──
@@ -60,7 +71,9 @@ create table if not exists public.fidelidade_acumulos (
 -- travaria todo crédito posterior no mesmo balde.
 create table if not exists public.fidelidade_acumulo_vendas (
   venda_id   uuid primary key references public.vendas(id) on delete cascade,
-  cliente_id uuid    not null,
+  -- cascade igual ao de fidelidade_acumulos: excluir a cliente tem de levar as
+  -- duas tabelas juntas, senão sobram linhas órfãs aqui.
+  cliente_id uuid    not null references public.clientes(id) on delete cascade,
   bucket_id  uuid    not null,
   valor      numeric not null,
   created_at timestamptz not null default now()
@@ -235,10 +248,63 @@ create trigger fidelidade_venda_removida_trg
   before delete on public.vendas
   for each row execute function public.fidelidade_venda_removida();
 
+-- ── 3b) Resumo de fidelidade da venda (para o modal pós-venda) ──────
+--   SECURITY DEFINER e NÃO por acaso: registrar_venda é SECURITY INVOKER (tem
+--   de ser, para preservar a RLS de consignados/vendas), e fidelidade_acumulos
+--   revoga tudo de `authenticated`. Se registrar_venda lesse essa tabela
+--   direto, o Postgres barraria por privilégio ANTES de olhar as linhas —
+--   `permission denied for table fidelidade_acumulos` — e, sem bloco de
+--   exceção, derrubaria a VENDA INTEIRA. A regra do projeto é a inversa:
+--   fidelidade nunca derruba venda. Por isso o resumo mora aqui, e qualquer
+--   erro vira um jsonb mínimo em vez de exceção.
+create or replace function public.fidelidade_resumo_venda(
+  p_venda_id uuid, p_cliente_id uuid, p_bucket_id uuid
+) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare
+  VALOR_POR_SELO constant numeric := 150;
+  v_ganhos int; v_acum numeric; v_ja int;
+begin
+  if p_cliente_id is null then
+    return jsonb_build_object('selos_ganhos', 0, 'tem_ciclo', false);
+  end if;
+
+  select coalesce(sum(quantidade), 0) into v_ganhos
+    from fidelidade_selos where venda_id = p_venda_id;
+
+  select valor_acumulado, selos_gerados into v_acum, v_ja
+    from fidelidade_acumulos
+   where cliente_id = p_cliente_id and bucket_id = p_bucket_id;
+
+  return jsonb_build_object(
+    'selos_ganhos',         coalesce(v_ganhos, 0),
+    'excedente_descartado', 0,
+    'cartela_selos',        (select selos from fidelidade_cartelas
+                              where cliente_id = p_cliente_id and status = 'aberta'),
+    'completou',            exists (select 1 from fidelidade_selos s
+                              join fidelidade_cartelas c on c.id = s.cartela_id
+                              where s.venda_id = p_venda_id and c.status = 'completa'),
+    'premio_pendente',      exists (select 1 from fidelidade_premios p
+                              where p.cliente_id = p_cliente_id and p.status = 'pendente'),
+    -- tem_ciclo diz se o valor que sobrou fica GUARDADO para a próxima compra.
+    -- Sem maleta o balde é a própria venda: o troco morre com ela, e dizer
+    -- "faltam R$ X nesta maleta" seria mentira.
+    'tem_ciclo',            p_bucket_id is distinct from p_venda_id,
+    'ciclo_acumulado',      coalesce(v_acum, 0),
+    'falta_para_selo',      case when v_acum is null then null
+                                 else (coalesce(v_ja, 0) + 1) * VALOR_POR_SELO - v_acum end);
+exception when others then
+  raise warning 'fidelidade_resumo_venda falhou (venda %): %', p_venda_id, sqlerrm;
+  return jsonb_build_object('selos_ganhos', 0, 'tem_ciclo', false);
+end; $$;
+revoke all on function public.fidelidade_resumo_venda(uuid,uuid,uuid) from public, anon;
+grant  execute on function public.fidelidade_resumo_venda(uuid,uuid,uuid) to authenticated;
+
 -- ── 4) registrar_venda v8: resolve a MALETA no servidor ──────────────
 --   Corpo da v7 (0055) + p_maleta_id e a resolução do ciclo. O parâmetro é só
 --   override e SÓ vale se a maleta for da própria pessoa — senão a venda
 --   entraria no ciclo de outra revendedora.
+drop function if exists public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb);
 drop function if exists public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb,text,date,date);
 drop function if exists public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb,text,date,date,jsonb);
 drop function if exists public.registrar_venda(text,date,text,numeric,numeric,text,text,jsonb,text,int,int,date,jsonb);
@@ -383,27 +449,12 @@ begin
     values (v_venda_id, v_pago, p_data);
   end if;
 
-  -- A venda pode gerar selos em 2 cartelas (excedente acumula) → soma. Com a
-  -- regra nova a venda pode legitimamente gerar 0 (o valor ficou guardado no
-  -- balde do ciclo) — por isso vai junto 'falta_para_selo': sem esse número o
-  -- "+0 selos" na tela da revendedora parece bug, e ela desconfia da regra.
-  select jsonb_build_object(
-    'selos_ganhos',         coalesce(sum(s.quantidade), 0),
-    'excedente_descartado', 0,
-    'cartela_selos',        (select selos from fidelidade_cartelas
-                              where cliente_id = v_cliente_id and status = 'aberta'),
-    'completou',            exists (select 1 from fidelidade_selos s2
-                              join fidelidade_cartelas c on c.id = s2.cartela_id
-                              where s2.venda_id = v_venda_id and c.status = 'completa'),
-    'premio_pendente',      exists (select 1 from fidelidade_premios p
-                              where p.cliente_id = v_cliente_id and p.status = 'pendente'),
-    'ciclo_acumulado',      (select a.valor_acumulado from fidelidade_acumulos a
-                              where a.cliente_id = v_cliente_id and a.bucket_id = coalesce(v_maleta, v_venda_id)),
-    'falta_para_selo',      (select (a.selos_gerados + 1) * 150 - a.valor_acumulado
-                               from fidelidade_acumulos a
-                              where a.cliente_id = v_cliente_id and a.bucket_id = coalesce(v_maleta, v_venda_id))
-  ) into v_fid
-  from fidelidade_selos s where s.venda_id = v_venda_id;
+  -- Resumo para o modal pós-venda. Vai por uma função SECURITY DEFINER (3b):
+  -- esta aqui é SECURITY INVOKER e `authenticated` não tem privilégio em
+  -- fidelidade_acumulos — ler direto daria "permission denied" e derrubaria a
+  -- venda. A venda já está gravada neste ponto; o resumo é só informação.
+  v_fid := public.fidelidade_resumo_venda(
+             v_venda_id, v_cliente_id, coalesce(v_maleta, v_venda_id));
 
   return jsonb_build_object('venda_id', v_venda_id, 'cliente_id', v_cliente_id, 'fidelidade', v_fid);
 end;
@@ -491,44 +542,7 @@ end; $$;
 revoke all on function public.completar_venda_cliente(uuid,text,text,int,int,text) from public, anon;
 grant  execute on function public.completar_venda_cliente(uuid,text,text,int,int,text) to authenticated;
 
--- ── 6) fidelidade_status v3: mostra quanto falta para o próximo selo ─
---   Continua SECURITY INVOKER (a RLS 0028 filtra por papel). O bloco novo
---   'ciclo' é o que explica para a revendedora por que a venda de R$75 não
---   gerou selo — sem ele a regra nova parece um bug.
-create or replace function public.fidelidade_status(p_cliente_id uuid)
-returns jsonb language sql stable security invoker set search_path = public as $$
-  select jsonb_build_object(
-    'cliente_id', p_cliente_id,
-    'cartela', (select jsonb_build_object('id', id, 'selos', selos, 'criada_em', created_at)
-                  from fidelidade_cartelas where cliente_id = p_cliente_id and status = 'aberta'),
-    'premios_pendentes', coalesce((select jsonb_agg(jsonb_build_object(
-                    'id', id, 'valor', valor, 'criado_em', created_at) order by created_at)
-                  from fidelidade_premios where cliente_id = p_cliente_id and status = 'pendente'), '[]'::jsonb),
-    'cartelas_completas', (select count(*) from fidelidade_cartelas
-                            where cliente_id = p_cliente_id and status = 'completa'),
-    'selos_total', coalesce((select sum(quantidade) from fidelidade_selos
-                              where cliente_id = p_cliente_id), 0),
-    'extrato', coalesce((select jsonb_agg(x) from (
-        select jsonb_build_object(
-                 'venda_id',         s.venda_id,
-                 'quantidade',       s.quantidade,
-                 'valor_venda',      s.valor_venda,
-                 'em',               s.created_at,
-                 'ajuste_manual',    s.ajuste_manual,
-                 'premio_cancelado', s.premio_cancelado,
-                 'motivo', case when public.is_staff() then s.ajuste_motivo end,
-                 'autor',  case when public.is_staff()
-                                then (select pr.nome from profiles pr where pr.id = s.ajustado_por) end
-               ) as x
-          from fidelidade_selos s
-         where s.cliente_id = p_cliente_id
-         order by s.created_at desc limit 20) t), '[]'::jsonb)
-  );
-$$;
-revoke all on function public.fidelidade_status(uuid) from public;
-grant  execute on function public.fidelidade_status(uuid) to authenticated;
-
--- ── 7) Quanto falta para o próximo selo, no ciclo ATUAL ──────────────
+-- ── 6) Quanto falta para o próximo selo, no ciclo ATUAL ──────────────
 --   Consulta separada porque depende de um balde específico (a maleta ativa)
 --   e fidelidade_status é por cliente, sem noção de ciclo. SECURITY DEFINER
 --   com escopo manual: fidelidade_acumulos não tem policy nenhuma.
