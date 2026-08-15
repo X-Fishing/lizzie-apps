@@ -1,7 +1,7 @@
 // Pagamentos: lista de vendas, detalhe, registrar pagamento, excluir.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, parseMoneyBR, moneyToInput, hojeBR, brToISO, telValido, telFmt, telNormalizado, waMeLink, ehFormaAReceber } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, parseMoneyBR, moneyToInput, hojeBR, brToISO, diaMesPartes, fmtDiaMes, telValido, telFmt, telNormalizado, waMeLink, ehFormaAReceber } from './utils.js';
 import { enviarCertificado, gerarCertificadoGarantia, gerarVersoGarantia, numeroCertificado } from './certificado.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 
@@ -198,7 +198,7 @@ export async function verVenda(id) {
       <div class="detail-row"><div class="detail-key">Pago</div><div class="detail-val" style="color:var(--success)">R$ ${Number(v.valor_pago).toFixed(2)}</div></div>
       <div class="detail-row"><div class="detail-key">Pendente</div><div class="detail-val" style="color:var(--danger)">R$ ${restante.toFixed(2)}</div></div>
       ${v.telefone_cliente ? `<div class="detail-row"><div class="detail-key">WhatsApp</div><div class="detail-val"${telValido(v.telefone_cliente) ? '' : ' style="color:var(--danger)"'}>${esc(telFmt(v.telefone_cliente))}${telValido(v.telefone_cliente) ? '' : ' — número não confere'}</div></div>` : ''}
-      ${v.nascimento_cliente ? `<div class="detail-row"><div class="detail-key">Aniversário</div><div class="detail-val">${formatDate(v.nascimento_cliente)}</div></div>` : ''}
+      ${v.aniversario_mes ? `<div class="detail-row"><div class="detail-key">Aniversário</div><div class="detail-val">${fmtDiaMes(v.aniversario_dia, v.aniversario_mes)}</div></div>` : ''}
       ${v.data_combinada ? `<div class="detail-row"><div class="detail-key">Data combinada</div><div class="detail-val"${(v.data_combinada < new Date().toISOString().slice(0,10) && restante > 0) ? ' style="color:var(--danger)"' : ''}>${(() => { const p = v.data_combinada.split('T')[0].split('-'); return `${p[2]}/${p[1]}`; })()}</div></div>` : ''}
       ${v.observacao ? `<div class="detail-row"><div class="detail-key">Obs.</div><div class="detail-val">${esc(v.observacao)}</div></div>` : ''}
       ${v.atualizado_em ? `<div class="detail-row"><div class="detail-key">Dados corrigidos</div><div class="detail-val">${formatDate(v.atualizado_em)}${v.atualizacao_motivo ? ' · ' + esc(v.atualizacao_motivo) : ''}</div></div>` : ''}
@@ -258,7 +258,7 @@ export function completarClienteVenda(id) {
     <div class="form-group"><label class="form-label">Nome da cliente *</label>
       <input type="text" id="cv-nome" class="form-control" value="${esc(v.nome_cliente || '')}"></div>
     <div class="form-group"><label class="form-label">Aniversário (opcional)</label>
-      <input type="text" id="cv-nasc" class="form-control" placeholder="dd/mm/aaaa" inputmode="numeric" value="${esc(v.nascimento_cliente ? formatDate(v.nascimento_cliente) : '')}" oninput="maskDateBR(this)"></div>
+      <input type="text" id="cv-nasc" class="form-control" placeholder="dd/mm" maxlength="5" inputmode="numeric" value="${esc(fmtDiaMes(v.aniversario_dia, v.aniversario_mes))}" oninput="maskDiaMes(this)"></div>
     <div class="form-group"><label class="form-label">Motivo (opcional)</label>
       <textarea id="cv-motivo" class="form-control" rows="2" placeholder="Ex.: cliente informou o WhatsApp depois"></textarea></div>`;
   const btn = document.getElementById('cad-modal-salvar');
@@ -272,23 +272,26 @@ export function completarClienteVenda(id) {
 export async function completarClienteVendaSalvar(id) {
   const tel = (document.getElementById('cv-tel')?.value || '').trim();
   const nome = (document.getElementById('cv-nome')?.value || '').trim();
-  const nasc = brToISO((document.getElementById('cv-nasc')?.value || '').trim());
+  const nascTxt = (document.getElementById('cv-nasc')?.value || '').trim();
+  const nasc = diaMesPartes(nascTxt);
   const motivo = (document.getElementById('cv-motivo')?.value || '').trim() || null;
 
   if (!nome) { toast('Informe o nome da cliente'); return; }
   if (!telValido(tel)) { toast('Telefone inválido — informe um número real com DDD.'); return; }
+  if (nascTxt && !nasc) { toast('Aniversário inválido — use dd/mm (ex.: 07/03).'); return; }
 
   const btn = document.getElementById('cad-modal-salvar');
   btn.disabled = true; btn.textContent = 'Salvando...';
   const { data, error } = await sbQ(sb.rpc('completar_venda_cliente', {
-    p_venda_id: id, p_nome: nome, p_tel: telNormalizado(tel), p_nasc: nasc, p_motivo: motivo,
+    p_venda_id: id, p_nome: nome, p_tel: telNormalizado(tel),
+    p_dia: nasc?.dia ?? null, p_mes: nasc?.mes ?? null, p_motivo: motivo,
   }));
   btn.disabled = false; btn.textContent = 'Salvar e vincular';
 
   if (error) {
     console.error('completar_venda_cliente:', error);
     toast(/does not exist|schema cache/i.test(error.message || '')
-      ? 'Função do banco não encontrada — rode a migração 0039 no Supabase.'
+      ? 'Função do banco não encontrada — rode a migração 0055 no Supabase.'
       : (error.message || 'Não foi possível completar a venda'), 'erro');
     return;
   }

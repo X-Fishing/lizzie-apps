@@ -159,7 +159,7 @@
           <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18M6 10V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3M4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9"/></svg></span>Pagamentos
         </button>
         <button class="drawer-subitem" data-drawer-panel="historico" onclick="drawerIr('historico')">
-          <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4l3 2"/></svg></span>Histórico de Clientes
+          <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4l3 2"/></svg></span>Histórico de Vendas
         </button>
         <button class="drawer-subitem" data-drawer-panel="fidelidade" onclick="drawerIr('fidelidade')">
           <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg></span>Fidelidade
@@ -289,7 +289,7 @@
     <div id="panel-historico" style="display:none">
       <div class="section-header">
         <div>
-          <div class="section-title">Histórico de Clientes</div>
+          <div class="section-title">Histórico de Vendas</div>
           <div class="section-subtitle">Busque por nome para ver todas as compras</div>
         </div>
       </div>
@@ -440,7 +440,7 @@
       </div>
       <div class="form-group">
         <label class="form-label">Aniversário da cliente</label>
-        <input type="text" id="g-nasc" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)">
+        <input type="text" id="g-nasc" class="form-control" placeholder="dd/mm" maxlength="5" inputmode="numeric" oninput="maskDiaMes(this)">
       </div>
     </div>
     <div class="form-group">
@@ -619,8 +619,8 @@
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Aniversário da cliente *</label>
-        <input type="text" id="f-nasc" class="form-control" placeholder="dd/mm/aaaa" maxlength="10" inputmode="numeric" oninput="maskDateBR(this)">
+        <label class="form-label">Aniversário da cliente</label>
+        <input type="text" id="f-nasc" class="form-control" placeholder="dd/mm" maxlength="5" inputmode="numeric" oninput="maskDiaMes(this)">
       </div>
       <div class="form-group">
         <label class="form-label">Data da venda *</label>

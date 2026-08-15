@@ -4,8 +4,8 @@
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { esc, sbQ, toast, confirmarAcao, openModal, closeModal, handleSupabaseError,
-         isoToBR, brToISO, telFmt, telValido, telNormalizado } from './utils.js';
-// maskTelBR/maskDateBR são usados só em handlers inline (oninput=) via window.
+         isoToBR, diaMesPartes, fmtDiaMes, telFmt, telValido, telNormalizado } from './utils.js';
+// maskTelBR/maskDiaMes são usados só em handlers inline (oninput=) via window.
 
 const IC_PLUS  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="M12 5v14"/></svg>';
 const IC_EDIT  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
@@ -39,7 +39,7 @@ export async function loadClientes() {
 
 function render() {
   const mes = mesAtual();
-  const aniv = cache.filter(c => c.data_nascimento && Number(c.data_nascimento.slice(5, 7)) === mes).length;
+  const aniv = cache.filter(c => c.aniversario_mes === mes).length;
   const comContato = cache.filter(c => c.celular).length;
 
   panel().innerHTML = `
@@ -54,7 +54,7 @@ function render() {
     </div>
     <div style="margin-bottom:14px"><input type="text" class="form-control" placeholder="Buscar por nome, telefone, cidade ou e-mail..." value="${esc(busca)}" oninput="clienteBuscar(this.value)"></div>
     <div class="pag-wrap"><table class="pag-table"><thead><tr>
-      <th class="pag-th">Cliente</th><th class="pag-th">Telefone</th><th class="pag-th">Cidade</th><th class="pag-th">Nascimento</th>
+      <th class="pag-th">Cliente</th><th class="pag-th">Telefone</th><th class="pag-th">Cidade</th><th class="pag-th">Aniversário</th>
       <th class="pag-th" style="text-align:right">Ações</th>
     </tr></thead><tbody id="cli-tbody">${linhasClientes()}</tbody></table></div>`;
 }
@@ -70,7 +70,7 @@ function linhasClientes() {
       <td class="pag-td"><span class="ciclo-desc">${esc(c.nome)}</span>${c.email ? `<div style="font-size:11px;color:var(--muted)">${esc(c.email)}</div>` : ''}</td>
       <td class="pag-td">${esc(telFmt(c.celular))}${telRuim(c.celular) ? BADGE_TEL_RUIM : ''}</td>
       <td class="pag-td">${esc(c.cidade || '—')}</td>
-      <td class="pag-td">${c.data_nascimento ? esc(isoToBR(c.data_nascimento)) : '—'}</td>
+      <td class="pag-td">${fmtDiaMes(c.aniversario_dia, c.aniversario_mes) || '—'}</td>
       <td class="pag-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
         <button class="btn-icon" title="Editar" onclick="clienteEditar('${c.id}')" style="color:var(--rose)">${IC_EDIT}</button>
         <button class="btn-icon" title="Excluir" onclick="clienteExcluir('${c.id}')" style="color:var(--danger)">${IC_TRASH}</button>
@@ -97,7 +97,7 @@ export function clienteVer(id) {
     ${linha('Telefone', telFmt(c.celular))}
     ${linha('E-mail', c.email)}
     ${linha('Cidade', c.cidade)}
-    ${linha('Nascimento', c.data_nascimento ? isoToBR(c.data_nascimento) : '')}
+    ${linha('Aniversário', fmtDiaMes(c.aniversario_dia, c.aniversario_mes))}
     ${c.observacao ? linha('Observação', c.observacao) : ''}
     <button class="btn-secondary btn-sm" style="margin-top:14px" onclick="clienteEditar('${c.id}')">${IC_EDIT} Editar</button>`;
   document.getElementById('cad-modal-salvar').style.display = 'none';
@@ -120,8 +120,8 @@ function abrirForm(c) {
       <input type="text" id="cli-email" class="form-control" inputmode="email" value="${esc(r.email || '')}"></div>
     <div class="form-group"><label class="form-label">Cidade</label>
       <input type="text" id="cli-cidade" class="form-control" value="${esc(r.cidade || '')}"></div>
-    <div class="form-group"><label class="form-label">Data de nascimento</label>
-      <input type="text" id="cli-nasc" class="form-control" inputmode="numeric" placeholder="dd/mm/aaaa" value="${esc(r.data_nascimento ? isoToBR(r.data_nascimento) : '')}" oninput="maskDateBR(this)"></div>
+    <div class="form-group"><label class="form-label">Aniversário</label>
+      <input type="text" id="cli-nasc" class="form-control" inputmode="numeric" placeholder="dd/mm" maxlength="5" value="${esc(fmtDiaMes(r.aniversario_dia, r.aniversario_mes))}" oninput="maskDiaMes(this)"></div>
     <div class="form-group"><label class="form-label">Observação</label>
       <textarea id="cli-obs" class="form-control" rows="2">${esc(r.observacao || '')}</textarea></div>`;
   const salvar = document.getElementById('cad-modal-salvar');
@@ -140,13 +140,20 @@ export async function clienteSalvar(id) {
   // ser real. Mesma regra do banco (0038: tel_br_valido).
   const cel = val('cli-cel');
   if (cel && !telValido(cel)) { toast('Telefone inválido — informe um número real com DDD.'); return; }
+  // Aniversário é dd/mm, sem ano, e é opcional. Só reclama se foi digitado
+  // algo que não é uma data válida — no CRUD do staff engolir em silêncio
+  // esconderia erro de digitação.
+  const nascTxt = val('cli-nasc');
+  const nasc = diaMesPartes(nascTxt);
+  if (nascTxt && !nasc) { toast('Aniversário inválido — use dd/mm (ex.: 07/03).'); return; }
   const nb = v => v || null;
   const payload = {
     nome,
     celular: cel ? telNormalizado(cel) : null,
     email: nb(val('cli-email')),
     cidade: nb(val('cli-cidade')),
-    data_nascimento: brToISO(val('cli-nasc')),
+    aniversario_dia: nasc?.dia ?? null,
+    aniversario_mes: nasc?.mes ?? null,
     observacao: nb(val('cli-obs')),
   };
   const btn = document.getElementById('cad-modal-salvar');

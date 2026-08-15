@@ -1,7 +1,7 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado, ehFormaAReceber } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, diaMesPartes, fmtDiaMes, hojeBR, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado, ehFormaAReceber } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 import { abrirModalPosVenda } from './pos-venda.js';
 
@@ -2022,7 +2022,7 @@ async function buscarClientePorTelefone(tel) {
     state.vendaClienteId = cli.id;
     if (!nomeEl.value.trim()) nomeEl.value = cli.nome || '';
     const nascEl = document.getElementById('f-nasc');
-    if (nascEl && !nascEl.value.trim() && cli.nascimento) nascEl.value = isoToBR(cli.nascimento);
+    if (nascEl && !nascEl.value.trim()) nascEl.value = fmtDiaMes(cli.nasc_dia, cli.nasc_mes);
     if (status) status.innerHTML = `<span style="color:var(--rose)">Cliente já cadastrada · ${cli.selos ?? 0}/10 selos</span>`;
   } else {
     state.vendaClienteId = null;
@@ -2189,7 +2189,10 @@ export function vendaPgtoSet(i, campo, valor) {
 export async function confirmarVendaCarrinho(btn) {
   const cliente = document.getElementById('f-cliente').value.trim();
   const tel = soDigitos(document.getElementById('f-tel').value);
-  const nasc = brToISO(document.getElementById('f-nasc').value);
+  // Aniversário é dd/mm e OPCIONAL: um dado de marketing não pode travar a
+  // venda (a cliente costuma não querer dar). Texto inválido vira "sem
+  // aniversário" em silêncio — o banco também aceita null (0055).
+  const nasc = diaMesPartes(document.getElementById('f-nasc').value);
   const data = brToISO(document.getElementById('f-data').value);
   const obs = document.getElementById('f-obs').value.trim();
 
@@ -2210,7 +2213,6 @@ export async function confirmarVendaCarrinho(btn) {
 
   if (!cliente) { toast('Informe o nome da cliente'); return; }
   if (!semZap && !telValido(tel)) { toast('Telefone inválido — informe um número real com DDD.'); return; }
-  if (!semZap && !nasc) { toast('Informe o aniversário da cliente (dd/mm/aaaa)'); return; }
   if (!data) { toast('Data inválida (use dd/mm/aaaa)'); return; }
   if (!state.carrinhoVenda.length) { toast('Carrinho vazio'); return; }
 
@@ -2248,7 +2250,8 @@ export async function confirmarVendaCarrinho(btn) {
         p_status: status,
         p_obs: obs || null,
         p_tel: semZap ? null : telNormalizado(tel),
-        p_nasc: semZap ? null : nasc,
+        p_nasc_dia: semZap ? null : (nasc?.dia ?? null),
+        p_nasc_mes: semZap ? null : (nasc?.mes ?? null),
         p_combinada: combinada,
         p_itens: state.carrinhoVenda.map(it => ({
           consignado_id: it.consignado_id,

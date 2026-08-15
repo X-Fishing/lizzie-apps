@@ -1,7 +1,7 @@
 // Garantias: lista, cards, visao staff, criar/editar/status/excluir.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, formatDate, sbQ, fetchPaginado, handleSupabaseError, toast, confirmarAcao, openModal, closeModal, brToISO, isoToBR, hojeBR, telValido, telNormalizado } from './utils.js';
+import { esc, formatDate, sbQ, fetchPaginado, handleSupabaseError, toast, confirmarAcao, openModal, closeModal, brToISO, isoToBR, diaMesPartes, fmtDiaMes, hojeBR, telValido, telNormalizado } from './utils.js';
 export function calcPrazoGarantia() {
   const iso = brToISO(document.getElementById('g-entrada').value);
   const prazoEl = document.getElementById('g-prazo');
@@ -286,7 +286,7 @@ export async function editarGarantia(id) {
   document.getElementById('g-desc').value = g.descricao_item;
   document.getElementById('g-cliente').value = g.nome_cliente;
   document.getElementById('g-tel').value = g.telefone_cliente || '';
-  document.getElementById('g-nasc').value = isoToBR(g.nascimento_cliente) || '';
+  document.getElementById('g-nasc').value = fmtDiaMes(g.aniversario_dia, g.aniversario_mes);
   document.getElementById('g-problema').value = g.problema_relatado;
   document.getElementById('g-entrada').value = isoToBR(g.data_entrada);
   document.getElementById('g-prazo').value = isoToBR(g.prazo_maximo);
@@ -313,17 +313,18 @@ export async function salvarGarantia(btn) {
   const cliente = document.getElementById('g-cliente').value.trim();
   const problema = document.getElementById('g-problema').value.trim();
   const telCliente = document.getElementById('g-tel').value.trim();
-  const nascCliente = brToISO(document.getElementById('g-nasc').value);
+  // Aniversário dd/mm, OPCIONAL (0055). Texto inválido vira "sem aniversário".
+  const nascCliente = diaMesPartes(document.getElementById('g-nasc').value);
   if (!desc || !cliente || !problema) {
     toast('Preencha os campos obrigatórios');
     btn.disabled = false;
     return;
   }
-  // Revendedora: WhatsApp + aniversário obrigatórios (envio da garantia por
-  // WhatsApp). Staff continua opcional — garantias de balcão/antigas sem o dado.
+  // Revendedora: WhatsApp obrigatório (é por onde a garantia é enviada).
+  // O aniversário deixou de ser exigido (0055): é dado de marketing e não
+  // pode travar a abertura da garantia. Staff continua sem exigência nenhuma.
   if (!ehStaff()) {
     if (!telValido(telCliente)) { toast('Telefone inválido — informe um número real com DDD.'); btn.disabled = false; return; }
-    if (!nascCliente) { toast('Informe o aniversário da cliente (dd/mm/aaaa)'); btn.disabled = false; return; }
   }
 
   const editId = document.getElementById('g-edit-id').value;
@@ -346,7 +347,8 @@ export async function salvarGarantia(btn) {
     descricao_item: desc,
     nome_cliente: cliente,
     telefone_cliente: telNormalizado(telCliente),
-    nascimento_cliente: nascCliente || null,
+    aniversario_dia: nascCliente?.dia ?? null,
+    aniversario_mes: nascCliente?.mes ?? null,
     problema_relatado: problema,
     data_entrada: brToISO(document.getElementById('g-entrada').value),
     prazo_maximo: brToISO(document.getElementById('g-prazo').value),

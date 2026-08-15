@@ -163,7 +163,31 @@ export function maskDiaMes(input) {
   input.value = v;
 }
 
+// ── Aniversário: dia/mês SEM ano ─────────────────────────────────────
+// O ano nunca é pedido nem guardado (só o Bônus de Aniversário consome esse
+// dado, e ele filtra por mês). NÃO use diaMesParaISO aqui: ela resolve para
+// um ano concreto, o que faria 29/02 sumir em ano não-bissexto.
+// A mesma regra vive no banco (0055, aniversario_valido). Mudou aqui, mude lá.
+const DIAS_NO_MES = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+// 'dd/mm' -> { dia, mes } | null. Aceita 1 ou 2 dígitos no dia/mês.
+export function diaMesPartes(s) {
+  const m = (s || '').trim().match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!m) return null;
+  const dia = +m[1], mes = +m[2];
+  if (mes < 1 || mes > 12) return null;
+  if (dia < 1 || dia > DIAS_NO_MES[mes - 1]) return null;
+  return { dia, mes };
+}
+
+// { dia, mes } -> 'dd/mm' (vazio quando não há aniversário).
+export function fmtDiaMes(dia, mes) {
+  if (!dia || !mes) return '';
+  return `${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}`;
+}
+
 // dd/mm -> ISO yyyy-mm-dd, inferindo o ano da PRÓXIMA ocorrência (hoje ou futuro).
+// Só para DATA COMBINADA do fiado (que precisa de ano). Aniversário usa diaMesPartes.
 export function diaMesParaISO(s) {
   const m = (s || '').trim().match(/^(\d{1,2})\/(\d{1,2})$/);
   if (!m) return null;
