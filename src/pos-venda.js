@@ -97,10 +97,17 @@ export function posVendaEnviarSelos() {
   const ganhos = c.fid.selos_ganhos || 0;
   const falta = Number(c.fid.falta_para_selo);
   const acumula = !!c.fid.tem_ciclo && Number.isFinite(falta) && falta > 0;
-  const inicio = ganhos > 0
-    ? `Sua compra de ${fmtBRL(c.total)} na Lizzie Semijoias valeu +${ganhos} selo${ganhos !== 1 ? 's' : ''} no cartão fidelidade.`
-    : `Sua compra de ${fmtBRL(c.total)} na Lizzie Semijoias já está contando no cartão fidelidade${
-        acumula ? ` — faltam ${fmtBRL(falta)} para o próximo selo` : ''}.`;
+  // Três casos, e o terceiro importa: sem ciclo (venda fora de maleta) o troco
+  // é descartado, então dizer "já está contando" seria mentira — e essa
+  // mensagem vai por WhatsApp para a cliente final.
+  let inicio;
+  if (ganhos > 0) {
+    inicio = `Sua compra de ${fmtBRL(c.total)} na Lizzie Semijoias valeu +${ganhos} selo${ganhos !== 1 ? 's' : ''} no cartão fidelidade.`;
+  } else if (acumula) {
+    inicio = `Sua compra de ${fmtBRL(c.total)} na Lizzie Semijoias já está contando no cartão fidelidade — faltam ${fmtBRL(falta)} para o próximo selo.`;
+  } else {
+    inicio = `Passando para falar do seu cartão fidelidade da Lizzie Semijoias.`;
+  }
   const mensagem = `Oi ${nome}! 💗 ${inicio} Você está com ${x} de 10 selos — ${fim}.`;
   enviarWhatsApp({ telefone: c.tel, mensagem });
 }

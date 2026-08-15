@@ -9,6 +9,21 @@ export function esc(s) {
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
+// Valor que vai DENTRO de uma string JS que está DENTRO de um atributo HTML —
+// o caso de `onclick="minhaFn('${...}')"`. Aqui esc() NÃO basta: ele vira a
+// aspa em &#39;, mas o parser de HTML decodifica a entidade ANTES de o JS
+// rodar, então a aspa volta, fecha a string e o que vier depois EXECUTA.
+// Ordem: escapa para JS primeiro (a aspa vira \x27, que não é entidade) e só
+// então escapa para o atributo HTML.
+export function escAttrJs(v) {
+  const HTML = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+  const js = String(v ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, '\\x27')
+    .replace(/[\r\n\u2028\u2029]/g, '');   // quebra de linha encerraria o statement
+  return js.replace(/[&<>"]/g, c => HTML[c]);
+}
+
 // ── REGRA CENTRAL: métricas de faturamento/receita/ranking/estoque IGNORAM
 // revendedoras TESTE (profiles.teste = true). Toda agregação nova deve usar
 // este helper. As telas individuais da revendedora teste seguem funcionando.

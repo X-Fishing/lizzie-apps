@@ -61,7 +61,7 @@ begin
   end if;
   select valor_acumulado into v_acum from public.fidelidade_acumulos
    where cliente_id = v_cli and bucket_id = v_m1;
-  if v_acum <> 75 then raise exception 'T1b FALHOU: balde com %, esperado 75', v_acum; end if;
+  if coalesce(v_acum, -1) <> 75 then raise exception 'T1b FALHOU: balde com %, esperado 75', coalesce(v_acum, -1); end if;
 
   insert into public.vendas (revendedora_id, nome_cliente, data_venda, forma_pagamento,
                              valor_total, valor_pago, status, cliente_id, maleta_id)
@@ -86,8 +86,8 @@ begin
   end if;
   select valor_acumulado into v_acum from public.fidelidade_acumulos
    where cliente_id = v_cli and bucket_id = v_m1;
-  if v_acum <> 150 then
-    raise exception 'T2b FALHOU: balde foi para % apos reaplicar, esperado 150', v_acum;
+  if coalesce(v_acum, -1) <> 150 then
+    raise exception 'T2b FALHOU: balde foi para % apos reaplicar, esperado 150', coalesce(v_acum, -1);
   end if;
   raise notice 'T2 OK — reaplicar venda de 0 selos nao recontabiliza';
 
@@ -103,7 +103,7 @@ begin
   end if;
   select valor_acumulado into v_acum from public.fidelidade_acumulos
    where cliente_id = v_cli and bucket_id = v_m2;
-  if v_acum <> 75 then raise exception 'T3b FALHOU: balde da maleta 2 com %, esperado 75', v_acum; end if;
+  if coalesce(v_acum, -1) <> 75 then raise exception 'T3b FALHOU: balde da maleta 2 com %, esperado 75', coalesce(v_acum, -1); end if;
   raise notice 'T3 OK — maletas diferentes nao somam entre si';
 
   -- ══ T4 — venda grande fecha cartela, gera premio e transborda ═════
@@ -124,7 +124,7 @@ begin
   end if;
   select selos_gerados into v_ja from public.fidelidade_acumulos
    where cliente_id = v_cli and bucket_id = v_m1;
-  if v_ja <> 11 then raise exception 'T4c FALHOU: selos_gerados do balde = %, esperado 11', v_ja; end if;
+  if coalesce(v_ja, -1) <> 11 then raise exception 'T4c FALHOU: selos_gerados do balde = %, esperado 11', coalesce(v_ja, -1); end if;
   raise notice 'T4 OK — cartela fecha, premio nasce e o excedente vai para a nova';
 
   -- ══ T5 — venda SEM maleta vira balde proprio (regra antiga) ═══════
@@ -138,7 +138,7 @@ begin
   end if;
   select valor_acumulado into v_acum from public.fidelidade_acumulos
    where cliente_id = v_cli and bucket_id = v_v5;
-  if v_acum <> 100 then raise exception 'T5b FALHOU: balde avulso com %, esperado 100', v_acum; end if;
+  if coalesce(v_acum, -1) <> 100 then raise exception 'T5b FALHOU: balde avulso com %, esperado 100', coalesce(v_acum, -1); end if;
   raise notice 'T5 OK — venda sem maleta vira balde proprio';
 
   -- ══ T6 — valor 0 e valor null nao quebram nem creditam ════════════
@@ -150,7 +150,7 @@ begin
   values (v_rev, 'ZZ Teste', current_date, 'Pix', null, 0, 'pendente', v_cli, v_m2);
   select valor_acumulado into v_acum from public.fidelidade_acumulos
    where cliente_id = v_cli and bucket_id = v_m2;
-  if v_acum <> 75 then raise exception 'T6 FALHOU: balde da maleta 2 foi para %, esperado seguir 75', v_acum; end if;
+  if coalesce(v_acum, -1) <> 75 then raise exception 'T6 FALHOU: balde da maleta 2 foi para % (NULL vira -1), esperado seguir 75', coalesce(v_acum, -1); end if;
   raise notice 'T6 OK — venda de valor 0/null nao mexe no balde';
 
   -- ══ T7 — excluir venda cujo selo esta em cartela ABERTA ═══════════
@@ -236,7 +236,47 @@ begin
               and tablename in ('fidelidade_acumulos','fidelidade_acumulo_vendas')) then
     raise exception 'T9 FALHOU: existe policy nas tabelas do balde (deveriam ter zero)';
   end if;
-  raise notice 'T9 OK — tabelas do balde fechadas para authenticated';
+  if has_function_privilege('authenticated', 'public.aplicar_fidelidade_venda(uuid)', 'EXECUTE')
+     or has_function_privilege('authenticated', 'public.fidelidade_remover_venda_do_acumulo(uuid)', 'EXECUTE') then
+    raise exception 'T9 FALHOU: authenticated pode EXECUTAR funcao interna de fidelidade';
+  end if;
+  raise notice 'T9 OK — tabelas e funcoes internas do balde fechadas para authenticated';
+
+  -- ══ T10 — VENDA LEGADA nao pode ser creditada duas vezes ══════════
+  --   Simula o estado do dia do deploy: a venda ja tem selos (regra antiga)
+  --   mas NAO esta em fidelidade_acumulo_vendas, porque a tabela nasceu vazia.
+  --   Sem tratamento, reprocessar (o botao "Corrigir dados da cliente" faz
+  --   isso) creditaria os selos DE NOVO numa cartela nova.
+  declare v_m5 uuid; v_v8 uuid; v_antes int; v_depois int; begin
+    insert into public.maletas (revendedora_id, status) values (v_rev, 'finalizada') returning id into v_m5;
+    insert into public.vendas (revendedora_id, nome_cliente, data_venda, forma_pagamento,
+                               valor_total, valor_pago, status, cliente_id, maleta_id)
+    values (v_rev, 'ZZ Teste', current_date, 'Pix', 450, 450, 'quitado', v_cli, v_m5)
+    returning id into v_v8;
+
+    select selos into v_antes from public.fidelidade_cartelas
+     where cliente_id = v_cli and status = 'aberta';
+
+    -- "envelhece" a venda: some do controle novo, mantendo os selos ja dados
+    delete from public.fidelidade_acumulo_vendas where venda_id = v_v8;
+    delete from public.fidelidade_acumulos where cliente_id = v_cli and bucket_id = v_m5;
+
+    v_ret := public.aplicar_fidelidade_venda(v_v8);
+    if (v_ret->>'selos_ganhos')::int <> 0 then
+      raise exception 'T10a FALHOU: venda legada gerou % selo(s) a mais, esperado 0', v_ret->>'selos_ganhos';
+    end if;
+    select selos into v_depois from public.fidelidade_cartelas
+     where cliente_id = v_cli and status = 'aberta';
+    if v_depois <> v_antes then
+      raise exception 'T10b FALHOU: cartela foi de % para % ao reprocessar venda legada', v_antes, v_depois;
+    end if;
+    select selos_gerados into v_ja from public.fidelidade_acumulos
+     where cliente_id = v_cli and bucket_id = v_m5;
+    if coalesce(v_ja, -1) <> 3 then
+      raise exception 'T10c FALHOU: o balde legado ficou com selos_gerados = %, esperado 3', coalesce(v_ja, -1);
+    end if;
+  end;
+  raise notice 'T10 OK — venda anterior a migracao nao e creditada de novo';
 
   raise notice '';
   raise notice '════════ TODOS OS TESTES PASSARAM ════════';

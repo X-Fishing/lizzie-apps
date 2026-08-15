@@ -9,7 +9,7 @@
 // unique. A criação continua sendo insert direto (a RPC só edita).
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, sbQ, fetchPaginado, toast, confirmarAcao, openModal, closeModal, handleSupabaseError,
+import { esc, escAttrJs, sbQ, fetchPaginado, toast, confirmarAcao, openModal, closeModal, handleSupabaseError,
          formatDate, fmtBRL, diaMesPartes, fmtDiaMes, telFmt, telValido, telNormalizado } from './utils.js';
 import { abrirEdicaoCliente } from './cliente-form.js';
 // maskTelBR/maskDiaMes são usados só em handlers inline (oninput=) via window.
@@ -49,7 +49,11 @@ export async function loadClientes() {
       panel().innerHTML = `<div class="empty-state"><div class="empty-icon">${IC_USERS}</div><p>Rode a migração <b>0021_clientes.sql</b> no Supabase para ativar a base de clientes.</p></div>`;
       return;
     }
-    if (await handleSupabaseError(error, 'Erro ao carregar clientes')) return;
+    // ATENÇÃO: handleSupabaseError devolve TRUE para qualquer erro (utils.js).
+    // Usar `if (await handleSupabaseError(...)) return;` aqui deixaria a tela
+    // presa em "Carregando..." para sempre — e o timeout de 12s do sbQ dispara
+    // com sinal ruim de celular, não só com o servidor fora.
+    await handleSupabaseError(error, 'Erro ao carregar clientes');
     panel().innerHTML = `<div class="empty-state"><div class="empty-icon">${IC_USERS}</div><p>Não foi possível carregar os clientes. Tente de novo.</p></div>`;
     return;
   }
@@ -117,7 +121,7 @@ function linhasClientes() {
         .some(v => (v || '').toLowerCase().includes(termo)))
     : cache;
   return lista.length ? lista.map(c => `
-    <tr class="pag-row" style="cursor:pointer" onclick="abrirCliente('${esc(c.id)}')">
+    <tr class="pag-row" style="cursor:pointer" onclick="abrirCliente('${escAttrJs(c.id)}')">
       <td class="pag-td"><span class="ciclo-desc">${esc(c.nome)}</span>${c.cidade ? `<div style="font-size:11px;color:var(--muted)">${esc(c.cidade)}</div>` : ''}</td>
       <td class="pag-td">${esc(telFmt(c.celular))}${telRuim(c.celular) ? BADGE_TEL_RUIM : ''}</td>
       <td class="pag-td">${c.revendedoras.length ? esc(c.revendedoras.join(', ')) : '—'}</td>
@@ -126,8 +130,8 @@ function linhasClientes() {
       <td class="pag-td">${c.ultima ? esc(formatDate(c.ultima)) : '—'}</td>
       <td class="pag-td">${esc(fmtDiaMes(c.aniversario_dia, c.aniversario_mes)) || '—'}</td>
       <td class="pag-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
-        <button class="btn-icon" title="Editar" onclick="clienteEditar('${esc(c.id)}')" style="color:var(--rose)">${IC_EDIT}</button>
-        <button class="btn-icon" title="Excluir" onclick="clienteExcluir('${esc(c.id)}')" style="color:var(--danger)">${IC_TRASH}</button>
+        <button class="btn-icon" title="Editar" onclick="clienteEditar('${escAttrJs(c.id)}')" style="color:var(--rose)">${IC_EDIT}</button>
+        <button class="btn-icon" title="Excluir" onclick="clienteExcluir('${escAttrJs(c.id)}')" style="color:var(--danger)">${IC_TRASH}</button>
       </td>
     </tr>`).join('')
     : `<tr><td colspan="8"><div class="empty-state" style="padding:40px 0"><div class="empty-icon">${IC_USERS}</div><p>${termo ? 'Nenhum cliente encontrado' : 'Nenhum cliente cadastrado ainda'}</p></div></td></tr>`;

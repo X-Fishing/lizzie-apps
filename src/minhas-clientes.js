@@ -12,7 +12,7 @@
 // da sessão, então para o banco a funcionária continua staff).
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, sbQ, fetchPaginado, handleSupabaseError, fmtBRL, fmtDiaMes, telFmt, telValido } from './utils.js';
+import { esc, escAttrJs, sbQ, fetchPaginado, handleSupabaseError, fmtBRL, fmtDiaMes, telFmt, telValido } from './utils.js';
 import { abrirEdicaoCliente } from './cliente-form.js';
 
 const IC_USERS = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>';
@@ -37,7 +37,10 @@ export async function loadMinhasClientes() {
     .not('cliente_id', 'is', null)
     .order('id'));
   if (vErr) {
-    if (await handleSupabaseError(vErr, 'Erro ao carregar suas clientes')) return;
+    // handleSupabaseError devolve TRUE para qualquer erro (utils.js): usar o
+    // retorno dele como "já tratei, pode sair" deixaria a tela presa no
+    // spinner. Chamar para o toast/sessão e SEMPRE renderizar o estado.
+    await handleSupabaseError(vErr, 'Erro ao carregar suas clientes');
     panel().innerHTML = `<div class="empty-state"><div class="empty-icon">${IC_USERS}</div><p>Não foi possível carregar suas clientes. Tente de novo.</p></div>`;
     return;
   }
@@ -100,7 +103,7 @@ function linhas() {
       termo ? 'Nenhuma cliente encontrada' : 'Você ainda não tem clientes. Elas aparecem aqui depois da primeira venda com WhatsApp informado.'}</p></div>`;
   }
   return lista.map(c => `
-    <div class="hist-card" onclick="abrirCliente('${esc(c.id)}')">
+    <div class="hist-card" onclick="abrirCliente('${escAttrJs(c.id)}')">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">
         <div style="flex:1;min-width:0">
           <div class="hist-nome">${esc(c.nome)}</div>
@@ -113,7 +116,7 @@ function linhas() {
           </div>
         </div>
         <button class="btn-icon" title="Editar cadastro" style="color:var(--rose)"
-                onclick="event.stopPropagation();minhaClienteEditar('${esc(c.id)}')">${IC_EDIT}</button>
+                onclick="event.stopPropagation();minhaClienteEditar('${escAttrJs(c.id)}')">${IC_EDIT}</button>
       </div>
     </div>`).join('');
 }

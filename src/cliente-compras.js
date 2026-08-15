@@ -12,7 +12,7 @@
 // só na memória da sessão, então para a RLS a funcionária continua staff.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, sbQ, toast, confirmarAcao, handleSupabaseError, fmtBRL, formatDate,
+import { esc, escAttrJs, sbQ, toast, confirmarAcao, handleSupabaseError, fmtBRL, formatDate,
          isoToBR, fmtDiaMes, telFmt, telValido, waMeLink } from './utils.js';
 import { ehStaff, ehGestor } from './auth.js';
 import { IS_ADMIN } from './menu.js';
@@ -59,11 +59,14 @@ export async function loadClienteCompras(id) {
     sbQ(qv.order('data_venda', { ascending: false })),
   ]);
   if (meu !== req) return;   // outra cliente foi aberta enquanto isto carregava
-  // handleSupabaseError trata sessão expirada; se ele não assumir, a tela
-  // precisa sair do spinner — senão fica "Carregando..." para sempre.
   const erro = cRes.error || vRes.error;
   if (erro) {
-    if (await handleSupabaseError(erro, 'Erro ao carregar a cliente')) return;
+    // ATENÇÃO ao mexer aqui: handleSupabaseError devolve TRUE para qualquer
+    // erro (utils.js), então `if (await handleSupabaseError(...)) return;`
+    // deixaria a tela presa no spinner para sempre — e um timeout de 12s do
+    // sbQ acontece com sinal ruim de celular, não só com o servidor fora.
+    // Chamar (para o toast / sessão expirada) e SEMPRE renderizar o estado.
+    await handleSupabaseError(erro, 'Erro ao carregar a cliente');
     panel().innerHTML = vazio('Não foi possível carregar esta cliente. Tente de novo.');
     return;
   }
@@ -154,7 +157,7 @@ function listaCompras() {
           ? lin.map(it => `<div class="hist-item-row"><span>${esc(it.quantidade)}× ${esc(it.descricao)}</span><span>${fmtBRL(it.quantidade * Number(it.preco_unit))}</span></div>`).join('')
           : '<div class="hist-item-row" style="color:var(--muted);font-style:italic">Sem itens registrados.</div>')
       : '<div class="hist-item-row" style="color:var(--muted);font-style:italic">Carregando itens…</div>';
-    return `<div class="hist-card${aberta ? ' open' : ''}" onclick="clienteCompraToggle('${esc(v.id)}')">
+    return `<div class="hist-card${aberta ? ' open' : ''}" onclick="clienteCompraToggle('${escAttrJs(v.id)}')">
       <div class="hist-nome">${esc(formatDate(v.data_venda))} · ${fmtBRL(v.valor_total)}</div>
       <div class="hist-stats">
         ${esc(v.forma_pagamento || '—')}
@@ -224,7 +227,7 @@ function fidelidadeHtml(id) {
   const premiosHtml = premios.map(p => `
     <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:rgba(212,168,75,.10);border:1px solid var(--gold);border-radius:12px;padding:10px 14px;margin-bottom:8px">
       <div style="font-size:13px;color:var(--plum)"><span style="color:var(--gold);vertical-align:-3px">${IC_GIFT}</span> Prêmio de ${fmtBRL(p.valor)} disponível</div>
-      ${ehGestor() ? `<button class="btn-primary btn-sm" style="width:auto" onclick="clienteResgatarPremio('${esc(p.id)}')">Registrar resgate</button>` : ''}
+      ${ehGestor() ? `<button class="btn-primary btn-sm" style="width:auto" onclick="clienteResgatarPremio('${escAttrJs(p.id)}')">Registrar resgate</button>` : ''}
     </div>`).join('');
 
   // Ajuste manual entra com sinal (o "+" fixo renderizava "+-1") e ganha
@@ -249,8 +252,8 @@ function fidelidadeHtml(id) {
       ${renderCartelaFidelidade(selos)}
       ${cicloHtml()}
       ${IS_ADMIN ? `<div id="cc-ajuste-box" style="display:flex;gap:8px;justify-content:center;margin-top:12px">
-        <button class="btn-secondary btn-sm" style="width:auto" onclick="clienteAjustarSelo('${esc(id)}',-1)">− 1 selo</button>
-        <button class="btn-secondary btn-sm" style="width:auto" onclick="clienteAjustarSelo('${esc(id)}',1)">+ 1 selo</button>
+        <button class="btn-secondary btn-sm" style="width:auto" onclick="clienteAjustarSelo('${escAttrJs(id)}',-1)">− 1 selo</button>
+        <button class="btn-secondary btn-sm" style="width:auto" onclick="clienteAjustarSelo('${escAttrJs(id)}',1)">+ 1 selo</button>
       </div>` : ''}
       ${premiosHtml ? `<div style="margin:16px 0 6px">${premiosHtml}</div>` : ''}
       ${completas ? `<div style="font-size:12px;color:var(--muted);margin-top:10px">${completas} cartela${completas !== 1 ? 's' : ''} já completada${completas !== 1 ? 's' : ''}.</div>` : ''}
@@ -276,8 +279,8 @@ export function clienteAjustarSelo(id, delta) {
         ? 'Vai somar 1 selo na cartela em andamento.'
         : 'Vai tirar 1 selo. Se a cartela estiver completa, ela é reaberta e o prêmio pendente é cancelado.'}</div>
       <div style="display:flex;gap:8px">
-        <button class="btn-secondary btn-sm" style="flex:1" onclick="clienteAjusteCancelar('${esc(id)}')">Cancelar</button>
-        <button class="btn-primary btn-sm" style="flex:1" onclick="clienteAjustarSeloConfirmar('${esc(id)}',${delta})">Confirmar ${delta > 0 ? '+1' : '−1'}</button>
+        <button class="btn-secondary btn-sm" style="flex:1" onclick="clienteAjusteCancelar('${escAttrJs(id)}')">Cancelar</button>
+        <button class="btn-primary btn-sm" style="flex:1" onclick="clienteAjustarSeloConfirmar('${escAttrJs(id)}',${delta})">Confirmar ${delta > 0 ? '+1' : '−1'}</button>
       </div>
     </div>`;
 }

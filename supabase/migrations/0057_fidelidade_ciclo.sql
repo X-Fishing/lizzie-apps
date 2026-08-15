@@ -103,6 +103,7 @@ declare
   v_ja       int;
   v_restante int; v_cartela uuid; v_selos int; v_aplicados int; v_total int;
   v_ganhos   int := 0; v_completou boolean := false;
+  v_legado   int := 0;   -- selos que esta venda já produziu antes da 0057
 begin
   select id, cliente_id, revendedora_id, valor_total, maleta_id
     into v_venda from vendas where id = p_venda_id;
@@ -127,10 +128,25 @@ begin
     return jsonb_build_object('selos_ganhos', 0, 'ja_aplicada', true);
   end if;
 
-  insert into fidelidade_acumulos (cliente_id, bucket_id, valor_acumulado, selos_gerados)
-  values (v_venda.cliente_id, v_bucket, coalesce(v_venda.valor_total, 0), 0)
+  -- ⚠️ VENDA LEGADA. A linha acima só conhece vendas processadas DEPOIS desta
+  -- migração — no dia do deploy, isso é a base inteira. E o índice único
+  -- (venda_id, cartela_id) não segura: se a cartela de origem já fechou, a
+  -- segunda passagem cai numa cartela NOVA e credita tudo outra vez (é o que a
+  -- guarda removida da 0039:133 evitava). O caminho é alcançável pela UI:
+  -- "Corrigir dados da cliente" (pagamentos.js) chama aplicar_fidelidade_venda
+  -- em venda antiga já vinculada.
+  -- Solução: os selos que a venda JÁ produziu entram no balde como
+  -- selos_gerados. O delta então nasce zero (nada é recreditado) e o balde
+  -- fica com o histórico correto para as PRÓXIMAS compras do mesmo ciclo.
+  select coalesce(sum(quantidade), 0) into v_legado
+    from fidelidade_selos where venda_id = p_venda_id and not ajuste_manual;
+
+  insert into fidelidade_acumulos (cliente_id, bucket_id, valor_acumulado, selos_gerados, regra)
+  values (v_venda.cliente_id, v_bucket, coalesce(v_venda.valor_total, 0), v_legado,
+          case when v_venda.maleta_id is null then 'venda' else 'bucket' end)
   on conflict (cliente_id, bucket_id) do update
     set valor_acumulado = fidelidade_acumulos.valor_acumulado + excluded.valor_acumulado,
+        selos_gerados   = fidelidade_acumulos.selos_gerados   + excluded.selos_gerados,
         atualizado_em   = now()
   returning valor_acumulado, selos_gerados into v_acum, v_ja;
 
@@ -268,6 +284,16 @@ begin
   if p_cliente_id is null then
     return jsonb_build_object('selos_ganhos', 0, 'tem_ciclo', false);
   end if;
+  -- ESCOPO: é DEFINER e fica exposta ao PostgREST (registrar_venda é INVOKER e
+  -- precisa do grant para chamá-la), então sem esta checagem ela seria uma
+  -- porta de leitura da fidelidade por cima de toda a RLS da 0028/0042.
+  -- Mesmo escopo de fidelidade_ciclo_cliente: staff, ou quem vendeu para a
+  -- cliente. Devolve vazio em vez de exceção — isto nunca derruba a venda.
+  if not (public.is_staff()
+          or exists (select 1 from vendas v
+                      where v.cliente_id = p_cliente_id and v.revendedora_id = auth.uid())) then
+    return jsonb_build_object('selos_ganhos', 0, 'tem_ciclo', false);
+  end if;
 
   select coalesce(sum(quantidade), 0) into v_ganhos
     from fidelidade_selos where venda_id = p_venda_id;
@@ -380,8 +406,12 @@ begin
   -- CICLO da venda. Sem isto a fidelidade por ciclo (0057) não funciona: o
   -- trigger é AFTER INSERT e o front só gravava a maleta num UPDATE posterior.
   -- maletas_uma_ativa (maletas-schema) garante no máximo uma ativa por pessoa.
+  -- O override precisa exigir status 'ativa': sem isso, quem chamasse a RPC
+  -- direto poderia mandar sempre a mesma maleta ANTIGA e transformar o balde
+  -- num acumulador eterno — o troco nunca morreria com o ciclo e daria para
+  -- fabricar prêmio de R$300.
   select m.id into v_maleta from maletas m
-   where m.id = p_maleta_id and m.revendedora_id = auth.uid();
+   where m.id = p_maleta_id and m.revendedora_id = auth.uid() and m.status = 'ativa';
   if v_maleta is null then
     select m.id into v_maleta from maletas m
      where m.revendedora_id = auth.uid() and m.status = 'ativa'
