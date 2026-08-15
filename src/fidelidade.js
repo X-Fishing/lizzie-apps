@@ -34,6 +34,12 @@ export function renderCartelaFidelidade(selos) {
   return `<div class="fid-cartela">${casas}</div>`;
 }
 
+// Estado de erro visível. Sem isto a tela fica em "Carregando..." para sempre
+// quando a query falha (inclusive por timeout de rede).
+function erroTela() {
+  panel().innerHTML = `<div class="empty-state"><div class="empty-icon">${IC_STAMP}</div><p>Não foi possível carregar a fidelidade. Tente de novo.</p></div>`;
+}
+
 export async function loadFidelidade() {
   panel().innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
   const staff = ehStaff();
@@ -49,7 +55,10 @@ export async function loadFidelidade() {
   if (!staff) {
     const { data: minhasVendas, error: vErr } = await sbQ(sb.from('vendas')
       .select('cliente_id').eq('revendedora_id', state.currentUser.id).not('cliente_id', 'is', null));
-    if (vErr) { if (await handleSupabaseError(vErr, 'Erro ao carregar fidelidade')) return; }
+    // handleSupabaseError devolve TRUE para qualquer erro (utils.js): usar o
+    // retorno como "já tratei, pode sair" deixaria a tela presa no spinner —
+    // e o timeout de 12s do sbQ dispara com sinal ruim de celular.
+    if (vErr) { await handleSupabaseError(vErr, 'Erro ao carregar fidelidade'); erroTela(); return; }
     clienteIds = [...new Set((minhasVendas || []).map(v => v.cliente_id))];
     if (!clienteIds.length) { cache = []; render(); return; }
   }
@@ -69,7 +78,9 @@ export async function loadFidelidade() {
       panel().innerHTML = `<div class="empty-state"><div class="empty-icon">${IC_STAMP}</div><p>Rode as migrações <b>0028</b> e <b>0029</b> no Supabase para ativar a fidelidade.</p></div>`;
       return;
     }
-    if (await handleSupabaseError(cRes.error, 'Erro ao carregar fidelidade')) return;
+    await handleSupabaseError(cRes.error, 'Erro ao carregar fidelidade');
+    erroTela();
+    return;
   }
   const selosPorCli = {};
   (cartRes.data || []).forEach(c => { selosPorCli[c.cliente_id] = c.selos; });
@@ -113,7 +124,7 @@ function linhas() {
       <div class="fid-card" onclick="abrirCliente('${escAttrJs(c.id)}')">
         <div class="fid-card-topo">
           <div class="fid-card-nome">${esc(c.nome)}</div>
-          <div class="fid-card-selos">${c.selos}/10${c.premios ? ` · ${c.premios} prêmio${c.premios > 1 ? 's' : ''}` : ''}</div>
+          <div class="fid-card-selos">${esc(c.selos)}/10${c.premios ? ` · ${c.premios} prêmio${c.premios > 1 ? 's' : ''}` : ''}</div>
         </div>
         <div class="fid-card-tel">${esc(telFmt(c.celular))}${telRuim(c.celular) ? ' <span class="badge badge-pendente" title="Número fora do padrão — esta cartela pode misturar mais de uma pessoa.">Telefone inválido</span>' : ''}</div>
         <div class="fid-bar"><div style="width:${Math.min(100, c.selos * 10)}%"></div></div>
@@ -126,7 +137,7 @@ function linhas() {
     <tr class="pag-row" style="cursor:pointer" onclick="abrirCliente('${escAttrJs(c.id)}')">
       <td class="pag-td"><span class="ciclo-desc">${esc(c.nome)}</span></td>
       <td class="pag-td">${esc(telFmt(c.celular))}${telRuim(c.celular) ? '<span class="badge badge-pendente" style="margin-left:6px" title="Número fora do padrão — esta cartela pode misturar mais de uma pessoa.">Telefone inválido</span>' : ''}</td>
-      <td class="pag-td" style="text-align:center"><span class="fid-progresso">${c.selos}/10</span></td>
+      <td class="pag-td" style="text-align:center"><span class="fid-progresso">${esc(c.selos)}/10</span></td>
       <td class="pag-td" style="text-align:right">${c.premios ? `<span class="badge badge-aberta" style="color:var(--gold);border-color:var(--gold)">${IC_GIFT} Prêmio</span>` : ''}</td>
     </tr>`).join('')}</tbody></table></div>`;
 }

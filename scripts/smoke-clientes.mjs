@@ -209,7 +209,22 @@ await ir(`#/cliente/${CLI}`, 2500);
 t = await texto('#panel-cliente-compras');
 check('erro em /vendas mostra estado de erro na tela da cliente',
   t.includes(ERRO_NA_TELA) && !t.includes('Carregando'), JSON.stringify(t.slice(0, 120)));
+
+// A Fidelidade tem DUAS queries que podem falhar (a de vendas só existe para a
+// revendedora; a de clientes, para os dois papéis). Foi o ponto cego que
+// deixou o bug do spinner passar aqui.
+for (const alvo of (EH_STAFF ? ['clientes'] : ['vendas', 'clientes'])) {
+  falharQuery = alvo;
+  await ir('#/fidelidade', 2500);
+  t = await texto('#panel-fidelidade');
+  check(`erro em /${alvo} mostra estado de erro na Fidelidade`,
+    t.includes(ERRO_NA_TELA) && !t.includes('Carregando'), JSON.stringify(t.slice(0, 120)));
+}
 falharQuery = null;
+
+// Fidelidade saudável tem de listar a cliente e navegar ao clicar.
+await ir('#/fidelidade');
+check('Fidelidade lista a cliente', (await texto('#panel-fidelidade')).includes('Ana'));
 
 check('nenhum erro de pagina', erros.length === 0, erros.slice(0, 3).join(' | '));
 

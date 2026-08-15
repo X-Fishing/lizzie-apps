@@ -1,7 +1,7 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, diaMesPartes, fmtDiaMes, hojeBR, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado, ehFormaAReceber } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, diaMesPartes, fmtDiaMes, hojeBR, escAttrJs, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado, ehFormaAReceber } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 import { abrirModalPosVenda } from './pos-venda.js';
 
@@ -2066,7 +2066,11 @@ async function buscarNomesSugeridos(termo) {
   }
   el.innerHTML = nomes.length
     ? `<div class="nome-sugestoes">${nomes.map(n =>
-        `<button type="button" class="nome-sugestao-item" onmousedown="event.preventDefault();vendaNomeEscolher('${n.replace(/'/g, "\\'")}')">${esc(n)}</button>`).join('')}</div>`
+        // escAttrJs e não o replace manual de aspa simples: `n` é
+        // vendas.nome_cliente, TEXTO LIVRE digitado no PDV. O replace antigo
+        // não escapava a aspa DUPLA, então um nome como `a" onmouseover="…`
+        // saía da string e do próprio atributo.
+        `<button type="button" class="nome-sugestao-item" onmousedown="event.preventDefault();vendaNomeEscolher('${escAttrJs(n)}')">${esc(n)}</button>`).join('')}</div>`
     : '';
 }
 

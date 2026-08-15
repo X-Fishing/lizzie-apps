@@ -2,7 +2,7 @@
 // etapas (numa página rolável) no padrão visual do app. Só gestor/admin grava.
 import { sb, SUPABASE_URL, SUPABASE_KEY } from './supabase.js';
 import { esc, toast, sbQ, fetchPaginado, fmtBRL, confirmarAcao, handleSupabaseError,
-         maskMoneyBR, parseMoneyBR, moneyToInput, openModal, closeModal } from './utils.js';
+         maskMoneyBR, parseMoneyBR, moneyToInput, openModal, closeModal, escAttrJs } from './utils.js';
 import { ehAdmin } from './auth.js';
 import { criarOrdenacao, alternarOrdenacao, thOrd, ordenarPor, pagerHTML, paginaValida } from './grid.js';
 import { cadastroCache, carregarCadastrosParaSelect, cadNovo } from './cadastros.js';
@@ -160,7 +160,7 @@ function panel() { return document.getElementById('panel-produtos'); }
 // stopPropagation p/ não disparar o toggle do grupo/edição ao clicar na foto.
 function thumbHTML(url) {
   return url
-    ? `<span class="ciclo-emoji" style="cursor:zoom-in" onclick="event.stopPropagation();produtoZoomFoto('${esc(url)}')"><img src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px"></span>`
+    ? `<span class="ciclo-emoji" style="cursor:zoom-in" onclick="event.stopPropagation();produtoZoomFoto('${escAttrJs(url)}')"><img src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px"></span>`
     : `<span class="ciclo-emoji">${IC_GEM}</span>`;
 }
 

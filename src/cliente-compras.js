@@ -246,8 +246,8 @@ function fidelidadeHtml(id) {
   return `
     <div style="border:1px solid var(--border);border-radius:14px;padding:14px;margin-top:4px">
       <div style="text-align:center;margin-bottom:6px">
-        <div class="fid-progresso" style="font-size:22px">${selos}/10 selos</div>
-        <div style="font-size:12px;color:var(--muted)">${selos >= 10 ? 'Cartela completa!' : `Faltam ${10 - selos} para R$ 300 em peças`}</div>
+        <div class="fid-progresso" style="font-size:22px">${esc(selos)}/10 selos</div>
+        <div style="font-size:12px;color:var(--muted)">${selos >= 10 ? 'Cartela completa!' : `Faltam ${esc(10 - selos)} para R$ 300 em peças`}</div>
       </div>
       ${renderCartelaFidelidade(selos)}
       ${cicloHtml()}

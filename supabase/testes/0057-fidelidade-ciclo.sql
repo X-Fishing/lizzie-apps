@@ -8,6 +8,12 @@
 -- Cada asserção estoura com `raise exception` e aborta na hora. Se chegar ao
 -- fim imprimindo "TODOS OS TESTES PASSARAM", está tudo certo.
 --
+-- ⚠️ TODA comparação usa coalesce(x, -1). `SELECT ... INTO` sem linha atribui
+-- NULL, e `NULL <> 1` é NULL — o `if` não dispara e a asserção passa EM
+-- SILÊNCIO. Sem isso, um teste como o T4b (que existe para provar que a
+-- cartela nova foi aberta) daria verde justamente quando ela NÃO fosse aberta.
+-- Ao adicionar asserção nova, mantenha o padrão.
+--
 -- ⚠️ O CRÉDITO VEM DO GATILHO, NÃO DE CHAMADA DIRETA. `aplicar_fidelidade_trg`
 -- é AFTER INSERT em `vendas` (0039), então o simples INSERT já aplica os selos.
 -- Chamar `aplicar_fidelidade_venda` depois devolveria `ja_aplicada: true` — é
@@ -98,8 +104,8 @@ begin
   returning id into v_v3;
   select selos into v_selos from public.fidelidade_cartelas
    where cliente_id = v_cli and status = 'aberta';
-  if v_selos <> 1 then
-    raise exception 'T3a FALHOU: 75 numa maleta NOVA levou a cartela a %, esperado continuar 1', v_selos;
+  if coalesce(v_selos, -1) <> 1 then
+    raise exception 'T3a FALHOU: 75 numa maleta NOVA levou a cartela a % (NULL vira -1), esperado continuar 1', coalesce(v_selos, -1);
   end if;
   select valor_acumulado into v_acum from public.fidelidade_acumulos
    where cliente_id = v_cli and bucket_id = v_m2;
@@ -119,8 +125,8 @@ begin
   if v_premios <> 1 then raise exception 'T4a FALHOU: % premio(s) pendente(s), esperado 1', v_premios; end if;
   select selos into v_selos from public.fidelidade_cartelas
    where cliente_id = v_cli and status = 'aberta';
-  if v_selos <> 1 then
-    raise exception 'T4b FALHOU: cartela nova com % selo(s), esperado 1 (excedente)', v_selos;
+  if coalesce(v_selos, -1) <> 1 then
+    raise exception 'T4b FALHOU: cartela nova com % selo(s) (NULL vira -1 = a cartela nova nem foi aberta), esperado 1', coalesce(v_selos, -1);
   end if;
   select selos_gerados into v_ja from public.fidelidade_acumulos
    where cliente_id = v_cli and bucket_id = v_m1;
@@ -168,16 +174,16 @@ begin
 
     select selos into v_selos from public.fidelidade_cartelas
      where cliente_id = v_cli and status = 'aberta';
-    if v_selos <> v_antes + 1 then
-      raise exception 'T7a FALHOU: cartela foi de % para %, esperado +1', v_antes, v_selos;
+    if coalesce(v_selos, -1) <> coalesce(v_antes, 0) + 1 then
+      raise exception 'T7a FALHOU: cartela foi de % para % (NULL vira -1), esperado +1', v_antes, coalesce(v_selos, -1);
     end if;
 
     delete from public.vendas where id = v_v6;
 
     select selos into v_selos from public.fidelidade_cartelas
      where cliente_id = v_cli and status = 'aberta';
-    if v_selos <> v_antes then
-      raise exception 'T7b FALHOU: apos excluir, cartela ficou em %, esperado voltar a %', v_selos, v_antes;
+    if coalesce(v_selos, -1) <> coalesce(v_antes, 0) then
+      raise exception 'T7b FALHOU: apos excluir, cartela ficou em % (NULL vira -1), esperado voltar a %', coalesce(v_selos, -1), v_antes;
     end if;
     select valor_acumulado, selos_gerados into v_acum, v_ja from public.fidelidade_acumulos
      where cliente_id = v_cli and bucket_id = v_m3;
@@ -247,28 +253,58 @@ begin
   --   mas NAO esta em fidelidade_acumulo_vendas, porque a tabela nasceu vazia.
   --   Sem tratamento, reprocessar (o botao "Corrigir dados da cliente" faz
   --   isso) creditaria os selos DE NOVO numa cartela nova.
-  declare v_m5 uuid; v_v8 uuid; v_antes int; v_depois int; begin
+  --   E o caso que MAIS importa: a cartela de ORIGEM ja FECHOU. Ai o indice
+  --   unico (venda_id, cartela_id) nao segura nada — a 2a passagem cai numa
+  --   cartela NOVA e o par e inedito. Por isso o teste primeiro leva a cartela
+  --   aberta a 9, para os 3 selos da venda de R$450 fecharem uma e transbordar
+  --   para outra.
+  declare v_m5 uuid; v_v8 uuid; v_topo uuid; v_antes int; v_depois int; v_falta int; begin
     insert into public.maletas (revendedora_id, status) values (v_rev, 'finalizada') returning id into v_m5;
+
+    select coalesce(selos, 0) into v_antes from public.fidelidade_cartelas
+     where cliente_id = v_cli and status = 'aberta';
+    v_falta := 9 - coalesce(v_antes, 0);
+    if v_falta > 0 then
+      insert into public.vendas (revendedora_id, nome_cliente, data_venda, forma_pagamento,
+                                 valor_total, valor_pago, status, cliente_id, maleta_id)
+      values (v_rev, 'ZZ Teste', current_date, 'Pix', v_falta * 150, v_falta * 150, 'quitado', v_cli, v_m5)
+      returning id into v_topo;
+    end if;
+    select coalesce(selos, 0) into v_antes from public.fidelidade_cartelas
+     where cliente_id = v_cli and status = 'aberta';
+    if coalesce(v_antes, -1) <> 9 then
+      raise exception 'T10 PREPARO FALHOU: cartela deveria estar em 9, esta em %', coalesce(v_antes, -1);
+    end if;
+
+    -- 3 selos: 1 FECHA a cartela (premio) e 2 vao para a nova.
     insert into public.vendas (revendedora_id, nome_cliente, data_venda, forma_pagamento,
                                valor_total, valor_pago, status, cliente_id, maleta_id)
     values (v_rev, 'ZZ Teste', current_date, 'Pix', 450, 450, 'quitado', v_cli, v_m5)
     returning id into v_v8;
 
-    select selos into v_antes from public.fidelidade_cartelas
+    select coalesce(selos, 0) into v_antes from public.fidelidade_cartelas
      where cliente_id = v_cli and status = 'aberta';
+    if coalesce(v_antes, -1) <> 2 then
+      raise exception 'T10 PREPARO FALHOU: cartela nova deveria ter 2 selos, tem %', coalesce(v_antes, -1);
+    end if;
+    if not exists (select 1 from public.fidelidade_selos s
+                     join public.fidelidade_cartelas c on c.id = s.cartela_id
+                    where s.venda_id = v_v8 and c.status = 'completa') then
+      raise exception 'T10 PREPARO FALHOU: a venda deveria ter selo numa cartela COMPLETA';
+    end if;
 
     -- "envelhece" a venda: some do controle novo, mantendo os selos ja dados
     delete from public.fidelidade_acumulo_vendas where venda_id = v_v8;
     delete from public.fidelidade_acumulos where cliente_id = v_cli and bucket_id = v_m5;
 
     v_ret := public.aplicar_fidelidade_venda(v_v8);
-    if (v_ret->>'selos_ganhos')::int <> 0 then
-      raise exception 'T10a FALHOU: venda legada gerou % selo(s) a mais, esperado 0', v_ret->>'selos_ganhos';
+    if coalesce((v_ret->>'selos_ganhos')::int, -1) <> 0 then
+      raise exception 'T10a FALHOU: venda legada gerou % selo(s) a mais (NULL vira -1), esperado 0', coalesce((v_ret->>'selos_ganhos')::int, -1);
     end if;
     select selos into v_depois from public.fidelidade_cartelas
      where cliente_id = v_cli and status = 'aberta';
-    if v_depois <> v_antes then
-      raise exception 'T10b FALHOU: cartela foi de % para % ao reprocessar venda legada', v_antes, v_depois;
+    if coalesce(v_depois, -1) <> coalesce(v_antes, -2) then
+      raise exception 'T10b FALHOU: cartela foi de % para % (NULL vira -1) ao reprocessar venda legada', v_antes, coalesce(v_depois, -1);
     end if;
     select selos_gerados into v_ja from public.fidelidade_acumulos
      where cliente_id = v_cli and bucket_id = v_m5;
@@ -276,7 +312,7 @@ begin
       raise exception 'T10c FALHOU: o balde legado ficou com selos_gerados = %, esperado 3', coalesce(v_ja, -1);
     end if;
   end;
-  raise notice 'T10 OK — venda anterior a migracao nao e creditada de novo';
+  raise notice 'T10 OK — venda legada com cartela ja fechada nao e creditada de novo';
 
   raise notice '';
   raise notice '════════ TODOS OS TESTES PASSARAM ════════';

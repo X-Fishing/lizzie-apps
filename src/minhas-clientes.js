@@ -60,7 +60,13 @@ export async function loadMinhasClientes() {
     sbQ(sb.from('clientes').select('*').in('id', ids).order('nome')),
     sbQ(sb.from('fidelidade_cartelas').select('cliente_id,selos').eq('status', 'aberta').in('cliente_id', ids)),
   ]);
-  if (cRes.error) { if (await handleSupabaseError(cRes.error, 'Erro ao carregar suas clientes')) return; }
+  if (cRes.error) {
+    // Mesmo cuidado da 1ª query: o retorno de handleSupabaseError é sempre
+    // true, então sair por ele deixaria o spinner eterno.
+    await handleSupabaseError(cRes.error, 'Erro ao carregar suas clientes');
+    panel().innerHTML = `<div class="empty-state"><div class="empty-icon">${IC_USERS}</div><p>Não foi possível carregar suas clientes. Tente de novo.</p></div>`;
+    return;
+  }
   // A cartela é acessório: se a fidelidade não estiver instalada, a tela segue.
   const selosPorCli = {};
   (cartRes.data || []).forEach(c => { selosPorCli[c.cliente_id] = c.selos; });

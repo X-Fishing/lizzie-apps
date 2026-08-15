@@ -289,6 +289,12 @@ begin
   -- porta de leitura da fidelidade por cima de toda a RLS da 0028/0042.
   -- Mesmo escopo de fidelidade_ciclo_cliente: staff, ou quem vendeu para a
   -- cliente. Devolve vazio em vez de exceção — isto nunca derruba a venda.
+  -- A venda tem de ser DESTA cliente: sem amarrar as duas chaves, quem tem
+  -- acesso a uma cliente qualquer poderia passar o uuid de uma venda alheia e
+  -- ler os selos dela.
+  if not exists (select 1 from vendas v where v.id = p_venda_id and v.cliente_id = p_cliente_id) then
+    return jsonb_build_object('selos_ganhos', 0, 'tem_ciclo', false);
+  end if;
   if not (public.is_staff()
           or exists (select 1 from vendas v
                       where v.cliente_id = p_cliente_id and v.revendedora_id = auth.uid())) then
