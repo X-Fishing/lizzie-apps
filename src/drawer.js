@@ -11,7 +11,7 @@ import { showPanel } from './nav.js';
 // ativa abrir sozinho (senão a pessoa abre o menu e não vê onde está).
 const GRUPOS = {
   maleta: ['consignados', 'garantias', 'proxima-troca'],
-  vendas: ['pagamentos', 'historico', 'fidelidade'],
+  vendas: ['pagamentos', 'minhas-clientes', 'historico', 'fidelidade', 'cliente-compras'],
 };
 
 const el = id => document.getElementById(id);

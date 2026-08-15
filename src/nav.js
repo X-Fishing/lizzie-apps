@@ -25,6 +25,9 @@ function panelPermitido(name) {
   // chegaria por URL — e o guard de permissão abaixo não pega, porque
   // podeAcessarPanel devolve true para painel fora do MENU.
   if (name === 'proxima-troca' && ehStaff()) return 'dashboard';
+  // Mesma ideia: "Minhas Clientes" é a agenda da revendedora. O staff tem a
+  // tela Clientes (cad_clientes), que mostra a base inteira.
+  if (name === 'minhas-clientes' && ehStaff()) return 'dashboard';
   if (name === 'admin' && !ehGestor()) return 'dashboard';
   if (PANEIS_STAFF.includes(name) && !ehStaff()) return 'dashboard';
   if (name !== 'dashboard' && ehStaff() && !podeAcessarPanel(name)) {
@@ -36,7 +39,7 @@ function panelPermitido(name) {
 
 // Executor real: troca os paineis, sincroniza o menu ativo e dispara o loader.
 function aplicarTela(name) {
-  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin','fidelidade','proxima-troca','cliente-compras', ...PANEIS_STAFF].forEach(p => {
+  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin','fidelidade','proxima-troca','cliente-compras','minhas-clientes', ...PANEIS_STAFF].forEach(p => {
     const el = document.getElementById('panel-' + p);
     if (el) el.style.display = p === name ? 'block' : 'none';
     const nav = document.getElementById('nav-' + p);
@@ -78,6 +81,7 @@ function aplicarTela(name) {
   if (name === 'entrada-mercadoria') loadEntradaMercadoria();
   if (name === 'fidelidade') loadFidelidade();
   if (name === 'proxima-troca') loadProximaTroca();
+  if (name === 'minhas-clientes') loadMinhasClientes();
   if (name === 'bonus') loadBonus();
   if (name === 'lancador') loadLancador();
   window.scrollTo(0, 0);

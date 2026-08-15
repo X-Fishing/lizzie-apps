@@ -158,6 +158,9 @@
         <button class="drawer-subitem" data-drawer-panel="pagamentos" onclick="drawerIr('pagamentos')">
           <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10h18M6 10V7a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3M4 10v9a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-9"/></svg></span>Pagamentos
         </button>
+        <button class="drawer-subitem" data-drawer-panel="minhas-clientes" onclick="drawerIr('minhas-clientes')">
+          <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>Minhas Clientes
+        </button>
         <button class="drawer-subitem" data-drawer-panel="historico" onclick="drawerIr('historico')">
           <span class="drawer-ic"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4l3 2"/></svg></span>Histórico de Vendas
         </button>
@@ -335,6 +338,9 @@
     <!-- Cliente final: compras + cartela de fidelidade. Rota #/cliente/:id;
          todo o HTML vem de loadClienteCompras() em src/cliente-compras.js. -->
     <div id="panel-cliente-compras" style="display:none"></div>
+    <!-- Minhas Clientes: SÓ revendedora (a agenda dela). Todo o HTML vem de
+         loadMinhasClientes() em src/minhas-clientes.js. -->
+    <div id="panel-minhas-clientes" style="display:none"></div>
     <!-- Próxima troca: SÓ revendedora (a agenda dela). Todo o HTML vem de
          loadProximaTroca() em src/proxima-troca.js. -->
     <div id="panel-proxima-troca" style="display:none"></div>

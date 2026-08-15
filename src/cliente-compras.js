@@ -17,10 +17,12 @@ import { esc, sbQ, toast, confirmarAcao, handleSupabaseError, fmtBRL, formatDate
 import { ehStaff, ehGestor } from './auth.js';
 import { IS_ADMIN } from './menu.js';
 import { renderCartelaFidelidade } from './fidelidade.js';
+import { abrirEdicaoCliente } from './cliente-form.js';
 
 const IC_GIFT  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>';
 const IC_BAG   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>';
 const IC_BACK  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>';
+const IC_EDIT  = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
 
 const panel = () => document.getElementById('panel-cliente-compras');
 const telRuim = c => !!c && !telValido(c);
@@ -88,6 +90,7 @@ function render() {
       </div>
       <div class="acts">
         ${wa ? `<a class="btn-secondary btn-sm" style="width:auto;text-decoration:none;border-color:#25d366;color:#1a7a44" href="${wa}" target="_blank" rel="noopener">WhatsApp</a>` : ''}
+        <button class="btn-secondary btn-sm" style="width:auto" onclick="clienteComprasEditar()">${IC_EDIT} Editar cliente</button>
       </div>
     </div>
     ${telRuim(cli.celular) ? `<div style="font-size:12.5px;color:var(--danger);background:rgba(224,85,85,.10);border:1px solid var(--danger);border-radius:10px;padding:8px 12px;margin-bottom:12px">⚠ O telefone é a chave do cadastro. Fora do padrão, este registro pode ter juntado mais de uma pessoa — confira as compras antes de liberar prêmio de fidelidade.</div>` : ''}
@@ -258,6 +261,14 @@ export async function clienteResgatarPremio(premioId) {
     toast('Resgate registrado!');
     if (cli) await carregarFidelidade(cli.id);
   });
+}
+
+// Editar o cadastro pelo formulário compartilhado (src/cliente-form.js). A
+// permissão é do servidor (cliente_editar): a revendedora só edita cliente
+// para quem já vendeu — e se ela chegou nesta tela, vendeu.
+export function clienteComprasEditar() {
+  if (!cli) return;
+  abrirEdicaoCliente(cli, () => loadClienteCompras(cli.id));
 }
 
 // Voltar: usa o histórico do navegador (a tela foi aberta por navegação de
