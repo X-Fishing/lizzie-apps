@@ -192,7 +192,15 @@ export async function loadProdutos() {
   const { data, error } = await fetchPaginado(() => sb.from('produtos')
     .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,custo_compra,estoque_qtd,foto_url,descricao_curta,ativo,categoria_id,colecao_id,fornecedor_id,formato,nuvemshop_product_id,nuvemshop_variant_id,nuvemshop_sync_status,nuvemshop_sync_erro')
     .order('nome', { ascending: true }));
-  if (error) { if (await handleSupabaseError(error, 'Erro ao carregar produtos')) return; }
+  // handleSupabaseError devolve TRUE para qualquer erro (utils.js): sair pelo
+  // retorno dele deixaria a tela presa em "Carregando produtos..." para
+  // sempre — e o timeout de 12s do sbQ dispara com internet ruim, não só com
+  // o servidor fora.
+  if (error) {
+    await handleSupabaseError(error, 'Erro ao carregar produtos');
+    panel().innerHTML = '<div class="empty-state"><p>Não foi possível carregar os produtos. Tente de novo.</p></div>';
+    return;
+  }
   produtosCache = data || [];
   gruposAbertos.clear();
 

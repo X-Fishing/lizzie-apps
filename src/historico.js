@@ -87,7 +87,15 @@ export async function carregarItensDasVendas(vendas) {
   const faltam = vendas.filter(v => !state.vendaItensCache[v.id]).map(v => v.id);
   if (!faltam.length) return;
   const { data, error } = await sbQ(sb.from('venda_itens').select('*').in('venda_id', faltam).order('created_at'));
-  if (error) return;
+  // Sair calado aqui deixa a linha em "Carregando itens…" (:74) para sempre.
+  // Marca cada venda com lista vazia — que renderiza sem itens — e avisa.
+  if (error) {
+    console.warn('venda_itens:', error.message);
+    faltam.forEach(id => { state.vendaItensCache[id] = []; });
+    toast('Não foi possível carregar os itens das compras.', 'erro');
+    filtrarHistorico();
+    return;
+  }
   for (const v of vendas) {
     if (!state.vendaItensCache[v.id]) state.vendaItensCache[v.id] = [];
   }

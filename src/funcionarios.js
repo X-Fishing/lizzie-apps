@@ -240,7 +240,14 @@ export async function perfilAbrir(id) {
   if (!perfil) return;
   if (!document.getElementById('perfil-checklist')) renderPerfisPanel();
   const { data, error } = await sbQ(sb.from('perfil_permissoes').select('chave_menu').eq('perfil_id', id));
-  if (error) { if (await surfarErro(error, 'Erro ao carregar permissões')) return; }
+  // surfarErro devolve true para todo erro: sair por ele deixaria o spinner de
+  // #perfil-checklist (renderPerfisPanel, :197) girando para sempre.
+  if (error) {
+    await surfarErro(error, 'Erro ao carregar permissões');
+    const box = document.getElementById('perfil-checklist');
+    if (box) box.innerHTML = '<div class="empty-state" style="padding:20px 0"><p>Não foi possível carregar as permissões deste perfil. Tente de novo.</p></div>';
+    return;
+  }
   permsPerfil = new Set((data || []).map(r => r.chave_menu));
   renderChecklist(perfil);
 }

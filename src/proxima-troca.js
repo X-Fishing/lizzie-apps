@@ -56,7 +56,13 @@ export async function loadProximaTroca() {
     sbQ(sb.from('solicitacoes_troca').select('*').eq('revendedora_id', uid)
       .order('created_at', { ascending: false }).limit(5)),
   ]);
-  if (mRes.error) { if (await handleSupabaseError(mRes.error, 'Erro ao carregar a troca')) return; }
+  // handleSupabaseError sempre devolve true: sair por ele deixaria o spinner
+  // eterno. Chamar para o toast/sessão e renderizar o estado.
+  if (mRes.error) {
+    await handleSupabaseError(mRes.error, 'Erro ao carregar a troca');
+    panel().innerHTML = `<div class="empty-state"><div class="empty-icon">${IC_CAL}</div><p>Não foi possível carregar a próxima troca. Tente de novo.</p></div>`;
+    return;
+  }
   if (sRes.error && /relation|does not exist|schema cache/i.test(sRes.error.message || '')) {
     panel().innerHTML = `<div class="empty-state"><div class="empty-icon">${IC_CAL}</div><p>Rode a migração <b>0053</b> no Supabase para ativar a agenda de trocas.</p></div>`;
     return;

@@ -178,6 +178,15 @@ export async function loadDashboardStaff() {
     // Ciclo atual = catálogo ativo (mesma fonte do "vendido" em Controle de Vendas).
     fetchPaginado(() => sb.from('consignados').select('revendedora_id,quantidade_vendida,preco_venda').eq('status', 'ativo'))
   ]);
+  // Falha em qualquer uma das 4 NÃO pode passar em silêncio: o dashboard
+  // renderiza tudo ZERADO, com cara de dado real, e alguém toma decisão de
+  // negócio em cima de faturamento que não foi lido.
+  const erroDash = vRes.error || gRes.error || pRes.error || cRes.error;
+  if (erroDash) {
+    console.error('dashboard: erro em uma das consultas', erroDash);
+    toast('Não foi possível carregar parte do dashboard — os números abaixo podem estar incompletos.', 'erro');
+  }
+
   // Métricas de faturamento IGNORAM revendedoras TESTE (profiles.teste).
   const todasRevs = pRes.data || [];
   marcarRevsTeste(todasRevs);

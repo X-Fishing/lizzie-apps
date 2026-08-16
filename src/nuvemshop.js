@@ -45,7 +45,13 @@ export async function loadNuvemshop() {
   panel().innerHTML = '<div class="loading"><div class="spinner"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div><br>Carregando...</div>';
 
   const { data: st, error } = await sbQ(sb.rpc('nuvemshop_status'));
-  if (error) { if (await handleSupabaseError(error, 'Erro ao ler o status da loja')) return; }
+  // handleSupabaseError sempre devolve true: sair por ele deixaria o spinner
+  // eterno. Chamar para o toast/sessão e renderizar o estado.
+  if (error) {
+    await handleSupabaseError(error, 'Erro ao ler o status da loja');
+    panel().innerHTML = '<div class="empty-state"><p>Não foi possível ler o status da loja. Tente de novo.</p></div>';
+    return;
+  }
   const status = Array.isArray(st) ? st[0] : st;
 
   await Promise.all([carregarSemPar(), carregarComFotoSemCriar()]);
