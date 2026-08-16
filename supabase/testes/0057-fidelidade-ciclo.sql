@@ -147,17 +147,25 @@ begin
   if coalesce(v_acum, -1) <> 100 then raise exception 'T5b FALHOU: balde avulso com %, esperado 100', coalesce(v_acum, -1); end if;
   raise notice 'T5 OK — venda sem maleta vira balde proprio';
 
-  -- ══ T6 — valor 0 e valor null nao quebram nem creditam ════════════
+  -- ══ T6 — venda de valor 0 nao mexe no balde ═══════════════════════
+  --   O caso valor_total NULL nao existe: a coluna e NOT NULL no banco (a
+  --   tabela `vendas` nao esta versionada no repo, entao isto foi verificado
+  --   contra o banco real). O coalesce(valor_total, 0) da 0057 e defensivo e
+  --   inalcancavel — a asserção abaixo trava a premissa: se um dia alguem
+  --   tornar a coluna nullable, este teste avisa que o caso passa a existir.
+  if exists (select 1 from information_schema.columns
+              where table_schema='public' and table_name='vendas'
+                and column_name='valor_total' and is_nullable='YES') then
+    raise exception 'T6 FALHOU: vendas.valor_total virou NULLABLE — cubra o caso NULL no teste e reveja o coalesce da 0057';
+  end if;
+
   insert into public.vendas (revendedora_id, nome_cliente, data_venda, forma_pagamento,
                              valor_total, valor_pago, status, cliente_id, maleta_id)
   values (v_rev, 'ZZ Teste', current_date, 'Pix', 0, 0, 'quitado', v_cli, v_m2);
-  insert into public.vendas (revendedora_id, nome_cliente, data_venda, forma_pagamento,
-                             valor_total, valor_pago, status, cliente_id, maleta_id)
-  values (v_rev, 'ZZ Teste', current_date, 'Pix', null, 0, 'pendente', v_cli, v_m2);
   select valor_acumulado into v_acum from public.fidelidade_acumulos
    where cliente_id = v_cli and bucket_id = v_m2;
   if coalesce(v_acum, -1) <> 75 then raise exception 'T6 FALHOU: balde da maleta 2 foi para % (NULL vira -1), esperado seguir 75', coalesce(v_acum, -1); end if;
-  raise notice 'T6 OK — venda de valor 0/null nao mexe no balde';
+  raise notice 'T6 OK — venda de valor 0 nao mexe no balde (NULL e impossivel: coluna NOT NULL)';
 
   -- ══ T7 — excluir venda cujo selo esta em cartela ABERTA ═══════════
   --   Balde novo: 150 numa maleta nova → 1 selo na cartela aberta (que hoje
