@@ -337,7 +337,7 @@ function renderGestao(r) {
       ${!r.aprovada
         ? `<button class="btn-primary" onclick="aprovarRev('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> Aprovar acesso</button>`
         : `<button class="btn-danger" onclick="revogarRev('${r.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg> Revogar acesso</button>`}
-      ${r.email && ehGestor() ? `<button class="btn-primary" data-nome="${esc(r.nome || '')}" data-tel="${esc(r.telefone || '')}" onclick="criarAcessoRev('${r.id}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ${state.revSemAcesso?.has(String(r.id)) ? 'Criar acesso' : 'Redefinir senha'}</button>` : ''}
+      ${(r.email || !state.revSemAcesso?.has(String(r.id))) && ehGestor() ? `<button class="btn-primary" data-nome="${esc(r.nome || '')}" data-tel="${esc(r.telefone || '')}" onclick="criarAcessoRev('${escAttrJs(r.id)}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> ${state.revSemAcesso?.has(String(r.id)) ? 'Criar acesso' : 'Redefinir senha'}</button>` : ''}
       ${r.aprovada && r.telefone && r.email ? `<button class="btn-secondary" style="border-color:#25D366;color:#128C7E" data-nome="${esc(r.nome || '')}" data-email="${esc(r.email)}" data-tel="${esc(r.telefone)}" onclick="enviarAcessoRev(this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Enviar acesso</button>` : ''}
       ${ehAdmin() ? `<button class="btn-danger" data-rev-nome="${esc(r.nome || '')}" data-func="${r.role && r.role !== 'revendedora' ? '1' : ''}" onclick="confirmarExclusaoRev('${r.id}', this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg> ${r.role && r.role !== 'revendedora' ? 'Remover da lista de revendedoras' : 'Excluir revendedora'}</button>` : ''}
     </div>`;
@@ -551,8 +551,17 @@ export async function criarAcessoRev(id, btn) {
   const num = telWa55(tel) || '';
 
   document.getElementById('cad-modal-titulo').textContent = data.criado ? 'Acesso criado!' : 'Senha redefinida!';
+  // Quando o e-mail do cadastro foi editado, o LOGIN dela muda junto. Isso
+  // precisa aparecer: ela vai entrar com um endereço diferente do de antes, e
+  // quem avisa é a funcionária.
+  const avisoEmail = data.email_anterior
+    ? `<div style="font-size:12.5px;color:var(--plum);background:rgba(212,168,75,.12);border:1px solid var(--gold);border-radius:10px;padding:10px 12px;margin-bottom:12px">
+        O e-mail de acesso dela mudou de <b>${esc(data.email_anterior)}</b> para <b>${esc(data.email)}</b>. Ela precisa entrar com o novo.
+      </div>`
+    : '';
   document.getElementById('cad-modal-body').innerHTML = `
     <div style="font-size:13.5px;margin-bottom:12px">${data.criado ? 'A conta foi criada' : 'A senha foi redefinida'} para <b>${esc(nome)}</b>. Passe estes dados para ela:</div>
+    ${avisoEmail}
     <div style="background:var(--blush);border-radius:12px;padding:14px 16px;margin-bottom:12px">
       <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px">E-mail</div>
       <div style="font-size:14px;margin-bottom:10px;word-break:break-all">${esc(data.email)}</div>
