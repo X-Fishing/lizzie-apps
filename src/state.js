@@ -24,6 +24,7 @@ export const state = {
   vendaPagamentos: [],        // [{forma, valor}] — rateio do modal de venda (0051)
   solicitacoesTroca: [],      // staff: pedidos de remarcação pendentes (0053)
   minhaTroca: null,           // revendedora: { maleta, solicitacao } da própria troca (0053)
+  clienteVoltarPara: null,    // hash de origem da tela #/cliente/:id (botao Voltar)
   vendaClienteId: null,       // cliente encontrada pelo autocomplete de telefone (PDV)
   posVendaCtx: null,          // contexto do modal pós-venda (fidelidade + garantia)
   blingRevs: [],

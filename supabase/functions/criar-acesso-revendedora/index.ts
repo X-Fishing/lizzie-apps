@@ -60,23 +60,62 @@ Deno.serve(async (req) => {
   const { data: rev } = await admin.from('profiles')
     .select('id,nome,email').eq('id', body.profile_id).maybeSingle()
   if (!rev) return json({ error: 'revendedora não encontrada' }, 404)
-  const email = (rev.email ?? '').trim().toLowerCase()
-  if (!email) return json({ error: 'revendedora sem e-mail — preencha o e-mail no cadastro antes' }, 400)
+  let email = (rev.email ?? '').trim().toLowerCase()
 
   const senha = novaSenha()
 
-  // 4) Já existe conta com esse e-mail? (RPC só do service_role)
-  const { data: uidExistente } = await admin.rpc('fn_auth_uid_por_email', { p_email: email })
+  // 4) A CONTA DELA É PELO ID, não pelo e-mail: profiles.id = auth.users.id.
+  //    Procurar só por e-mail era o bug — ao trocar o e-mail no cadastro, a
+  //    busca não achava a conta existente, o código caía no "criar" e o
+  //    trigger handle_new_user tentava inserir um profile com um e-mail que
+  //    já existe. O índice único por lower(email) estourava e a mensagem que
+  //    chegava era um "Database error creating new user" genérico. Resultado
+  //    prático: depois de corrigir o e-mail dela, ninguém mais conseguia
+  //    gerar o acesso — e ainda sobrava uma conta órfã em auth.users.
+  const { data: contaPorId } = await admin.auth.admin.getUserById(body.profile_id)
+  const conta = contaPorId?.user ?? null
 
-  if (uidExistente) {
-    const { error } = await admin.auth.admin.updateUserById(uidExistente, {
+  if (conta) {
+    const emailAtual = (conta.email ?? '').toLowerCase()
+    // Cadastro sem e-mail mas com conta: o login manda. Sem isto, a
+    // revendedora ficava sem como redefinir a senha (o botão nem aparecia).
+    if (!email) email = emailAtual
+
+    const trocou = !!email && email !== emailAtual
+    if (trocou) {
+      // O e-mail do CADASTRO é a fonte da verdade: a pessoa acabou de editá-lo
+      // de propósito. Levar o login junto é o que faz "mudar o e-mail dela"
+      // significar alguma coisa.
+      const { data: donoDoNovo } = await admin.rpc('fn_auth_uid_por_email', { p_email: email })
+      if (donoDoNovo && donoDoNovo !== conta.id) {
+        return json({ error: `o e-mail ${email} já é o login de outra conta — confira o endereço ou use o cadastro existente` }, 409)
+      }
+    }
+
+    const patch: Record<string, unknown> = { password: senha, email_confirm: true }
+    if (trocou) patch.email = email
+    const { error } = await admin.auth.admin.updateUserById(conta.id, patch)
+    if (error) {
+      return json({ error: (trocou ? 'não foi possível atualizar o e-mail de acesso: ' : 'não foi possível redefinir a senha: ') + error.message }, 502)
+    }
+    return json({ ok: true, email, senha, criado: false, email_anterior: trocou ? emailAtual : null })
+  }
+
+  // 5) Sem conta com o id dela. Daqui para baixo o e-mail é obrigatório.
+  if (!email) return json({ error: 'revendedora sem e-mail — preencha o e-mail no cadastro antes' }, 400)
+
+  // Conta avulsa com esse e-mail (id diferente do profile — cadastro que ela
+  // mesma criou antes do pré-cadastro): redefine a senha nela.
+  const { data: uidPorEmail } = await admin.rpc('fn_auth_uid_por_email', { p_email: email })
+  if (uidPorEmail) {
+    const { error } = await admin.auth.admin.updateUserById(uidPorEmail, {
       password: senha, email_confirm: true,
     })
     if (error) return json({ error: 'não foi possível redefinir a senha: ' + error.message }, 502)
-    return json({ ok: true, email, senha, criado: false })
+    return json({ ok: true, email, senha, criado: false, email_anterior: null })
   }
 
-  // 5) Cria já confirmada (sem e-mail de confirmação, sem link que expira).
+  // 6) Cria já confirmada (sem e-mail de confirmação, sem link que expira).
   //    O trigger handle_new_user adota o pré-cadastro pelo e-mail e leva
   //    junto consignados/garantias/vendas/maletas.
   const { error } = await admin.auth.admin.createUser({
@@ -84,5 +123,5 @@ Deno.serve(async (req) => {
     user_metadata: { nome: rev.nome },
   })
   if (error) return json({ error: 'não foi possível criar o acesso: ' + error.message }, 502)
-  return json({ ok: true, email, senha, criado: true })
+  return json({ ok: true, email, senha, criado: true, email_anterior: null })
 })

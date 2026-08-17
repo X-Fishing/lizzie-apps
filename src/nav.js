@@ -25,6 +25,9 @@ function panelPermitido(name) {
   // chegaria por URL — e o guard de permissão abaixo não pega, porque
   // podeAcessarPanel devolve true para painel fora do MENU.
   if (name === 'proxima-troca' && ehStaff()) return 'dashboard';
+  // Mesma ideia: "Minhas Clientes" é a agenda da revendedora. O staff tem a
+  // tela Clientes (cad_clientes), que mostra a base inteira.
+  if (name === 'minhas-clientes' && ehStaff()) return 'dashboard';
   if (name === 'admin' && !ehGestor()) return 'dashboard';
   if (PANEIS_STAFF.includes(name) && !ehStaff()) return 'dashboard';
   if (name !== 'dashboard' && ehStaff() && !podeAcessarPanel(name)) {
@@ -36,7 +39,7 @@ function panelPermitido(name) {
 
 // Executor real: troca os paineis, sincroniza o menu ativo e dispara o loader.
 function aplicarTela(name) {
-  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin','fidelidade','proxima-troca', ...PANEIS_STAFF].forEach(p => {
+  ['dashboard','garantias','consignados','pagamentos','historico','trocas','admin','fidelidade','proxima-troca','cliente-compras','minhas-clientes', ...PANEIS_STAFF].forEach(p => {
     const el = document.getElementById('panel-' + p);
     if (el) el.style.display = p === name ? 'block' : 'none';
     const nav = document.getElementById('nav-' + p);
@@ -79,6 +82,7 @@ function aplicarTela(name) {
   if (name === 'entrada-mercadoria') loadEntradaMercadoria();
   if (name === 'fidelidade') loadFidelidade();
   if (name === 'proxima-troca') loadProximaTroca();
+  if (name === 'minhas-clientes') loadMinhasClientes();
   if (name === 'bonus') loadBonus();
   if (name === 'lancador') loadLancador();
   window.scrollTo(0, 0);
@@ -91,6 +95,15 @@ function irPara(panel) {
   const efetivo = panelPermitido(panel);
   if (efetivo !== panel) { navegar(hashDePanel(efetivo), { replace: true }); return; }
   aplicarTela(efetivo);
+}
+
+// Tela da cliente final como rota propria (#/cliente/:id). Os dois papeis
+// acessam: o proprio loader escopa as compras (staff ve todas, revendedora so
+// as dela) e recusa a cliente sem vinculo — por isso nao entra em PANEIS_STAFF.
+function irParaCliente(id) {
+  if (!state.currentUser) return;
+  aplicarTela('cliente-compras');
+  loadClienteCompras(id);   // global (cliente-compras.js)
 }
 
 // Detalhe/edicao de revendedora como rota propria (#/revendedoras/:id).
@@ -114,11 +127,32 @@ export function showPanel(name) { navegar(hashDePanel(name)); }
 // Abrir o detalhe de uma revendedora navegando (o "voltar" fecha o detalhe).
 export function abrirRevendedora(id) { navegar('/revendedoras/' + encodeURIComponent(id)); }
 
+// Abrir a tela de uma cliente final (compras + fidelidade). Usada pela
+// Fidelidade, pelo CRUD de Clientes e por Minhas Clientes.
+// Guarda de onde veio: history.back() sozinho nao serve, porque history.length
+// conta a aba INTEIRA — abrir o app direto em #/cliente/:id e clicar Voltar
+// sairia do app e deixaria a tela em branco (pior ainda no PWA standalone).
+export function abrirCliente(id) {
+  const atual = location.hash.slice(1);
+  state.clienteVoltarPara = (atual && !atual.startsWith('/cliente/')) ? atual : null;
+  navegar('/cliente/' + encodeURIComponent(id));
+}
+
+// Para onde o botao Voltar da tela da cliente leva. Sem origem conhecida
+// (link direto, F5), cai na tela que faz sentido para o papel.
+export function voltarDaCliente() {
+  const destino = state.clienteVoltarPara;
+  state.clienteVoltarPara = null;
+  if (destino) { navegar(destino, { replace: true }); return; }
+  navegar(hashDePanel(ehStaff() ? 'clientes' : 'minhas-clientes'), { replace: true });
+}
+
 // Registra as rotas e liga o router. Chamado no login (usuario ja carregado).
 export function iniciarRoteamento() {
   registrar('/', () => irPara(panelInicial()));
   registrar('/revendedoras', () => irPara('admin'));
   registrar('/revendedoras/:id', ({ id }) => irParaDetalheRev(id));
+  registrar('/cliente/:id', ({ id }) => irParaCliente(id));
   registrar('/:panel', ({ panel }) => irPara(panel));
   iniciar();
 }

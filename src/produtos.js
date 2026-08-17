@@ -2,7 +2,7 @@
 // etapas (numa página rolável) no padrão visual do app. Só gestor/admin grava.
 import { sb, SUPABASE_URL, SUPABASE_KEY } from './supabase.js';
 import { esc, toast, sbQ, fetchPaginado, fmtBRL, confirmarAcao, handleSupabaseError,
-         maskMoneyBR, parseMoneyBR, moneyToInput, openModal, closeModal } from './utils.js';
+         maskMoneyBR, parseMoneyBR, moneyToInput, openModal, closeModal, escAttrJs } from './utils.js';
 import { ehAdmin } from './auth.js';
 import { criarOrdenacao, alternarOrdenacao, thOrd, ordenarPor, pagerHTML, paginaValida } from './grid.js';
 import { cadastroCache, carregarCadastrosParaSelect, cadNovo } from './cadastros.js';
@@ -160,7 +160,7 @@ function panel() { return document.getElementById('panel-produtos'); }
 // stopPropagation p/ não disparar o toggle do grupo/edição ao clicar na foto.
 function thumbHTML(url) {
   return url
-    ? `<span class="ciclo-emoji" style="cursor:zoom-in" onclick="event.stopPropagation();produtoZoomFoto('${esc(url)}')"><img src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px"></span>`
+    ? `<span class="ciclo-emoji" style="cursor:zoom-in" onclick="event.stopPropagation();produtoZoomFoto('${escAttrJs(url)}')"><img src="${esc(url)}" style="width:100%;height:100%;object-fit:cover;border-radius:8px"></span>`
     : `<span class="ciclo-emoji">${IC_GEM}</span>`;
 }
 
@@ -192,7 +192,15 @@ export async function loadProdutos() {
   const { data, error } = await fetchPaginado(() => sb.from('produtos')
     .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,custo_compra,estoque_qtd,foto_url,descricao_curta,ativo,categoria_id,colecao_id,fornecedor_id,formato,nuvemshop_product_id,nuvemshop_variant_id,nuvemshop_sync_status,nuvemshop_sync_erro')
     .order('nome', { ascending: true }));
-  if (error) { if (await handleSupabaseError(error, 'Erro ao carregar produtos')) return; }
+  // handleSupabaseError devolve TRUE para qualquer erro (utils.js): sair pelo
+  // retorno dele deixaria a tela presa em "Carregando produtos..." para
+  // sempre — e o timeout de 12s do sbQ dispara com internet ruim, não só com
+  // o servidor fora.
+  if (error) {
+    await handleSupabaseError(error, 'Erro ao carregar produtos');
+    panel().innerHTML = '<div class="empty-state"><p>Não foi possível carregar os produtos. Tente de novo.</p></div>';
+    return;
+  }
   produtosCache = data || [];
   gruposAbertos.clear();
 
@@ -329,7 +337,7 @@ function linhaVarProdHTML(p, vars, aberto) {
   const pMin = Math.min(...precos), pMax = Math.max(...precos);
   const preco = pMin === pMax ? fmtBRL(pMin) : `${fmtBRL(pMin)} – ${fmtBRL(pMax)}`;
   return `
-    <tr class="ciclo-row" style="cursor:pointer" onclick="produtoToggleGrupo('${encodeURIComponent('var:' + p.id)}')">
+    <tr class="ciclo-row" style="cursor:pointer" onclick="produtoToggleGrupo('${escAttrJs(encodeURIComponent('var:' + p.id))}')">
       ${tdCheck([p.id])}
       <td class="ciclo-td">
         <div style="display:flex;align-items:center;gap:10px">
@@ -358,7 +366,11 @@ function linhaGrupoHTML(g, aberto) {
   const preco = pMin === pMax ? fmtBRL(pMin) : `${fmtBRL(pMin)} – ${fmtBRL(pMax)}`;
   const estoque = g.membros.reduce((s, m) => s + (m.p.estoque_qtd ?? 0), 0);
   const foto = g.membros.find(m => m.p.foto_url)?.p.foto_url || null;
-  const chave = encodeURIComponent(g.base);
+  // encodeURIComponent NÃO escapa ' ( ) - . — e dá para montar expressão
+  // executável só com esses. Como isto entra numa string JS dentro de um
+  // atributo onclick, precisa de escAttrJs por cima (produtos.nome é texto
+  // livre vindo do cadastro/Bling).
+  const chave = escAttrJs(encodeURIComponent(g.base));
   return `
     <tr class="ciclo-row" style="cursor:pointer" onclick="produtoToggleGrupo('${chave}')">
       ${tdCheck(g.membros.map(m => m.p.id))}
@@ -725,8 +737,35 @@ export async function produtoSincronizarSite(id, btn) {
   }
 }
 
+// Limiar a partir do qual pedimos confirmação explícita antes de mandar tudo
+// de uma vez: enquanto o catálogo legado do Bling não passa por inventário,
+// boa parte dos produtos vinculados pode estar com estoque_qtd = 0 sem ser
+// real — sincronizar tudo tiraria essas peças de venda no site sem motivo.
+const LIMIAR_ZERADOS_AVISO = 0.3;
+
 // Enfileira todos os produtos ativos já vinculados. O cron processa em lote.
 export async function produtoSincronizarTudo(btn) {
+  const { data: resumoRaw, error: errResumo } = await sbQ(sb.rpc('nuvemshop_resumo_vinculados'));
+  if (errResumo) { if (await handleSupabaseError(errResumo, 'Erro ao conferir os vínculos: ' + errResumo.message)) return; }
+  const resumo = Array.isArray(resumoRaw) ? resumoRaw[0] : resumoRaw;
+  const total = resumo?.total_vinculados ?? 0;
+  const zerados = resumo?.zerados ?? 0;
+
+  if (total > 0 && zerados / total >= LIMIAR_ZERADOS_AVISO) {
+    confirmarAcao(
+      'Muitos produtos vinculados estão com estoque zero',
+      `${zerados} de ${total} produtos vinculados à loja estão com estoque 0 no app. ` +
+      `Sincronizar agora vai tirá-los de venda no site. Se o zero não for real ` +
+      `(catálogo importado do Bling, sem inventário ainda), confira antes de continuar.`,
+      `Sincronizar mesmo assim (${total})`,
+      () => produtoSincronizarTudoConfirmado(btn)
+    );
+    return;
+  }
+  await produtoSincronizarTudoConfirmado(btn);
+}
+
+async function produtoSincronizarTudoConfirmado(btn) {
   const original = btn ? btn.innerHTML : '';
   if (btn) { btn.disabled = true; btn.textContent = 'Enfileirando...'; }
   const { data, error } = await sbQ(sb.rpc('nuvemshop_enfileirar_tudo'));
@@ -1120,7 +1159,19 @@ export async function produtoFotosImportar() {
 // branco NÃO altera nada. Categoria/Coleção/Fornecedor casam pelo NOME.
 // ════════════════════════════════════════════════════════════════════
 const PLANILHA_COLS = ['sku', 'nome', 'codigo_barras', 'preco_venda', 'custo_compra', 'estoque_qtd', 'descricao_curta', 'categoria', 'colecao', 'fornecedor', 'codigo_fornecedor', 'peso_liquido', 'peso_bruto', 'largura', 'altura', 'profundidade', 'ativo'];
+const PLANILHA_COL_SINONIMOS = { estoque_qtd: ['estoque', 'qtd', 'qtde', 'quantidade', 'saldo'] };
 let planilhaAnalise = null;
+
+// Valida o FORMATO antes de chamar parseMoneyBR — ela nunca devolve NaN (cai
+// pra 0 em qualquer lixo), então sem validar antes, entradas mal formadas
+// ("--1", "1,,2", "-") viravam 0 silencioso (podendo sobrescrever valor real
+// ao atualizar um produto existente). Aceita "12", "-3", "10,00", "1.234" e
+// "1.234,56" (milhar + decimal); rejeita o resto.
+const RE_NUM_BR = /^-?(\d+|\d{1,3}(?:\.\d{3})+)(,\d+)?$/;
+function parseNumBR(v) {
+  const limpo = String(v).replace(/[^\d,.-]/g, '');
+  return RE_NUM_BR.test(limpo) ? parseMoneyBR(limpo) : NaN;
+}
 
 // nome do cadastro a partir do id (categorias/colecoes/fornecedores)
 function nomeCadastro(tabela, id) {
@@ -1153,9 +1204,21 @@ function baixarCSV(nomeArquivo, matriz) {
 }
 
 // ── Parser CSV (aspas, separador auto ; ou , pela 1ª linha) ──
+// Conta ocorrências de um separador FORA de campos entre aspas (senão vírgulas
+// dentro de um nome de coluna com aspas confundem a detecção de separador).
+function contarForaDeAspas(linha, ch) {
+  let n = 0, aspas = false;
+  for (let i = 0; i < linha.length; i++) {
+    const c = linha[i];
+    if (c === '"') { if (aspas && linha[i + 1] === '"') { i++; continue; } aspas = !aspas; }
+    else if (c === ch && !aspas) n++;
+  }
+  return n;
+}
+
 function parseCSV(texto) {
   const primeira = (texto.split(/\r?\n/)[0] || '');
-  const sep = primeira.split(';').length >= primeira.split(',').length ? ';' : ',';
+  const sep = contarForaDeAspas(primeira, ';') >= contarForaDeAspas(primeira, ',') ? ';' : ',';
   const linhas = [];
   let campo = '', linha = [], aspas = false;
   for (let i = 0; i < texto.length; i++) {
@@ -1261,8 +1324,15 @@ export async function produtoPlanilhaArquivo(input) {
 
   const header = linhas[0].map(h => (h || '').trim().toLowerCase());
   const idx = {};
-  PLANILHA_COLS.forEach(c => { const i = header.indexOf(c); if (i >= 0) idx[c] = i; });
+  PLANILHA_COLS.forEach(c => {
+    let i = header.indexOf(c);
+    if (i < 0 && PLANILHA_COL_SINONIMOS[c]) {
+      for (const alt of PLANILHA_COL_SINONIMOS[c]) { i = header.indexOf(alt); if (i >= 0) break; }
+    }
+    if (i >= 0) idx[c] = i;
+  });
   if (idx.sku == null) { area.innerHTML = impErro('Falta a coluna "sku" no cabeçalho. Baixe a planilha modelo e use o mesmo cabeçalho.'); return; }
+  const colunasFaltando = PLANILHA_COLS.filter(c => c !== 'sku' && idx[c] == null);
 
   const atualizar = [], criar = [], avisos = [];
   let semMudanca = 0;
@@ -1276,10 +1346,13 @@ export async function produtoPlanilhaArquivo(input) {
     for (const c of ['nome', 'codigo_barras', 'descricao_curta', 'codigo_fornecedor']) { const v = get(c); if (v !== '') campos[c] = v; }
     for (const c of ['preco_venda', 'custo_compra']) {
       const v = get(c); if (v === '') continue;
-      const n = parseMoneyBR(v);
-      if (n != null && !isNaN(n)) campos[c] = n; else avisosLinha.push(`${c} inválido ("${v}")`);
+      const n = parseNumBR(v);
+      if (!isNaN(n)) campos[c] = n; else avisosLinha.push(`${c} inválido ("${v}")`);
     }
-    { const v = get('estoque_qtd'); if (v !== '') { const n = parseInt(v.replace(/[^\d-]/g, ''), 10); if (!isNaN(n)) campos.estoque_qtd = n; else avisosLinha.push('estoque inválido'); } }
+    { const v = get('estoque_qtd'); if (v !== '') {
+      const n = parseNumBR(v);
+      if (!isNaN(n)) campos.estoque_qtd = Math.round(n); else avisosLinha.push('estoque inválido');
+    } }
     for (const c of ['peso_liquido', 'peso_bruto', 'largura', 'altura', 'profundidade']) {
       const v = get(c); if (v === '') continue;
       const n = parseFloat(v.replace(',', '.'));
@@ -1299,7 +1372,16 @@ export async function produtoPlanilhaArquivo(input) {
     avisosLinha.forEach(m => avisos.push({ linha: r + 1, msg: `SKU ${sku}: ${m}` }));
 
     const prod = acharProduto(sku);
-    if (!prod) { criar.push({ sku, campos, nome: campos.nome || '', faltaNome: !campos.nome }); continue; }
+    if (!prod) {
+      // "célula em branco não altera nada" só faz sentido pra ATUALIZAR — em
+      // produto novo não há nada prévio, então fica 0 (default do banco) sem
+      // avisar em lugar nenhum. Aqui, avisa.
+      if (idx.estoque_qtd != null && campos.estoque_qtd === undefined) {
+        avisos.push({ linha: r + 1, msg: `SKU ${sku}: estoque em branco — produto novo vai nascer com estoque 0` });
+      }
+      criar.push({ sku, campos, nome: campos.nome || '', faltaNome: !campos.nome });
+      continue;
+    }
     const diff = {}, resumo = [];
     for (const [k, v] of Object.entries(campos)) {
       const atual = prod[k];
@@ -1310,15 +1392,21 @@ export async function produtoPlanilhaArquivo(input) {
     else semMudanca++;
   }
 
-  planilhaAnalise = { atualizar, criar, avisos, semMudanca, total: linhas.length - 1 };
+  planilhaAnalise = { atualizar, criar, avisos, semMudanca, total: linhas.length - 1, colunasFaltando };
   renderPlanilhaRelatorio();
 }
 
 function renderPlanilhaRelatorio() {
   const area = document.getElementById('planilha-area');
-  const { atualizar, criar, avisos, semMudanca, total } = planilhaAnalise;
+  const { atualizar, criar, avisos, semMudanca, total, colunasFaltando } = planilhaAnalise;
   const podeCriar = criar.filter(c => !c.faltaNome).length;
   const semNome = criar.length - podeCriar;
+
+  const blocoColunasFaltando = colunasFaltando && colunasFaltando.length ? `
+    <div class="card" style="margin-bottom:12px">
+      <div style="font-size:14px;font-weight:600;color:${colunasFaltando.includes('estoque_qtd') && podeCriar ? 'var(--danger)' : 'var(--gold)'};margin-bottom:8px">Colunas do modelo não encontradas no cabeçalho — ${colunasFaltando.length}</div>
+      <p style="font-size:12px;color:var(--muted);margin:0">${esc(colunasFaltando.join(', '))}. Essas colunas serão ignoradas em todas as linhas${podeCriar ? ' — produtos novos criados a partir desta planilha não terão esses campos preenchidos' : ''}.</p>
+    </div>` : '';
 
   const blocoAtualizar = `
     <div class="card" style="margin-bottom:12px">
@@ -1341,7 +1429,7 @@ function renderPlanilhaRelatorio() {
     </div>` : '';
 
   const nada = !atualizar.length && !podeCriar;
-  area.innerHTML = blocoAtualizar + blocoCriar + blocoAvisos + `
+  area.innerHTML = blocoColunasFaltando + blocoAtualizar + blocoCriar + blocoAvisos + `
     <div class="card">
       <div style="font-size:12px;color:var(--muted);margin-bottom:10px">Linhas na planilha: ${total} · Atualizar: ${atualizar.length} · Sem mudança: ${semMudanca} · Novos: ${criar.length}</div>
       <button class="btn-primary" id="planilha-btn-aplicar" ${nada ? 'disabled style="opacity:.5"' : ''} onclick="produtoPlanilhaAplicar()">Aplicar ${atualizar.length} alteraç${atualizar.length !== 1 ? 'ões' : 'ão'}</button>

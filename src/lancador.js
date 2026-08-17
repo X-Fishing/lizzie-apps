@@ -42,7 +42,13 @@ function beep(ok = true) {
 export async function loadLancador() {
   panel().innerHTML = '<div class="loading"><div class="spinner"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg></div><br>Carregando...</div>';
   const { data, error } = await sbQ(sb.from('profiles').select('id,nome').eq('is_revendedora', true).eq('aprovada', true).order('nome'));
-  if (error) { if (await handleSupabaseError(error, 'Erro ao carregar revendedoras')) return; }
+  // Sair pelo retorno de handleSupabaseError (que é sempre true) deixaria a
+  // tela presa no spinner. Chamar para o toast/sessão e renderizar o estado.
+  if (error) {
+    await handleSupabaseError(error, 'Erro ao carregar revendedoras');
+    panel().innerHTML = '<div class="empty-state"><p>Não foi possível carregar as revendedoras. Tente de novo.</p></div>';
+    return;
+  }
   revsAprovadas = data || [];
   carrinho = [];
   maletasAbertas = [];
@@ -504,7 +510,11 @@ async function f3Buscar() {
   const { data, error } = await sbQ(q.order('nome').limit(50));
   if (error) {
     console.error('Busca de produtos (F3):', error);
-    toast(`Erro na busca: ${error.message || 'tente novamente'}`);
+    toast(`Erro na busca: ${error.message || 'tente novamente'}`, 'erro');
+    // lancadorAbrirBusca() deixou um spinner em #f3-results: sem escrever
+    // aqui, ele gira para sempre e a pessoa acha que ainda está buscando.
+    const div = document.getElementById('f3-results');
+    if (div) div.innerHTML = '<div class="empty-state" style="padding:20px 0"><p>Não foi possível buscar. Tente de novo.</p></div>';
     return;
   }
   f3Resultados = data || [];

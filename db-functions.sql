@@ -1,10 +1,15 @@
 -- ════════════════════════════════════════════════════════════════════
 -- Lizzie Semijoias — Funções RPC (Postgres)
 -- ════════════════════════════════════════════════════════════════════
--- COMO APLICAR: Supabase → SQL Editor → cole este arquivo → Run.
--- Idempotente (create or replace). Aplique ANTES de publicar a versão do
--- index.html que chama sb.rpc('registrar_venda', ...), senão registrar
--- venda vai falhar.
+-- ⚠️⚠️ ARQUIVO HISTÓRICO — **NÃO RODE ESTE ARQUIVO HOJE.** ⚠️⚠️
+-- A `registrar_venda` aqui está na assinatura ANTIGA. Rodá-lo depois das
+-- migrações recria um overload velho, e o PostgREST passa a recusar a chamada
+-- por ambiguidade — TODA venda quebra em campo. A versão que vale é sempre a
+-- da migração de maior número em supabase/migrations/ (hoje: 0057).
+-- Mantido só como registro de como a função nasceu.
+--
+-- COMO APLICAR (só em banco NOVO, antes das migrações): Supabase → SQL Editor
+-- → cole este arquivo → Run. Idempotente (create or replace).
 -- ════════════════════════════════════════════════════════════════════
 
 -- registrar_venda: cria a venda, os itens, o recebimento (se houver) e
@@ -264,7 +269,7 @@ grant execute on function public.sincronizar_maleta(uuid,text,jsonb) to authenti
 
 -- ════════════════════════════════════════════════════════════════════
 -- MALETA PÚBLICA — link exclusivo por revendedora no site-catálogo
--- (lizzie-catalogo.netlify.app/maleta?t=<share_token>)
+-- (catalogo.lizzie.com.br/maleta?t=<share_token>)
 -- ════════════════════════════════════════════════════════════════════
 
 -- Token de compartilhamento por profile (link público da maleta).

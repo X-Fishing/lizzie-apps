@@ -2,18 +2,17 @@
 // com ação "Avisar" via WhatsApp (deep link wa.me, sem API). O rastreio de
 // bônus enviado/valor (mockup) depende de infra futura — fora do escopo agora.
 import { sb } from './supabase.js';
-import { esc, sbQ, isoToBR, waMeLink, telFmt } from './utils.js';
+import { esc, sbQ, fmtDiaMes, waMeLink, telFmt } from './utils.js';
 
 const IC_CAKE = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3M12 8v3M17 8v3M7 4h.01M12 4h.01M17 4h.01"/></svg>';
 const IC_USER = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
 const IC_WA   = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 21l1.65-3.8a9 9 0 1 1 3.4 2.9L3 21"/><path d="M9 10a.5.5 0 0 0 1 0V9a.5.5 0 0 0-1 0v1a5 5 0 0 0 5 5h1a.5.5 0 0 0 0-1h-1a.5.5 0 0 0 0 1"/></svg>';
 
 const MESES = ['janeiro','fevereiro','março','abril','maio','junho','julho','agosto','setembro','outubro','novembro','dezembro'];
-let lista = [];        // { tipo, nome, telefone, nascimento(ISO) }
+let lista = [];        // { tipo, nome, telefone, dia, mes }
 let filtro = 'todos';  // todos | revendedora | cliente
 
 const panel = () => document.getElementById('panel-bonus');
-const diaMes = iso => Number(iso.slice(8, 10));   // p/ ordenar por dia
 
 export async function loadBonus() {
   panel().innerHTML = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
@@ -21,9 +20,12 @@ export async function loadBonus() {
   const mm = String(mes).padStart(2, '0');
 
   const [{ data: docs }, { data: profs }, { data: clientes }] = await Promise.all([
+    // A REVENDEDORA continua com data_nascimento completa (o contrato precisa
+    // do ano — 0055 não mexeu nesta tabela). Só a CLIENTE virou dia/mês.
     sbQ(sb.from('revendedora_docs').select('profile_id,data_nascimento')),   // RLS: só gestor
     sbQ(sb.from('profiles').select('id,nome,telefone').eq('role', 'revendedora').eq('aprovada', true)),
-    sbQ(sb.from('clientes').select('nome,celular,data_nascimento')),
+    sbQ(sb.from('clientes').select('nome,celular,aniversario_dia,aniversario_mes')
+        .eq('aniversario_mes', mes)),   // filtro no banco (índice parcial da 0055)
   ]);
 
   const profMap = new Map((profs || []).map(p => [String(p.id), p]));
@@ -31,13 +33,14 @@ export async function loadBonus() {
   for (const d of (docs || [])) {
     if (!d.data_nascimento || d.data_nascimento.slice(5, 7) !== mm) continue;
     const p = profMap.get(String(d.profile_id));
-    if (p) lista.push({ tipo: 'revendedora', nome: p.nome, telefone: p.telefone, nascimento: d.data_nascimento });
+    if (p) lista.push({ tipo: 'revendedora', nome: p.nome, telefone: p.telefone,
+                        dia: Number(d.data_nascimento.slice(8, 10)), mes });
   }
   for (const c of (clientes || [])) {
-    if (!c.data_nascimento || c.data_nascimento.slice(5, 7) !== mm) continue;
-    lista.push({ tipo: 'cliente', nome: c.nome, telefone: c.celular, nascimento: c.data_nascimento });
+    lista.push({ tipo: 'cliente', nome: c.nome, telefone: c.celular,
+                 dia: c.aniversario_dia, mes: c.aniversario_mes });
   }
-  lista.sort((a, b) => diaMes(a.nascimento) - diaMes(b.nascimento));
+  lista.sort((a, b) => (a.dia || 0) - (b.dia || 0));
   render(mes);
 }
 
@@ -63,7 +66,7 @@ function render(mes) {
     return `<tr class="pag-row">
       <td class="pag-td"><span class="ciclo-desc">${esc(x.nome)}</span></td>
       <td class="pag-td">${badge(x.tipo)}</td>
-      <td class="pag-td">${esc(isoToBR(x.nascimento).slice(0, 5))}</td>
+      <td class="pag-td">${fmtDiaMes(x.dia, x.mes) || '—'}</td>
       <td class="pag-td">${esc(x.telefone ? telFmt(x.telefone) : '—')}</td>
       <td class="pag-td" style="text-align:right">${wa
         ? `<a href="${wa}" target="_blank" rel="noopener" class="btn-secondary btn-sm" style="text-decoration:none;border-color:#25d366;color:#1a7a44">${IC_WA} Avisar</a>`

@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════════════
--- 0055 — Log de auditoria automático para EXCLUSÕES. COMO APLICAR:
+-- 0059 — Log de auditoria automático para EXCLUSÕES. COMO APLICAR:
 -- Supabase → SQL Editor → cole tudo → Run. Depois:
 -- select pg_notify('pgrst','reload schema');
 -- Idempotente: pode rodar 2x sem erro.

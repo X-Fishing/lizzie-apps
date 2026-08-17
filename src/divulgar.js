@@ -1,12 +1,12 @@
 // Divulgar maleta: link público exclusivo por revendedora no site-catálogo
-// (lizzie-catalogo.netlify.app/maleta?t=<share_token>). O token vem de
+// (catalogo.lizzie.com.br/maleta?t=<share_token>). O token vem de
 // profiles.share_token e a página pública lê via RPC maleta_publica (anon).
 import { sb } from './supabase.js';
 import { state } from './state.js';
 import { toast, sbQ, confirmarAcao, openModal } from './utils.js';
 import { ehStaff } from './auth.js';
 
-const MALETA_PUBLICA_URL = 'https://lizzie-catalogo.netlify.app/maleta?t=';
+const MALETA_PUBLICA_URL = 'https://catalogo.lizzie.com.br/maleta?t=';
 let divulgarCtx = { token: null, propria: false };
 
 function montarDivulgar(nome, token, propria) {

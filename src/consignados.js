@@ -1,7 +1,7 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, hojeBR, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado, ehFormaAReceber } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, diaMesPartes, fmtDiaMes, hojeBR, escAttrJs, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado, ehFormaAReceber } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 import { abrirModalPosVenda } from './pos-venda.js';
 
@@ -2022,7 +2022,7 @@ async function buscarClientePorTelefone(tel) {
     state.vendaClienteId = cli.id;
     if (!nomeEl.value.trim()) nomeEl.value = cli.nome || '';
     const nascEl = document.getElementById('f-nasc');
-    if (nascEl && !nascEl.value.trim() && cli.nascimento) nascEl.value = isoToBR(cli.nascimento);
+    if (nascEl && !nascEl.value.trim()) nascEl.value = fmtDiaMes(cli.nasc_dia, cli.nasc_mes);
     if (status) status.innerHTML = `<span style="color:var(--rose)">Cliente já cadastrada · ${cli.selos ?? 0}/10 selos</span>`;
   } else {
     state.vendaClienteId = null;
@@ -2066,7 +2066,11 @@ async function buscarNomesSugeridos(termo) {
   }
   el.innerHTML = nomes.length
     ? `<div class="nome-sugestoes">${nomes.map(n =>
-        `<button type="button" class="nome-sugestao-item" onmousedown="event.preventDefault();vendaNomeEscolher('${n.replace(/'/g, "\\'")}')">${esc(n)}</button>`).join('')}</div>`
+        // escAttrJs e não o replace manual de aspa simples: `n` é
+        // vendas.nome_cliente, TEXTO LIVRE digitado no PDV. O replace antigo
+        // não escapava a aspa DUPLA, então um nome como `a" onmouseover="…`
+        // saía da string e do próprio atributo.
+        `<button type="button" class="nome-sugestao-item" onmousedown="event.preventDefault();vendaNomeEscolher('${escAttrJs(n)}')">${esc(n)}</button>`).join('')}</div>`
     : '';
 }
 
@@ -2189,7 +2193,10 @@ export function vendaPgtoSet(i, campo, valor) {
 export async function confirmarVendaCarrinho(btn) {
   const cliente = document.getElementById('f-cliente').value.trim();
   const tel = soDigitos(document.getElementById('f-tel').value);
-  const nasc = brToISO(document.getElementById('f-nasc').value);
+  // Aniversário é dd/mm e OPCIONAL: um dado de marketing não pode travar a
+  // venda (a cliente costuma não querer dar). Texto inválido vira "sem
+  // aniversário" em silêncio — o banco também aceita null (0055).
+  const nasc = diaMesPartes(document.getElementById('f-nasc').value);
   const data = brToISO(document.getElementById('f-data').value);
   const obs = document.getElementById('f-obs').value.trim();
 
@@ -2210,7 +2217,6 @@ export async function confirmarVendaCarrinho(btn) {
 
   if (!cliente) { toast('Informe o nome da cliente'); return; }
   if (!semZap && !telValido(tel)) { toast('Telefone inválido — informe um número real com DDD.'); return; }
-  if (!semZap && !nasc) { toast('Informe o aniversário da cliente (dd/mm/aaaa)'); return; }
   if (!data) { toast('Data inválida (use dd/mm/aaaa)'); return; }
   if (!state.carrinhoVenda.length) { toast('Carrinho vazio'); return; }
 
@@ -2248,8 +2254,15 @@ export async function confirmarVendaCarrinho(btn) {
         p_status: status,
         p_obs: obs || null,
         p_tel: semZap ? null : telNormalizado(tel),
-        p_nasc: semZap ? null : nasc,
+        p_nasc_dia: semZap ? null : (nasc?.dia ?? null),
+        p_nasc_mes: semZap ? null : (nasc?.mes ?? null),
         p_combinada: combinada,
+        // Ciclo (maleta) da venda. O servidor resolve a maleta ATIVA sozinho e
+        // só aceita este id se ele for da própria pessoa — mandamos por ser o
+        // que a tela está mostrando, mas quem manda é o banco. A fidelidade
+        // por ciclo (0057) depende de a maleta estar no INSERT: o trigger de
+        // selos é AFTER INSERT e não enxerga um UPDATE posterior.
+        p_maleta_id: state.maletaAtivaId || null,
         p_itens: state.carrinhoVenda.map(it => ({
           consignado_id: it.consignado_id,
           descricao: it.descricao,
@@ -2263,20 +2276,17 @@ export async function confirmarVendaCarrinho(btn) {
     if (errRpc) {
       console.error('Erro ao registrar venda (RPC):', errRpc);
       const msg = /registrar_venda|function|does not exist|schema cache/i.test(errRpc.message || '')
-        ? 'Função do banco não encontrada — rode db-functions.sql no Supabase.'
+        ? 'Função do banco não encontrada — rode as migrações 0055 e 0057 no Supabase.'
         : ('Erro: ' + (errRpc.message || 'tente novamente'));
       toast(msg);
       resetBtn();
       return;
     }
 
-    // Vincula a venda à maleta ATIVA (ciclo atual) — best-effort, não bloqueia.
-    // Escopo de "maleta atual" em Pagamentos/Dashboard depende disso.
-    const vendaId = vendaRet?.venda_id || (typeof vendaRet === 'string' ? vendaRet : null);
-    if (vendaId && state.maletaAtivaId) {
-      sbQ(sb.from('vendas').update({ maleta_id: state.maletaAtivaId }).eq('id', vendaId))
-        .then(({ error }) => { if (error) console.warn('venda.maleta_id:', error.message); });
-    }
+    // A maleta (ciclo) já veio gravada no INSERT pela própria RPC — o UPDATE
+    // fire-and-forget que existia aqui saiu: além de poder falhar em silêncio
+    // (era só um console.warn), ele acontecia DEPOIS do trigger de fidelidade,
+    // que então creditava os selos no ciclo errado.
 
     // Snapshot da venda ANTES de zerar o carrinho (o modal pós-venda usa).
     const snapshot = {

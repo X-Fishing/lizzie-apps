@@ -1,5 +1,5 @@
 // Auditoria de exclusões (só admin) — consulta o audit_log alimentado por
-// gatilhos de banco (supabase/migrations/0055_audit_log_exclusoes.sql).
+// gatilhos de banco (supabase/migrations/0059_audit_log_exclusoes.sql).
 // Tela só de LEITURA: nenhuma ação de escrita aqui de propósito.
 import { sb } from './supabase.js';
 import { esc, sbQ, openModal } from './utils.js';
@@ -24,7 +24,7 @@ let fTabela = '', fDe = '', fAte = '';
 const panel = () => document.getElementById('panel-auditoria');
 const HTML_RESTRITO = `<div class="empty-state"><div class="empty-icon">${IC_LOCK}</div><p>Área restrita ao administrador.</p></div>`;
 const HTML_LOADING = '<div class="loading"><div class="spinner">⟳</div><br>Carregando...</div>';
-const HTML_ERRO = `<div class="empty-state"><div class="empty-icon">${IC_EMPTY}</div><p>Erro ao carregar. Já rodou a migração <b>0055_audit_log_exclusoes.sql</b> no Supabase?</p></div>`;
+const HTML_ERRO = `<div class="empty-state"><div class="empty-icon">${IC_EMPTY}</div><p>Erro ao carregar. Já rodou a migração <b>0059_audit_log_exclusoes.sql</b> no Supabase?</p></div>`;
 
 function fmtDataHora(ts) {
   if (!ts) return '—';

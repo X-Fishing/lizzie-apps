@@ -9,6 +9,28 @@ export function esc(s) {
     ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
 }
 
+// Valor que vai DENTRO de uma string JS que está DENTRO de um atributo HTML —
+// o caso de `onclick="minhaFn('${...}')"`. Aqui esc() NÃO basta: ele vira a
+// aspa em &#39;, mas o parser de HTML decodifica a entidade ANTES de o JS
+// rodar, então a aspa volta, fecha a string e o que vier depois EXECUTA.
+//
+// Ordem: escapa para JS primeiro (as duas aspas viram \x27/\x22, que não são
+// entidades) e só então escapa para o atributo HTML. Escapar a aspa DUPLA como
+// &quot; não serviria pelo mesmo motivo — ela voltaria antes de o JS rodar.
+//
+// ⚠️ encodeURIComponent NÃO é escapador de string JS: ele deixa passar
+// ' ( ) - . ! ~ * _ , e dá para montar expressão executável só com eles.
+// Se precisar dos dois, componha: escAttrJs(encodeURIComponent(v)).
+export function escAttrJs(v) {
+  const HTML = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
+  const js = String(v ?? '')
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, '\\x27')
+    .replace(/"/g, '\\x22')
+    .replace(/[\r\n\u2028\u2029]/g, '');   // quebra de linha encerraria o statement
+  return js.replace(/[&<>"]/g, c => HTML[c]);
+}
+
 // ── REGRA CENTRAL: métricas de faturamento/receita/ranking/estoque IGNORAM
 // revendedoras TESTE (profiles.teste = true). Toda agregação nova deve usar
 // este helper. As telas individuais da revendedora teste seguem funcionando.
@@ -163,7 +185,31 @@ export function maskDiaMes(input) {
   input.value = v;
 }
 
+// ── Aniversário: dia/mês SEM ano ─────────────────────────────────────
+// O ano nunca é pedido nem guardado (só o Bônus de Aniversário consome esse
+// dado, e ele filtra por mês). NÃO use diaMesParaISO aqui: ela resolve para
+// um ano concreto, o que faria 29/02 sumir em ano não-bissexto.
+// A mesma regra vive no banco (0055, aniversario_valido). Mudou aqui, mude lá.
+const DIAS_NO_MES = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+
+// 'dd/mm' -> { dia, mes } | null. Aceita 1 ou 2 dígitos no dia/mês.
+export function diaMesPartes(s) {
+  const m = (s || '').trim().match(/^(\d{1,2})\/(\d{1,2})$/);
+  if (!m) return null;
+  const dia = +m[1], mes = +m[2];
+  if (mes < 1 || mes > 12) return null;
+  if (dia < 1 || dia > DIAS_NO_MES[mes - 1]) return null;
+  return { dia, mes };
+}
+
+// { dia, mes } -> 'dd/mm' (vazio quando não há aniversário).
+export function fmtDiaMes(dia, mes) {
+  if (!dia || !mes) return '';
+  return `${String(dia).padStart(2, '0')}/${String(mes).padStart(2, '0')}`;
+}
+
 // dd/mm -> ISO yyyy-mm-dd, inferindo o ano da PRÓXIMA ocorrência (hoje ou futuro).
+// Só para DATA COMBINADA do fiado (que precisa de ano). Aniversário usa diaMesPartes.
 export function diaMesParaISO(s) {
   const m = (s || '').trim().match(/^(\d{1,2})\/(\d{1,2})$/);
   if (!m) return null;

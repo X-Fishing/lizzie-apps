@@ -1,7 +1,49 @@
 # Pendências — App Lizzie
 
 > Arquivo de continuidade entre sessões. Atualizar conforme os itens forem resolvidos.
-> Última atualização: 04/08/2026
+> Última atualização: 16/08/2026
+
+---
+
+## 🧰 COMO RODAR SQL DAQUI (descoberto em 16/08/2026)
+
+Não precisa de Docker, nem de psql, nem da senha do banco. O CLI já está
+autenticado e roda SQL pela Management API:
+
+```
+npx supabase db query --linked "select 1"
+npx supabase db query --linked -f supabase/testes/0057-fidelidade-ciclo.sql
+```
+
+`begin … rollback` funciona por essa via (verificado), então os scripts de
+`supabase/testes/` podem rodar contra a base real sem gravar nada. Confira
+sempre um snapshot antes/depois:
+
+```
+select (select coalesce(sum(selos),0) from fidelidade_cartelas) as selos,
+       (select count(*) from vendas) as vendas;
+```
+
+## ⚠️ LIÇÃO CARA (16/08/2026) — o banco não é o que o repo assume
+
+A migração **0035** (`vendas.maleta_id`) **nunca tinha sido aplicada**, e
+ninguém percebeu porque a 0057 aplicou **sem erro**: o Postgres não valida
+referência a coluna dentro de corpo de função. A bomba ficou armada até a
+primeira venda. Já foi corrigido (0035 aplicada, 315/318 vendas backfilladas).
+
+**Regra que fica:** antes de publicar qualquer coisa que dependa de coluna
+nova, confira no banco de verdade, não no repo:
+
+```
+select column_name from information_schema.columns
+ where table_schema='public' and table_name='vendas' order by ordinal_position;
+```
+
+**Segunda lição, sobre janela de deploy:** a 0055/0057 derrubaram as
+assinaturas antigas de `registrar_venda`, o que quebrou o app **publicado**
+até o push sair. Migração que troca assinatura de RPC usada pelo front deve
+deixar um atalho compatível com a assinatura antiga, ou a janela entre
+migração e deploy fica com o app fora do ar.
 
 ---
 
