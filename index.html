@@ -731,8 +731,8 @@
 
 <!-- LIGHTBOX DE FOTO (preview por cima de outros modais; fecha só no X/Esc) -->
 <div class="modal-overlay" id="lightbox-foto" style="z-index:700;align-items:center">
-  <button type="button" class="modal-close-x" aria-label="Fechar" style="position:absolute;top:18px;right:18px;margin:0;float:none;z-index:701" onclick="closeModal('lightbox-foto')">✕</button>
-  <div id="lightbox-foto-body" style="max-width:92vw;max-height:82vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px"></div>
+  <button type="button" class="modal-close-x" aria-label="Fechar" style="position:absolute;top:18px;right:18px;margin:0;float:none;z-index:701" onclick="closeModal('lightbox-foto');lightboxLimparCache()">✕</button>
+  <div id="lightbox-foto-body" style="max-width:92vw;max-height:82vh;max-height:82dvh;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding-bottom:env(safe-area-inset-bottom,0px);display:flex;flex-direction:column;align-items:center;justify-content:center;justify-content:safe center;gap:10px"></div>
 </div>
 
 <!-- MODAL BUSCA DE PRODUTO (F3 — lançador de mostruário) -->

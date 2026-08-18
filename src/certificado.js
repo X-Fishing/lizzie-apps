@@ -2,7 +2,7 @@
 // público lizzie-fotos e devolve a URL + o link wa.me para enviar à cliente.
 // Nada aqui pode derrubar a venda: quem chama trata o erro com toast/reenvio.
 import { sb } from './supabase.js';
-import { isoToBR, waMeLink } from './utils.js';
+import { isoToBR, waMeLink, compartilharArquivos } from './utils.js';
 import { GARANTIA_TEMPLATE as T } from './garantia-template.js';
 import { VERSO_TITULO, VERSO_BLOCOS, CONTATO } from './garantia-textos.js';
 
@@ -243,14 +243,9 @@ export async function enviarCertificado({ vendaId, cliente, tel, dataISO, itens,
   } catch (e) { console.warn('verso do certificado', e); }
 
   const arquivos = verso ? [file, verso] : [file];
-  if (navigator.canShare && navigator.canShare({ files: arquivos })) {
-    try { await navigator.share({ files: arquivos, text: mensagem }); return true; }
-    catch (e) { if (e && e.name === 'AbortError') return true; /* senão cai no link */ }
-  }
-  if (verso && navigator.canShare && navigator.canShare({ files: [file] })) {
-    try { await navigator.share({ files: [file], text: mensagem }); return true; }
-    catch (e) { if (e && e.name === 'AbortError') return true; }
-  }
+  if (await compartilharArquivos(arquivos, mensagem)) return true;
+  // Aparelho que recusa 2 arquivos de uma vez: tenta só a frente.
+  if (verso && await compartilharArquivos([file], mensagem)) return true;
   // Fallback: link no wa.me (usa a URL pré-gerada p/ não travar em popup no PC).
   const url = publicUrl || await uploadCertificado(vendaId, b);
   const link = waMeLink(tel, `${mensagem}\n${url}`);

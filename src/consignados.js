@@ -1,7 +1,7 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, diaMesPartes, fmtDiaMes, hojeBR, escAttrJs, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado, ehFormaAReceber } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, diaMesPartes, fmtDiaMes, hojeBR, escAttrJs, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado, ehFormaAReceber, podeCompartilharArquivo, compartilharArquivos } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 import { abrirModalPosVenda } from './pos-venda.js';
 
@@ -1123,11 +1123,16 @@ export function renderConferencia() {
 let lbFotos = [];       // urls exibidas no lightbox
 let lbIdx = 0;
 let lbLegenda = '';
+let lbDesc = '';        // descrição/referência cruas — viram o nome do arquivo
+let lbRef = '';         // baixado (a legenda tem HTML, não serve pra isso)
 
 export async function confVerFoto(id) {
   const c = state.allConsignados.find(x => String(x.id) === String(id));
   if (!c) return;
   lbLegenda = `${esc(c.descricao)}${c.referencia ? ` <span style="opacity:.7">· ${esc(c.referencia)}</span>` : ''}`;
+  lbDesc = c.descricao || '';
+  lbRef = c.referencia || '';
+  lbBlobs.clear();   // fotos da peça anterior não interessam mais (memória)
   const body = document.getElementById('lightbox-foto-body');
   body.innerHTML = '<div class="spinner" style="color:#fff">⟳</div>';
   openModal('lightbox-foto');
@@ -1137,7 +1142,8 @@ export async function confVerFoto(id) {
   if (c.produto_id) {
     const { data, error } = await sbQ(sb.from('produtos').select('foto_url,imagens').eq('id', c.produto_id).maybeSingle());
     if (error) console.error('Fotos do produto:', error);
-    if (data?.imagens?.length) lbFotos = data.imagens;
+    // filter: slot vazio no imagens[] viraria um fetch de undefined.
+    if (data?.imagens?.length) lbFotos = data.imagens.filter(Boolean);
     else if (data?.foto_url) lbFotos = [data.foto_url];
   }
   if (!lbFotos.length && c.foto_url) lbFotos = [c.foto_url];
@@ -1149,6 +1155,153 @@ export function lightboxFotoNav(delta) {
   if (!lbFotos.length) return;
   lbIdx = (lbIdx + delta + lbFotos.length) % lbFotos.length;
   lightboxRender();
+}
+
+// ── Baixar / compartilhar a foto da peça ────────────────────────────
+// Pedido das revendedoras: pegar a foto pra postar no Instagram/status.
+// No celular o certo é o share nativo (a bandeja abre o Instagram direto,
+// sem passar pela galeria); no PC, download mesmo. Reusa
+// compartilharArquivos() do utils.js — o mesmo caminho do certificado.
+//
+// O blob é pré-baixado assim que a foto aparece, porque o share nativo exige
+// gesto do usuário: se o fetch só começasse no clique, o iOS mataria a
+// ativação e recusaria o share. Se mesmo assim o blob não estiver pronto na
+// hora do toque, a gente NÃO gasta o gesto esperando — pede um segundo toque
+// (aí o gesto é novo e válido).
+//
+// Fotos legadas hospedadas fora (Bling) são cross-origin sem CORS: o fetch
+// falha e o caminho é abrir a imagem numa aba pra ela salvar na mão.
+const lbBlobs = new Map();      // url -> Promise<Blob|null>, com .pronto/.valor
+const LB_CACHE_MAX = 12;        // teto de segurança (o clear() por peça já limita)
+
+// No celular a bandeja nativa é o que ela quer (posta direto no Instagram);
+// no PC, staff quer o arquivo em Downloads. O Chrome do Windows aceita
+// canShare({files}) e abriria a bandeja do Windows — por isso o share só vale
+// em tela de toque.
+function preferirShare() {
+  return podeCompartilharArquivo() && window.matchMedia('(pointer: coarse)').matches;
+}
+
+// Estado do prefetch de uma foto. O resultado fica no próprio Promise pra dar
+// pra perguntar "já está pronto?" SEM await — é isso que salva o gesto no iOS.
+//
+// Falha (CORS, rede, HTTP 5xx) resolve como null e FICA no cache: se a gente
+// apagasse aqui, o toque seguinte veria cache-miss, entraria em "Preparando..."
+// de novo e a foto do Bling ficaria num vai-e-vem eterno, sem chegar no plano
+// B. Quem apaga é lbEsquecer(), depois de já ter mostrado o plano B pra ela —
+// assim a próxima tentativa refaz o fetch (falha de rede costuma ser passageira).
+// Guarda: URL vazia já nasce "pronta e sem blob". lbFotos vem filtrado, mas
+// se um dia entrar um slot nulo o botão travaria esperando pra sempre.
+const lbVazio = Object.assign(Promise.resolve(null), { pronto: true, valor: null });
+
+function lbPrefetch(url) {
+  if (!url) return lbVazio;
+  const cache = lbBlobs.get(url);
+  if (cache) return cache;
+  const p = fetch(url, { mode: 'cors' })
+    .then(r => (r.ok ? r.blob() : null))
+    .catch(() => null)
+    .then(b => { p.pronto = true; p.valor = b; return b; });
+  p.pronto = false; p.valor = null;
+  lbBlobs.set(url, p);
+  // LRU simples: descarta os mais antigos (Map preserva ordem de inserção).
+  while (lbBlobs.size > LB_CACHE_MAX) lbBlobs.delete(lbBlobs.keys().next().value);
+  return p;
+}
+
+// Rearma a tentativa: o próximo toque refaz o fetch em vez de repetir a falha.
+function lbEsquecer(urls) {
+  for (const u of urls) lbBlobs.delete(u);
+}
+
+// Chamado ao fechar o lightbox: blob de foto em resolução cheia não tem por
+// que ficar na memória de um PWA que passa o dia aberto.
+export function lightboxLimparCache() {
+  lbBlobs.clear();
+}
+
+// Nome do arquivo como ela vai ver na galeria: "1234_Brinco_gota-1.jpg".
+// sanitizeArquivo() é o mesmo higienizador do PDF do mostruário (abaixo):
+// tira acento e troca separador por "_".
+function lbNomeArquivo({ ref, desc, total }, idx, mime) {
+  const ext = /png/.test(mime) ? 'png' : /webp/.test(mime) ? 'webp' : 'jpg';
+  const corte = sanitizeArquivo(desc).slice(0, 40).replace(/_+$/, '');
+  const base = [sanitizeArquivo(ref), corte].filter(Boolean).join('-') || 'lizzie';
+  return `${base}${total > 1 ? `-${idx + 1}` : ''}.${ext}`;
+}
+
+// Abre a foto numa aba pra ela salvar na mão (último recurso). Âncora em vez
+// de window.open porque no PWA instalado o window.open costuma ser barrado.
+// Só http(s): a URL vem do banco e um href "javascript:" executaria no clique.
+function lbAbrirNaAba(url) {
+  if (!/^https?:\/\//i.test(url || '')) { toast('Essa foto tem um endereço inválido.'); return; }
+  const a = document.createElement('a');
+  a.href = url; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+// Nada veio: mostra o plano B e rearma pra ela poder tentar de novo.
+function lbFalhou(urls) {
+  lbAbrirNaAba(urls[0]);
+  lbEsquecer(urls);
+  toast(urls.length > 1
+    ? 'Não consegui baixar essas fotos por aqui — abri a primeira numa aba: segure na imagem e escolha "Salvar".'
+    : 'Não consegui baixar essa foto por aqui — abri numa aba: segure na imagem e escolha "Salvar".');
+}
+
+// `todas` = a peça inteira (carrossel do post). Sem ele, só a foto na tela.
+export async function lightboxBaixarFoto(btn, todas = false) {
+  if (!lbFotos.length) return;
+  // Congela a peça no momento do clique: ela pode navegar ou fechar o
+  // lightbox enquanto isso corre, e aí lbFotos/lbRef já são de OUTRA peça.
+  const peca = { fotos: lbFotos.slice(), ref: lbRef, desc: lbDesc, total: lbFotos.length };
+  const urls = todas ? peca.fotos : [peca.fotos[lbIdx]];
+  const idxs = todas ? peca.fotos.map((_, i) => i) : [lbIdx];
+  const share = preferirShare();
+
+  if (btn.disabled) return;                       // toque duplo rápido
+  const pendentes = urls.map(lbPrefetch);
+  if (pendentes.some(p => !p.pronto)) {
+    const rotulo = btn.innerHTML;                 // textContent comeria o ícone
+    btn.disabled = true; btn.textContent = 'Preparando...';
+    await Promise.all(pendentes);
+    const vivo = btn.isConnected;                 // ela pode ter navegado/fechado
+    if (vivo) { btn.innerHTML = rotulo; btn.disabled = false; }
+    if (!pendentes.some(p => p.valor)) { if (vivo) lbFalhou(urls); return; }
+    if (share) {
+      // O await acima queimou o gesto e o iOS recusaria o share. Devolve o
+      // toque pra ela em vez de degradar pro download (que no iPhone salva em
+      // Arquivos, não na galeria, e não abre o Instagram).
+      if (vivo) toast(urls.length > 1 ? 'Fotos prontas — pode tocar de novo.' : 'Foto pronta — pode tocar de novo.');
+      return;
+    }
+    // Sem share (desktop): o download por âncora não precisa de gesto, segue.
+  }
+
+  const arquivos = pendentes
+    .map((p, i) => (p.valor ? new File([p.valor], lbNomeArquivo(peca, idxs[i], p.valor.type),
+      { type: p.valor.type || 'image/jpeg' }) : null))
+    .filter(Boolean);
+
+  if (!arquivos.length) { lbFalhou(urls); return; }
+  if (arquivos.length < urls.length) {
+    const faltam = urls.filter((_, i) => !pendentes[i].valor);
+    lbEsquecer(faltam);
+    toast(`${faltam.length} foto(s) não vieram — toque de novo pra tentar essas.`);
+  }
+
+  btn.disabled = true;                            // trava até terminar
+  setTimeout(() => { btn.disabled = false; }, 1200);
+  if (share && await compartilharArquivos(arquivos)) return;
+
+  for (const f of arquivos) {
+    const url = URL.createObjectURL(f);
+    const a = document.createElement('a');
+    a.href = url; a.download = f.name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+  toast(arquivos.length > 1 ? `${arquivos.length} fotos baixadas` : 'Foto baixada');
 }
 
 function lightboxRender() {
@@ -1168,10 +1321,31 @@ function lightboxRender() {
   body.innerHTML = `
     <div style="display:flex;align-items:center;gap:12px">
       ${lbFotos.length > 1 ? btnNav(-1) : ''}
-      <img src="${esc(lbFotos[lbIdx])}" style="max-width:78vw;max-height:70vh;border-radius:14px;object-fit:contain"
+      <img src="${esc(lbFotos[lbIdx])}" style="max-width:78vw;max-height:62vh;max-height:62dvh;border-radius:14px;object-fit:contain"
         onerror="this.outerHTML='<div style=&quot;color:#fff;padding:30px;font-size:14px&quot;>Não foi possível carregar a foto</div>'">
       ${lbFotos.length > 1 ? btnNav(1) : ''}
-    </div>${contador}${legenda}`;
+    </div>${contador}${legenda}${lightboxAcoesHtml()}`;
+  // Adianta o download pra o toque não precisar esperar. Todas as fotos da
+  // peça, não só a da tela: o botão "Todas (N)" precisa delas prontas.
+  lbPrefetch(lbFotos[lbIdx]);
+  lbFotos.forEach(u => { if (u !== lbFotos[lbIdx]) lbPrefetch(u); });
+}
+
+// Ações de foto (baixar/compartilhar). Rótulo muda conforme o aparelho: no
+// celular vira share nativo, no PC é download mesmo.
+function lightboxAcoesHtml() {
+  const share = preferirShare();
+  const ico = share
+    ? '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98"/></svg>'
+    : '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>';
+  const est = 'display:inline-flex;align-items:center;gap:6px;padding:11px 18px;min-height:44px;border-radius:999px;border:1px solid rgba(255,255,255,0.4);background:rgba(0,0,0,0.35);color:#fff;font-size:13px;font-weight:600;cursor:pointer';
+  const todas = lbFotos.length > 1
+    ? `<button type="button" style="${est};font-weight:500;opacity:.85" onclick="lightboxBaixarFoto(this, true)">Todas (${lbFotos.length})</button>`
+    : '';
+  return `<div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+      <button type="button" style="${est}" onclick="lightboxBaixarFoto(this)">${ico} ${share ? 'Compartilhar' : 'Baixar'}</button>
+      ${todas}
+    </div>`;
 }
 
 // Atalho de bipe na busca da conferência: "*" marca a peça filtrada como

@@ -428,3 +428,37 @@ export function waMeLink(tel, msg) {
   const n = telWa55(tel);
   return n ? `https://wa.me/${n}?text=${encodeURIComponent(msg || '')}` : null;
 }
+
+// ── Compartilhamento nativo de arquivos ─────────────────────────────
+// Usado pelo certificado de garantia e pelo download de foto da peça. No
+// celular a bandeja do sistema abre WhatsApp/Instagram direto; no PC o
+// navegador não aceita arquivo no share (o Chrome tem share e recusa files),
+// então quem chama precisa ter um plano B.
+
+// Memoizado: a resposta não muda durante a sessão e isso roda a cada render.
+let _podeShareArquivo = null;
+export function podeCompartilharArquivo() {
+  if (_podeShareArquivo === null) {
+    try {
+      _podeShareArquivo = !!(navigator.canShare &&
+        navigator.canShare({ files: [new File([new Blob()], 'a.jpg', { type: 'image/jpeg' })] }));
+    } catch { _podeShareArquivo = false; }
+  }
+  return _podeShareArquivo;
+}
+
+// Devolve true se o share aconteceu OU se a usuária desistiu na bandeja
+// (nos dois casos não há o que fazer depois). false = não rolou, siga pro
+// plano B do chamador.
+export async function compartilharArquivos(arquivos, texto) {
+  if (!arquivos?.length || !podeCompartilharArquivo()) return false;
+  if (!navigator.canShare({ files: arquivos })) return false;
+  try {
+    await navigator.share(texto ? { files: arquivos, text: texto } : { files: arquivos });
+    return true;
+  } catch (e) {
+    if (e && e.name === 'AbortError') return true;   // desistiu: fim do fluxo
+    console.warn('share nativo:', e);
+    return false;
+  }
+}
