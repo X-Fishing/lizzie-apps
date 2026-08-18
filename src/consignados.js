@@ -205,12 +205,26 @@ function cicloCardsHtml(list) {
   }).join('');
 }
 
+// Botão dedicado pra ordem de lançamento — pedido da equipe: clicar no
+// cabeçalho "#" resolve, mas não é óbvio que dá pra clicar ali. Um botão
+// visível volta pra ordem em que as peças foram lançadas na maleta com
+// um clique só, sem precisar achar a coluna certa.
+export function ordenarPorLancamento() {
+  state.cSort = { col: 'ordem', dir: 'asc' };
+  renderCicloGrid();
+}
+
 export function cicloTableHtml(list, isAdmin, historico = false) {
   // Só o catálogo ativo da revendedora vira card; o histórico e as telas do
   // staff continuam na tabela (lá a comparação coluna a coluna é o ponto).
   if (!isAdmin && !historico) return cicloCardsHtml(list);
   const rows = cicloSortRows(list).map(c => cicloRowHtml(c, isAdmin, historico)).join('');
+  const jaEmOrdem = state.cSort.col === 'ordem' && state.cSort.dir === 'asc';
+  const btnOrdem = !jaEmOrdem
+    ? `<button class="btn-secondary btn-sm" style="margin-bottom:8px" onclick="ordenarPorLancamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg> Ordem de lançamento</button>`
+    : '';
   return `<div class="ciclo-wrap">
+    ${btnOrdem}
     <table class="ciclo-table">
       <thead>
         <tr>
