@@ -150,6 +150,8 @@ let paginaAtual = 1;         // paginação client-side da grid
 const POR_PAGINA = 50;
 const ordProdutos = criarOrdenacao('nome');   // ordenação por clique no cabeçalho
 let formVariacoes = [];   // variações em edição no formulário (client-side)
+let formComponentes = []; // componentes do kit em edição: [{componente_produto_id, quantidade}]
+let formEditandoId = null; // id do produto aberto no form (exclui a si mesmo da lista de componentes)
 let formImagens = [];     // imagens em edição: [{url|null, file|null, preview}] — a 1ª é a principal
 const MAX_IMAGENS = 5;
 const MAX_IMG_MB = 5;
@@ -182,6 +184,34 @@ function nomeColecao(id) {
   return c ? c.nome : '';
 }
 
+// Produto (do catálogo já carregado) a partir do id — usado pra resolver
+// os componentes de um kit (que só guardam o id, não uma cópia dos dados).
+function produtoPorId(id) {
+  return produtosCache.find(x => String(x.id) === String(id));
+}
+
+// Estoque "disponível" calculado de um kit: mínimo entre os componentes
+// (floor(estoque do componente / qtd necessária)). Só exibição — não é
+// gravado em lugar nenhum (produtos.estoque_qtd não decrementa em venda
+// hoje, um kit não deve fingir ser mais "ao vivo" que produto comum).
+function estoqueCalculadoKit(componentes) {
+  if (!componentes.length) return 0;
+  const valores = componentes.map(c => {
+    const prod = produtoPorId(c.componente_produto_id);
+    const qtd = Number(c.quantidade) || 1;
+    return prod ? Math.floor((Number(prod.estoque_qtd) || 0) / qtd) : 0;
+  });
+  return Math.min(...valores);
+}
+
+// Custo somado dos componentes de um kit (soma custo_compra * quantidade).
+function custoCalculadoKit(componentes) {
+  return componentes.reduce((s, c) => {
+    const prod = produtoPorId(c.componente_produto_id);
+    return s + (prod ? Number(prod.custo_compra) || 0 : 0) * (Number(c.quantidade) || 0);
+  }, 0);
+}
+
 // ════════════════════════════════════════════════════════════════════
 // LISTA
 // ════════════════════════════════════════════════════════════════════
@@ -204,16 +234,30 @@ export async function loadProdutos() {
   produtosCache = data || [];
   gruposAbertos.clear();
 
-  // Variações (produtos formato 'variacao') aparecem na grid como sub-linhas
-  const { data: vars } = await fetchPaginado(() => sb.from('produto_variacoes')
-    .select('id,produto_id,atributo,valor,sku,codigo_barras,preco_venda,estoque_qtd,nuvemshop_product_id,nuvemshop_variant_id,nuvemshop_sync_status,nuvemshop_sync_erro')
-    .order('created_at'));
+  // Variações (produtos formato 'variacao') e componentes de kit (formato
+  // 'kit') aparecem na grid como sub-linhas — duas queries independentes,
+  // buscadas em paralelo (não uma depende da outra).
+  const [{ data: vars }, { data: comps }] = await Promise.all([
+    fetchPaginado(() => sb.from('produto_variacoes')
+      .select('id,produto_id,atributo,valor,sku,codigo_barras,preco_venda,estoque_qtd,nuvemshop_product_id,nuvemshop_variant_id,nuvemshop_sync_status,nuvemshop_sync_erro')
+      .order('created_at')),
+    fetchPaginado(() => sb.from('produto_componentes')
+      .select('id,produto_id,componente_produto_id,quantidade').order('created_at')),
+  ]);
   variacoesPorProduto.clear();
   for (const v of (vars || [])) {
     const k = String(v.produto_id);
     if (!variacoesPorProduto.has(k)) variacoesPorProduto.set(k, []);
     variacoesPorProduto.get(k).push(v);
   }
+
+  componentesPorProduto.clear();
+  for (const c of (comps || [])) {
+    const k = String(c.produto_id);
+    if (!componentesPorProduto.has(k)) componentesPorProduto.set(k, []);
+    componentesPorProduto.get(k).push(c);
+  }
+
   if (!cadastroCache.colecoes || !cadastroCache.colecoes.length) {
     await carregarCadastrosParaSelect(); // popula categorias/colecoes/fornecedores p/ nome e filtro
   }
@@ -225,7 +269,8 @@ export async function loadProdutos() {
 // o aro vive no nome: "Anel 15 Dois Corações". A grid agrupa por modelo SÓ
 // visualmente — sem schema novo, sem produto_variacoes, bipe/maleta intocados.
 const gruposAbertos = new Set();
-const variacoesPorProduto = new Map();   // produto_id -> [variações] (pra grid)
+const variacoesPorProduto = new Map();    // produto_id -> [variações] (pra grid)
+const componentesPorProduto = new Map();  // produto_id (do KIT) -> [{quantidade, componente_produto_id}] (pra grid)
 
 // "Anel 15 Dois Corações Ródio" -> { base: 'Anel Dois Corações Ródio', tamanho: '15' }
 // Nome fora do padrão -> null (produto avulso, sem grupo)
@@ -358,6 +403,48 @@ function linhaVarProdHTML(p, vars, aberto) {
     </tr>`;
 }
 
+// Sub-linha de um componente (dentro de um produto formato 'kit')
+function linhaComponenteHTML(c) {
+  const prod = produtoPorId(c.componente_produto_id);
+  const qtd = Number(c.quantidade) || 1;
+  const estoqueDisp = prod ? Math.floor((Number(prod.estoque_qtd) || 0) / qtd) : 0;
+  return `
+    <tr class="ciclo-row" style="background:rgba(201,116,138,0.045)">
+      <td class="ciclo-td"></td>
+      <td class="ciclo-td" style="padding-left:34px">
+        <div class="ciclo-desc" style="font-size:13px">${prod ? esc(prod.nome) : '(produto não encontrado)'} <span style="color:var(--muted)">× ${qtd}</span></div>
+      </td>
+      <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${prod?.sku ? esc(prod.sku) : '—'}</td>
+      <td class="ciclo-td" style="text-align:center"><span class="ciclo-num">${estoqueDisp}</span></td>
+      <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(prod?.custo_compra)}</span></td>
+      <td class="ciclo-td" style="text-align:center;white-space:nowrap"></td>
+      <td class="ciclo-td" style="text-align:right;white-space:nowrap"></td>
+    </tr>`;
+}
+
+// Linha-cabeçalho de um kit (expande/colapsa igual variação) — mostra o
+// estoque CALCULADO (mínimo entre componentes), nunca o estoque_qtd cru.
+function linhaKitProdHTML(p, componentes, aberto) {
+  const estoque = estoqueCalculadoKit(componentes);
+  return `
+    <tr class="ciclo-row" style="cursor:pointer" onclick="produtoToggleGrupo('${escAttrJs(encodeURIComponent('kit:' + p.id))}')">
+      ${tdCheck([p.id])}
+      <td class="ciclo-td">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="width:14px;color:var(--rose);font-size:12px">${aberto ? '▾' : '▸'}</span>
+          ${thumbHTML(p.foto_url)}
+          <div><div class="ciclo-desc">${esc(p.nome)}<span class="ciclo-badge" style="margin-left:6px">kit</span>${p.colecao_id ? `<span class="ciclo-badge" style="margin-left:6px">${esc(nomeColecao(p.colecao_id))}</span>` : ''}${badgeInativo(p)}</div>
+          <div style="font-size:11px;color:var(--muted)">${componentes.length} componente${componentes.length !== 1 ? 's' : ''}: ${componentes.map(c => esc(produtoPorId(c.componente_produto_id)?.nome || '?')).join(' + ')}</div></div>
+        </div>
+      </td>
+      <td class="ciclo-td" style="white-space:nowrap;font-size:12.5px;color:var(--muted)">${p.sku ? esc(p.sku) : '—'}</td>
+      <td class="ciclo-td" style="text-align:center"><span class="ciclo-num" title="Calculado: mínimo entre os componentes">${estoque}</span></td>
+      <td class="ciclo-td"><span class="ciclo-preco">${fmtBRL(p.preco_venda)}</span></td>
+      ${tdSiteHTML(p, p.id)}
+      <td class="ciclo-td" style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">${acoesProdutoHTML(p.id)}</td>
+    </tr>`;
+}
+
 // Linha-cabeçalho de um grupo de anéis (clicável: expande/colapsa)
 function linhaGrupoHTML(g, aberto) {
   const tams = g.membros.map(m => m.tamanho).sort((a, b) => Number(a) - Number(b));
@@ -419,6 +506,7 @@ function listaUnidades(lista = listaFiltrada()) {
   for (const p of lista) {
     const vars = p.formato === 'variacao' ? (variacoesPorProduto.get(String(p.id)) || []) : [];
     if (vars.length) { unidades.push({ tipo: 'varprod', p, vars }); continue; }
+    if (p.formato === 'kit') { unidades.push({ tipo: 'kitprod', p, componentes: componentesPorProduto.get(String(p.id)) || [] }); continue; }
     const g = grupoAnel(p.nome);
     if (g) {
       let u = porBase.get(g.base);
@@ -438,6 +526,7 @@ function listaUnidades(lista = listaFiltrada()) {
     sku:     u => u.tipo === 'grupo' ? '' : u.p.sku,
     estoque: u => u.tipo === 'grupo' ? u.membros.reduce((s, m) => s + (Number(m.p.estoque_qtd) || 0), 0)
            : u.tipo === 'varprod' ? u.vars.reduce((s, v) => s + (Number(v.estoque_qtd) || 0), 0)
+           : u.tipo === 'kitprod' ? estoqueCalculadoKit(u.componentes)
            : (Number(u.p.estoque_qtd) || 0),
     preco:   u => u.tipo === 'grupo' ? Math.min(...u.membros.map(m => Number(m.p.preco_venda) || 0))
            : u.tipo === 'varprod' ? Math.min(...u.vars.map(v => Number(v.preco_venda ?? u.p.preco_venda) || 0))
@@ -465,6 +554,12 @@ function tabelaHTML() {
       const aberto = gruposAbertos.has('var:' + u.p.id) || !!f;
       let html = linhaVarProdHTML(u.p, u.vars, aberto);
       if (aberto) html += u.vars.map(v => linhaVariacaoHTML(u.p, v)).join('');
+      return html;
+    }
+    if (u.tipo === 'kitprod') {
+      const aberto = gruposAbertos.has('kit:' + u.p.id) || !!f;
+      let html = linhaKitProdHTML(u.p, u.componentes, aberto);
+      if (aberto) html += u.componentes.map(c => linhaComponenteHTML(c)).join('');
       return html;
     }
     const aberto = gruposAbertos.has(u.base) || !!f;
@@ -1507,7 +1602,9 @@ async function abrirForm(p, opts = {}) {
   const clonando = !!opts.clonarDe;
   const editando = !!p && !clonando;
   p = p || {};
-  formVariacoes = []; // carregadas depois se editando
+  formVariacoes = [];  // carregadas depois se editando
+  formComponentes = []; // idem, componentes de kit
+  formEditandoId = editando ? p.id : null; // exclui a si mesmo da lista de componentes possíveis
   // imagens: array novo (imagens[1] = principal) com fallback pro foto_url legado
   const urlsIniciais = (p.imagens && p.imagens.length) ? p.imagens : (p.foto_url ? [p.foto_url] : []);
   formImagens = urlsIniciais.slice(0, MAX_IMAGENS).map(u => ({ url: u, file: null, preview: u }));
@@ -1532,8 +1629,9 @@ async function abrirForm(p, opts = {}) {
         <select id="p-categoria" class="form-control" onchange="produtoCategoriaBanho()">${optsSelect('categorias', p.categoria_id)}</select></div>
       <div class="form-group"><label class="form-label">Formato</label>
         <select id="p-formato" class="form-control" onchange="produtoToggleVariacao()">
-          <option value="simples" ${p.formato !== 'variacao' ? 'selected' : ''}>Simples</option>
+          <option value="simples" ${p.formato !== 'variacao' && p.formato !== 'kit' ? 'selected' : ''}>Simples</option>
           <option value="variacao" ${p.formato === 'variacao' ? 'selected' : ''}>Com variação</option>
+          <option value="kit" ${p.formato === 'kit' ? 'selected' : ''}>Kit (peça montada)</option>
         </select></div>
     </div>
 
@@ -1624,14 +1722,17 @@ async function abrirForm(p, opts = {}) {
     ${secHeader('Variações')}
     <div id="p-variacoes-wrap"></div>
 
+    ${secHeader('Componentes do kit', 'peça montada a partir de outros produtos — custo é somado automaticamente')}
+    <div id="p-componentes-wrap"></div>
+
     <button class="btn-primary" style="width:100%;margin-top:22px" onclick="produtoSalvar(${editando ? `'${p.id}'` : 'null'})">
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg> ${editando ? 'Salvar alterações' : 'Salvar produto'}</button>`;
 
   produtoToggleVariacao();
   renderImagens();
   produtoPrecifPreview();
-  if (editando) carregarVariacoes(p.id);
-  else if (clonando) carregarVariacoes(opts.clonarDe, true);
+  if (editando) { carregarVariacoes(p.id); carregarComponentes(p.id); }
+  else if (clonando) { carregarVariacoes(opts.clonarDe, true); carregarComponentes(opts.clonarDe); }
 }
 
 // ── Preview de precificação no formulário (motor em precificacao.js) ──
@@ -1794,15 +1895,26 @@ async function carregarVariacoes(produtoId, clonando = false) {
 }
 
 export function produtoToggleVariacao() {
+  const formato = document.getElementById('p-formato').value;
   const wrap = document.getElementById('p-variacoes-wrap');
-  if (!wrap) return;
-  const ativo = document.getElementById('p-formato').value === 'variacao';
-  wrap.parentElement && wrap.previousElementSibling; // noop guard
-  if (!ativo) {
-    wrap.innerHTML = `<p style="font-size:12px;color:var(--muted)">Selecione o formato "Com variação" para adicionar cores, tamanhos, etc.</p>`;
-    return;
+  if (wrap) {
+    if (formato !== 'variacao') {
+      wrap.innerHTML = `<p style="font-size:12px;color:var(--muted)">Selecione o formato "Com variação" para adicionar cores, tamanhos, etc.</p>`;
+    } else {
+      renderVariacoes();
+    }
   }
-  renderVariacoes();
+  const wrapKit = document.getElementById('p-componentes-wrap');
+  if (wrapKit) {
+    if (formato !== 'kit') {
+      wrapKit.innerHTML = `<p style="font-size:12px;color:var(--muted)">Selecione o formato "Kit (peça montada)" para montar a peça com outros produtos já cadastrados.</p>`;
+    } else {
+      renderComponentes();
+    }
+  }
+  // Custo do kit é sempre a soma dos componentes — campo fica travado nesse formato.
+  const custoInput = document.getElementById('p-custo');
+  if (custoInput) custoInput.readOnly = formato === 'kit';
 }
 
 function renderVariacoes() {
@@ -1836,6 +1948,74 @@ export function produtoVarRemover(i) { formVariacoes.splice(i, 1); renderVariaco
 export function produtoVarSet(i, campo, val) {
   if (!formVariacoes[i]) return;
   formVariacoes[i][campo] = campo === 'estoque_qtd' ? (parseInt(val) || 0) : val;
+}
+
+// ── Componentes do kit (client-side até salvar) ──
+// Componente referencia outro produto pelo id (não é dono de SKU próprio),
+// por isso — diferente de variação clonada — a referência segue igual ao
+// clonar: não faz sentido "zerar" um vínculo pra outro produto existente.
+async function carregarComponentes(produtoId) {
+  const { data } = await sbQ(sb.from('produto_componentes').select('componente_produto_id,quantidade').eq('produto_id', produtoId).order('created_at'));
+  formComponentes = (data || []).map(c => ({ componente_produto_id: c.componente_produto_id, quantidade: c.quantidade }));
+  renderComponentes();
+}
+
+// Opções do <select> de componente: qualquer produto que não seja kit e
+// não seja o próprio produto em edição (sem aninhamento, sem auto-referência).
+function opcoesComponente(selecionadoId) {
+  return produtosCache
+    // Só produto 'simples': kit não aninha (sem recursão), e variação também
+    // fica de fora — o estoque/custo real dela vive em produto_variacoes, não
+    // em produtos.estoque_qtd/custo_compra, que é o que o cálculo do kit lê.
+    .filter(p => p.formato !== 'kit' && p.formato !== 'variacao' && String(p.id) !== String(formEditandoId))
+    .slice()
+    .sort((a, b) => (a.nome || '').localeCompare(b.nome || ''))
+    .map(p => `<option value="${p.id}" ${String(p.id) === String(selecionadoId) ? 'selected' : ''}>${esc(p.nome)}${p.sku ? ` (${esc(p.sku)})` : ''}</option>`)
+    .join('');
+}
+
+function renderComponentes() {
+  const wrap = document.getElementById('p-componentes-wrap');
+  if (!wrap || document.getElementById('p-formato').value !== 'kit') return;
+  const rows = formComponentes.map((c, i) => {
+    const prod = produtoPorId(c.componente_produto_id);
+    const estoqueDisp = prod ? Math.floor((Number(prod.estoque_qtd) || 0) / (Number(c.quantidade) || 1)) : 0;
+    return `<tr class="ciclo-row">
+      <td class="ciclo-td"><select class="form-control" style="min-width:220px" onchange="produtoCompSet(${i},'componente_produto_id',this.value)">
+        <option value="">— selecione —</option>${opcoesComponente(c.componente_produto_id)}
+      </select></td>
+      <td class="ciclo-td" style="text-align:center"><input type="number" min="0.001" step="0.001" class="form-control" style="width:80px" value="${c.quantidade ?? 1}" oninput="produtoCompSet(${i},'quantidade',this.value)"></td>
+      <td class="ciclo-td" style="text-align:right">${fmtBRL(prod?.custo_compra)}</td>
+      <td class="ciclo-td" style="text-align:center">${prod ? estoqueDisp : '—'}</td>
+      <td class="ciclo-td" style="text-align:right"><button class="btn-icon" style="color:var(--danger)" onclick="produtoCompRemover(${i})">${IC_TRASH}</button></td>
+    </tr>`;
+  }).join('');
+  const custoTotal = custoCalculadoKit(formComponentes);
+  const estoqueCalc = estoqueCalculadoKit(formComponentes);
+  wrap.innerHTML = `
+    <div class="pag-wrap"><table class="pag-table"><thead><tr>
+      <th class="pag-th">Componente</th><th class="pag-th" style="text-align:center">Qtd</th>
+      <th class="pag-th" style="text-align:right">Custo unit.</th><th class="pag-th" style="text-align:center">Estoque disp.</th><th class="pag-th"></th>
+    </tr></thead><tbody>${rows || `<tr><td colspan="5" style="padding:14px;color:var(--muted);font-size:12px">Nenhum componente. Adicione abaixo.</td></tr>`}</tbody></table></div>
+    <button class="btn-secondary btn-sm" style="margin-top:10px" onclick="produtoCompAdicionar()">${IC_PLUS} Adicionar componente</button>
+    <div style="margin-top:10px;font-size:12.5px;color:var(--muted)">Custo somado dos componentes: <b style="color:var(--plum)">${fmtBRL(custoTotal)}</b> · Estoque calculado do kit (mínimo entre componentes): <b style="color:var(--plum)">${estoqueCalc}</b></div>`;
+  // Custo do kit acompanha os componentes ao vivo — o campo fica travado (produtoToggleVariacao).
+  const custoInput = document.getElementById('p-custo');
+  if (custoInput) custoInput.value = moneyToInput(custoTotal);
+}
+
+export function produtoCompAdicionar() {
+  formComponentes.push({ componente_produto_id: '', quantidade: 1 });
+  renderComponentes();
+}
+export function produtoCompRemover(i) { formComponentes.splice(i, 1); renderComponentes(); }
+export function produtoCompSet(i, campo, val) {
+  if (!formComponentes[i]) return;
+  formComponentes[i][campo] = campo === 'quantidade' ? (parseFloat(val) || 0) : val;
+  // Só re-renderiza ao trocar o produto (select) — na quantidade (input de
+  // texto) re-renderizar a cada tecla derrubaria o foco do campo. Os totais
+  // (custo/estoque calculado) atualizam no próximo re-render (add/remove/troca).
+  if (campo === 'componente_produto_id') renderComponentes();
 }
 
 // Atalho: cadastrar fornecedor sem sair do formulário de produto.
@@ -1902,7 +2082,12 @@ export async function produtoSalvar(id) {
     sku: document.getElementById('p-sku').value.trim() || null,
     codigo_barras: document.getElementById('p-codbarras').value.trim() || null,
     preco_venda: parseMoneyBR(document.getElementById('p-venda').value) || 0,
-    custo_compra: parseMoneyBR(document.getElementById('p-custo').value) || 0,
+    // Kit: custo vem SEMPRE de formComponentes (fonte da verdade), nunca do
+    // campo #p-custo — ele só re-renderiza (e sincroniza o campo) na troca do
+    // componente, não a cada tecla da quantidade (perderia o foco do input),
+    // então confiar no valor exibido na hora de salvar podia gravar um custo
+    // desatualizado se a quantidade tivesse acabado de mudar.
+    custo_compra: formato === 'kit' ? custoCalculadoKit(formComponentes) : (parseMoneyBR(document.getElementById('p-custo').value) || 0),
     categoria_id: document.getElementById('p-categoria').value || null,
     colecao_id: document.getElementById('p-colecao').value || null,
     fornecedor_id: document.getElementById('p-fornecedor').value || null,
@@ -1973,7 +2158,9 @@ export async function produtoSalvar(id) {
     toast('Erro: ' + (error.message || 'tente novamente')); return;
   }
 
-  // variações: substitui (apaga as antigas e regrava) só se formato = variacao
+  // variações/componentes: substitui (apaga as antigas e regrava) só na
+  // tabela do formato atual — as duas são limpas ao trocar de formato,
+  // pra não deixar resíduo de quando o produto era variação/kit.
   if (produtoId) {
     if (formato === 'variacao') {
       const vlist = formVariacoes.filter(v => (v.atributo || '').trim() && (v.valor || '').trim())
@@ -1996,9 +2183,31 @@ export async function produtoSalvar(id) {
           return;
         }
       }
-    } else {
-      // virou "simples": limpa variações antigas
+      await sb.from('produto_componentes').delete().eq('produto_id', produtoId);
+    } else if (formato === 'kit') {
+      const clist = formComponentes.filter(c => c.componente_produto_id && Number(c.quantidade) > 0)
+        .map(c => ({ produto_id: produtoId, componente_produto_id: c.componente_produto_id, quantidade: Number(c.quantidade) }));
+      const incompletos = formComponentes.length - clist.length;
+      // Mesma trava anti-perda das variações: linha incompleta não é descartada em silêncio.
+      if (incompletos > 0) {
+        if (btn) { btn.disabled = false; btn.textContent = id ? 'Salvar alterações' : 'Salvar produto'; }
+        toast(`${incompletos} componente(s) sem produto selecionado — preencha (ou remova a linha) antes de salvar`);
+        return;
+      }
+      await sb.from('produto_componentes').delete().eq('produto_id', produtoId);
+      if (clist.length) {
+        const { error: cErr } = await sb.from('produto_componentes').insert(clist);
+        if (cErr) {
+          toast('Produto salvo, mas ERRO ao gravar componentes: ' + (cErr.message || 'tente de novo'));
+          loadProdutos();
+          return;
+        }
+      }
       await sb.from('produto_variacoes').delete().eq('produto_id', produtoId);
+    } else {
+      // virou "simples": limpa variações e componentes antigos
+      await sb.from('produto_variacoes').delete().eq('produto_id', produtoId);
+      await sb.from('produto_componentes').delete().eq('produto_id', produtoId);
     }
   }
 
@@ -2011,7 +2220,12 @@ export function produtoExcluir(id) {
   confirmarAcao('Excluir produto', `Excluir "${p?.nome || ''}"? Isso não pode ser desfeito.`, 'Excluir', async () => {
     const { error } = await sb.from('produtos').delete().eq('id', id);
     if (error) {
-      if (/foreign key|violates/i.test(error.message || '')) { toast('Não dá para excluir: produto vinculado a maletas.'); return; }
+      if (/foreign key|violates/i.test(error.message || '')) {
+        const msg = /produto_componentes/i.test(error.message || '')
+          ? 'Não dá para excluir: este produto é componente de um kit. Remova-o do kit antes.'
+          : 'Não dá para excluir: produto vinculado a maletas.';
+        toast(msg); return;
+      }
       if (await handleSupabaseError(error, 'Erro ao excluir')) return;
       toast('Erro ao excluir'); return;
     }

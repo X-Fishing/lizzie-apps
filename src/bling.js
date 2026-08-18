@@ -368,18 +368,26 @@ export async function atualizarMaleta(revId, btn) {
   // fallback). A revendedora pode ter MAIS DE UM contato no Bling com o mesmo nome e
   // ids diferentes (ex.: Bruna #18638 id A e #18526 id B); filtrar só pelo id salvo
   // deixava o outro pedido de fora.
-  const abertos = todos.filter(p => p.situacao?.id === SITUACAO_ABERTO);
   const alvoNome = nome ? normalizarNome(nome) : '';
-  const abertosRev = abertos.filter(p => {
+  const matchaRevendedora = p => {
     if (blingId && String(p.contato?.id) === String(blingId)) return true;
     if (alvoNome) {
       const cn = normalizarNome(p.contato?.nome);
       return cn && (cn === alvoNome || cn.includes(alvoNome) || alvoNome.includes(cn));
     }
     return false;
-  });
+  };
+  const abertos = todos.filter(p => p.situacao?.id === SITUACAO_ABERTO);
+  const abertosRev = abertos.filter(matchaRevendedora);
+  // Pedidos já ATENDIDOS (voltaram no Bling) que batem com a revendedora mas
+  // NUNCA foram vinculados a nenhuma peça dela — antes ficavam invisíveis
+  // aqui (só entrava pedido vinculado OU em aberto). É uma causa raiz real
+  // de "item sumido": pedido antigo, já atendido, nunca importado — o admin
+  // nem tinha como escolher sincronizá-lo, porque nem aparecia na lista.
+  const atendidosNuncaVinculados = todos.filter(p =>
+    p.situacao?.id !== SITUACAO_ABERTO && !pedidoNums.includes(String(p.numero)) && matchaRevendedora(p));
   const porNumero = new Map();
-  [...vinculados, ...abertosRev].forEach(p => porNumero.set(String(p.numero), p));
+  [...vinculados, ...abertosRev, ...atendidosNuncaVinculados].forEach(p => porNumero.set(String(p.numero), p));
   const candidatos = [...porNumero.values()].sort((a, b) => (b.data || '').localeCompare(a.data || ''));
 
   if (!candidatos.length) {
@@ -397,8 +405,13 @@ export async function atualizarMaleta(revId, btn) {
   // Mais de um pedido: o admin escolhe (não assume nada).
   state.maletaCtx = { revId, nome, pedidos: {} };
   candidatos.forEach(p => { state.maletaCtx.pedidos[p.id] = p; });
+  const badgeSituacao = p => {
+    if (p.situacao?.id === SITUACAO_ABERTO) return '<span style="color:var(--success);font-size:11px">• em aberto</span>';
+    if (!pedidoNums.includes(String(p.numero))) return '<span style="color:var(--warning);font-size:11px">• atendido, nunca sincronizado</span>';
+    return '<span style="color:var(--muted);font-size:11px">• atendido</span>';
+  };
   cont.innerHTML = `<p style="font-size:13px;color:var(--muted);margin-bottom:10px"><strong>${esc(nome)}</strong> tem ${candidatos.length} pedidos no Bling. Escolha qual atualizar:</p>` +
-    candidatos.map(p => `<button class="btn-secondary" style="width:100%;text-align:left;margin-bottom:8px" onclick="previewMaletaPorId('${p.id}')">Pedido #${p.numero} — ${formatDate(p.data)} ${p.situacao?.id === SITUACAO_ABERTO ? '<span style="color:var(--success);font-size:11px">• em aberto</span>' : '<span style="color:var(--muted);font-size:11px">• atendido</span>'}</button>`).join('');
+    candidatos.map(p => `<button class="btn-secondary" style="width:100%;text-align:left;margin-bottom:8px" onclick="previewMaletaPorId('${p.id}')">Pedido #${p.numero} — ${formatDate(p.data)} ${badgeSituacao(p)}</button>`).join('');
 }
 
 export function previewMaletaPorId(pedidoId) {
@@ -442,6 +455,11 @@ export async function previewMaleta(revId, nome, pedido) {
   state.maletaCtx.revId = revId;
   state.maletaCtx.pedidoNumero = pedido.numero;
   state.maletaCtx.itensRpc = Object.values(blingPorRef).map(b => ({ referencia: b.referencia, descricao: b.descricao, quantidade: b.quantidade, preco: b.preco }));
+  // Guardados pra virar aviso PERSISTENTE (maleta_sync_avisos) se o admin
+  // confirmar a sincronização — o banner abaixo some ao fechar o modal,
+  // sem isso o item pulado ficava só na memória de quem olhou a tela na hora.
+  state.maletaCtx.semCodigo = semCodigo;
+  state.maletaCtx.avisosNeg = avisosNeg;
 
   let html = `<div style="font-size:13px;color:var(--muted);margin-bottom:12px">Maleta de <strong>${esc(nome)}</strong> · Pedido #${pedido.numero}</div>`;
   if (!novos.length) {
@@ -462,8 +480,14 @@ export async function previewMaleta(revId, nome, pedido) {
       <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> <strong>${semCodigo.length} item(ns) sem código no Bling</strong> — NÃO sincronizados, conferir manualmente:
       ${semCodigo.map(s => `<div>• ${esc(s.descricao || '(sem descrição)')} — qtd ${Number(s.quantidade) || 0}</div>`).join('')}</div>`;
   }
-  if (novos.length) {
-    html += `<button class="btn-primary" style="width:100%;margin-top:14px" onclick="confirmarMaleta(this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> Adicionar ${totalNovas} ite${totalNovas!==1?'ns':'m'} à maleta</button>`;
+  // O botão precisa aparecer mesmo com 0 itens novos SE houver avisos —
+  // confirmarMaleta() é o único ponto que grava os avisos em
+  // maleta_sync_avisos (0062); sem ele aparecer aqui, um pedido cujo único
+  // problema é "sem código"/"delta negativo" fecha o modal sem persistir
+  // nada, reproduzindo o mesmo tipo de sumiço silencioso do incidente da Leina.
+  if (novos.length || avisosNeg.length || semCodigo.length) {
+    const label = novos.length ? `Adicionar ${totalNovas} ite${totalNovas!==1?'ns':'m'} à maleta` : 'Registrar avisos de sincronização';
+    html += `<button class="btn-primary" style="width:100%;margin-top:14px" onclick="confirmarMaleta(this)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg> ${label}</button>`;
   }
   cont.innerHTML = html;
 }
@@ -484,7 +508,33 @@ export async function confirmarMaleta(btn) {
     toast(msg); btn.disabled = false; btn.textContent = 'Tentar de novo'; return;
   }
   const n = Number(data) || 0;
-  toast(n > 0 ? `${n} ite${n!==1?'ns':'m'} adicionado${n!==1?'s':''} à maleta!` : 'Maleta já estava atualizada');
+
+  // Item pulado (sem código / delta negativo) vira aviso PERSISTENTE — best
+  // effort: não trava a confirmação se essa gravação falhar (RLS ausente,
+  // migração 0062 não rodada etc.), só avisa no console pra investigar depois.
+  // upsert + ignoreDuplicates: rodar a sincronização de novo enquanto o
+  // mesmo problema persiste não deve empilhar avisos repetidos (índice
+  // único parcial da 0062 cobre exatamente essas 4 colunas).
+  const avisos = [
+    ...(state.maletaCtx.semCodigo || []).map(s => ({
+      revendedora_id: state.maletaCtx.revId, pedido_numero: String(state.maletaCtx.pedidoNumero || ''),
+      tipo: 'sem_codigo', descricao: s.descricao || '(sem descrição)', quantidade: Number(s.quantidade) || 0 })),
+    ...(state.maletaCtx.avisosNeg || []).map(a => ({
+      revendedora_id: state.maletaCtx.revId, pedido_numero: String(state.maletaCtx.pedidoNumero || ''),
+      // deficit sempre positivo (quantas unidades a menos o Bling mostra) — sinal
+      // negativo aqui seria confuso pra quem só olhar a coluna quantidade depois.
+      tipo: 'delta_negativo', descricao: a.descricao, quantidade: Math.abs(a.app - Math.floor(a.quantidade)) })),
+  ];
+  if (avisos.length) {
+    const { error: avErr } = await sb.from('maleta_sync_avisos')
+      .upsert(avisos, { onConflict: 'revendedora_id,pedido_numero,tipo,descricao', ignoreDuplicates: true });
+    if (avErr) console.warn('[maleta_sync_avisos] não gravou avisos (rodou a migração 0062?):', avErr.message);
+  }
+
+  toast(n > 0 ? `${n} ite${n!==1?'ns':'m'} adicionado${n!==1?'s':''} à maleta!`
+    : avisos.length ? `Maleta já estava atualizada — ${avisos.length} aviso(s) registrado(s) pra conferência.`
+    : 'Maleta já estava atualizada');
+
   closeModal('modal-maleta');
   state.allConsignados = [];
   if (document.getElementById('panel-consignados').style.display !== 'none') loadConsignados();

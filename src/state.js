@@ -10,11 +10,12 @@ export const state = {
   vendaItensCache: {},
   revNameMap: {},
   revBlingMap: {},
+  avisosSync: [],           // maleta_sync_avisos não resolvidos (admin) — ver migration 0062
   revTesteSet: new Set(),   // ids de revendedoras TESTE (fora de faturamento/estoque)
   gFilter: 'todas',
   gSort: { col: 'prazo_maximo', dir: 'asc' },
   pFilter: 'todos',
-  cSort: { col: 'descricao', dir: 'asc' },
+  cSort: { col: 'ordem', dir: 'asc' },   // ordem de lançamento (pedido da equipe) — ver migration 0060
   cicloRevSelecionada: null,
   cicloSoVendidos: false,
   cicloSoNaoVendidos: false,  // exclusivo com cicloSoVendidos

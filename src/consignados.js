@@ -24,11 +24,14 @@ export async function loadConsignados() {
   const makeQ = () => {
     let q = sb.from('consignados').select('*');
     if (!isAdmin) q = q.eq('revendedora_id', state.currentUser.id);
-    return q.order('created_at', { ascending: false });
+    return q.order('ordem', { ascending: false });
   };
   const queries = [fetchPaginado(makeQ)];
   if (isAdmin) {
     queries.push(sbQ(sb.from('profiles').select('*').eq('is_revendedora', true)));
+    // Best-effort: se a migração 0062 ainda não rodou, sbQ só devolve erro
+    // (não quebra o carregamento) e o card fica sem o badge de avisos.
+    queries.push(sbQ(sb.from('maleta_sync_avisos').select('*').eq('resolvido', false).order('created_at', { ascending: false })));
   } else {
     // revendedora: descobre a maleta ATIVA (o catálogo só mostra peças dela)
     queries.push(sbQ(sb.from('maletas').select('id').eq('revendedora_id', state.currentUser.id).eq('status', 'ativa').maybeSingle()));
@@ -48,6 +51,7 @@ export async function loadConsignados() {
     state.revBlingMap = {};
     revs.forEach(r => { state.revNameMap[r.id] = r.nome; state.revBlingMap[r.id] = r.bling_contato_id || ''; });
     marcarRevsTeste(revs); // contas TESTE ficam fora dos totais agregados
+    state.avisosSync = results[2].data || [];
   } else {
     state.maletaAtivaId = results[1].data?.id || null;
   }
@@ -158,6 +162,7 @@ export function cicloRowHtml(c, isAdmin, historico = false) {
     extraClass = esgotado ? ' esgotado' : '';
   }
   return `<tr class="ciclo-row${extraClass}"${extraStyle}>
+    <td class="ciclo-td" style="width:1%;white-space:nowrap;font-size:12px;color:var(--muted)">${c.ordem ?? '—'}</td>
     <td class="ciclo-td">
       <div style="display:flex;align-items:center;gap:6px">
         <button class="btn-icon" title="Ver foto" style="color:var(--rose);padding:2px;flex:none" onclick="confVerFoto('${c.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></button>
@@ -209,6 +214,7 @@ export function cicloTableHtml(list, isAdmin, historico = false) {
     <table class="ciclo-table">
       <thead>
         <tr>
+          ${cicloTh('ordem','#')}
           ${cicloTh('descricao','Descrição')}
           ${cicloTh('referencia','SKU')}
           ${cicloTh('categoria','Categoria')}
@@ -480,9 +486,11 @@ function cicloAdmCardsHtml() {
   return linhas.map(l => {
     const convPct = Math.round(l.conv * 100);
     const faixa = l.temAtivos ? 'var(--grad-rose)' : 'var(--border)';
+    const nAvisos = (state.avisosSync || []).filter(a => String(a.revendedora_id) === String(l.revId)).length;
     return `<div class="rev-card${l.temAtivos ? '' : ' inativo'}" style="position:relative;overflow:hidden;padding-top:16px" onclick="abrirCicloRev('${l.revId}')">
       <div style="position:absolute;top:0;left:0;right:0;height:4px;background:${faixa}"></div>
       ${l.revId === topRevId ? '<span class="badge" style="position:absolute;top:12px;right:12px;background:var(--gold);color:#fff;font-size:10px">TOP</span>' : ''}
+      ${nAvisos > 0 ? `<div style="font-size:11px;color:var(--warning);font-weight:600;margin-bottom:6px" title="Item pulado na sincronização com o Bling — abra a revendedora pra ver"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true" width="13" height="13"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> ${nAvisos} aviso${nAvisos!==1?'s':''} de sincronização</div>` : ''}
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
         <span style="width:38px;height:38px;border-radius:50%;background:var(--blush);color:var(--rose);display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">${cicloIniciais(l.nome)}</span>
         <div style="min-width:0">
@@ -604,6 +612,18 @@ export function renderCicloAdminDetalhe(revId, list) {
     ? `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>${msgVazio}</p></div>`
     : cicloTableHtml(listaTabela, true);
 
+  // Avisos de sincronização (0062) que ficaram pendentes pra esta revendedora
+  // — persistem até alguém marcar resolvido, não somem sozinhos como o banner
+  // do modal de sincronização (motivo do item ter sumido da relação da Leina).
+  const avisosRev = (state.avisosSync || []).filter(a => String(a.revendedora_id) === String(revId));
+  const avisosHtml = avisosRev.length ? `<div style="margin-bottom:14px;background:rgba(212,168,75,0.12);border:1px solid var(--gold);border-radius:10px;padding:10px 12px;font-size:12.5px">
+      <div style="font-weight:600;margin-bottom:6px;color:var(--text)"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3z"/><line x1="12" x2="12" y1="9" y2="13"/><line x1="12" x2="12.01" y1="17" y2="17"/></svg> ${avisosRev.length} aviso${avisosRev.length!==1?'s':''} de sincronização pendente${avisosRev.length!==1?'s':''}</div>
+      ${avisosRev.map(a => `<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:4px 0;border-top:1px solid rgba(0,0,0,0.06)">
+        <span>${a.tipo === 'sem_codigo' ? 'Sem código no Bling' : 'Delta negativo (conferir manualmente)'} — ${esc(a.descricao || '')}${a.pedido_numero ? ` · pedido #${esc(a.pedido_numero)}` : ''}</span>
+        ${ehGestor() ? `<button class="btn-secondary btn-sm" style="flex:none" onclick="resolverAvisoSync('${a.id}')">Marcar resolvido</button>` : ''}
+      </div>`).join('')}
+    </div>` : '';
+
   return `<button class="btn-voltar-ciclo" onclick="voltarCardsCiclo()">← Voltar para revendedoras</button>
     <div class="card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
@@ -618,10 +638,23 @@ export function renderCicloAdminDetalhe(revId, list) {
         </div>
       </div>
       ${acoesTopo}
+      ${avisosHtml}
       ${tabelaHtml}
       ${acoes}
     </div>
     ${historicoCatalogosHtml(list)}`;
+}
+
+// Marca um aviso de sincronização (0062) como resolvido — não apaga (fica
+// como histórico), só sai da lista de pendentes.
+export async function resolverAvisoSync(id) {
+  const { error } = await sbQ(sb.from('maleta_sync_avisos')
+    .update({ resolvido: true, resolvido_em: new Date().toISOString(), resolvido_por: state.currentUser.id })
+    .eq('id', id));
+  if (await handleSupabaseError(error, 'Erro ao marcar aviso como resolvido')) return;
+  state.avisosSync = state.avisosSync.filter(a => a.id !== id);
+  toast('Aviso marcado como resolvido.');
+  renderCicloGrid();
 }
 
 export function abrirCicloRev(revId) {
