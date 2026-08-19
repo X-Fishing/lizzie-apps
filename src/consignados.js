@@ -137,7 +137,7 @@ export function cicloTh(col, label) {
   return `<th class="ciclo-th${state.cSort.col === col ? ' sorted' : ''}" onclick="sortConsignados('${col}')">${label} ${cicloArrow(col)}</th>`;
 }
 
-export function cicloRowHtml(c, isAdmin, historico = false) {
+export function cicloRowHtml(c, isAdmin, historico = false, posicao = null) {
   const disp = qtdDisp(c);
   const esgotado = disp <= 0;
   const cat = c.categoria || detectarCategoria(c.descricao);
@@ -162,7 +162,7 @@ export function cicloRowHtml(c, isAdmin, historico = false) {
     extraClass = esgotado ? ' esgotado' : '';
   }
   return `<tr class="ciclo-row${extraClass}"${extraStyle}>
-    <td class="ciclo-td" style="width:1%;white-space:nowrap;font-size:12px;color:var(--muted)">${c.ordem ?? '—'}</td>
+    <td class="ciclo-td" style="width:1%;white-space:nowrap;font-size:12px;color:var(--muted)">${posicao ?? '—'}</td>
     <td class="ciclo-td">
       <div style="display:flex;align-items:center;gap:6px">
         <button class="btn-icon" title="Ver foto" style="color:var(--rose);padding:2px;flex:none" onclick="confVerFoto('${c.id}')"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></button>
@@ -218,7 +218,13 @@ export function cicloTableHtml(list, isAdmin, historico = false) {
   // Só o catálogo ativo da revendedora vira card; o histórico e as telas do
   // staff continuam na tabela (lá a comparação coluna a coluna é o ponto).
   if (!isAdmin && !historico) return cicloCardsHtml(list);
-  const rows = cicloSortRows(list).map(c => cicloRowHtml(c, isAdmin, historico)).join('');
+  // Ordem de lançamento = posição 1..N DENTRO DESTA MALETA, não o valor bruto
+  // de `ordem` (sequência global da tabela toda — não dizia nada pra quem via,
+  // tipo "8327"). Fixa independente da coluna que o usuário está ordenando
+  // agora: é uma referência estável, não muda se ele clicar em "Preço".
+  const ordemRank = new Map();
+  [...list].sort((a, b) => (a.ordem ?? 0) - (b.ordem ?? 0)).forEach((c, i) => ordemRank.set(c.id, i + 1));
+  const rows = cicloSortRows(list).map(c => cicloRowHtml(c, isAdmin, historico, ordemRank.get(c.id))).join('');
   const jaEmOrdem = state.cSort.col === 'ordem' && state.cSort.dir === 'asc';
   const btnOrdem = !jaEmOrdem
     ? `<button class="btn-secondary btn-sm" style="margin-bottom:8px" onclick="ordenarPorLancamento()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18"/><path d="M3 12h18"/><path d="M3 18h18"/></svg> Ordem de lançamento</button>`
