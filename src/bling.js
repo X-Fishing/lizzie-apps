@@ -296,6 +296,51 @@ export function voltarListaBling() {
   }
 }
 
+// Garante que cada item do pedido Bling tenha um produto correspondente no
+// catálogo interno (produtos) — sem isso, quando a peça volta sem vender e
+// alguém tenta relançá-la pra outra revendedora, o bipe do Lançador não acha
+// ela (lookupProduto só busca em produtos, nunca em consignados). Devolve um
+// Map código→produto_id (existentes + recém-criados) pra vincular no insert.
+async function garantirProdutosDoBling(itens) {
+  const mapa = new Map();
+  const codigos = [...new Set(itens.map(it => (it.codigo || '').trim()).filter(Boolean))];
+  if (!codigos.length) return mapa;
+
+  const { data: existentes } = await sbQ(sb.from('produtos').select('id,sku').in('sku', codigos));
+  (existentes || []).forEach(p => mapa.set(p.sku, p.id));
+
+  const faltando = codigos.filter(c => !mapa.has(c));
+  if (!faltando.length) return mapa;
+
+  // Um item por código (o primeiro que aparece define nome/preço do produto novo).
+  const porCodigo = new Map();
+  itens.forEach(it => { const c = (it.codigo || '').trim(); if (c && !porCodigo.has(c)) porCodigo.set(c, it); });
+  const novos = faltando.map(c => {
+    const it = porCodigo.get(c);
+    return { nome: it.descricao || c, sku: c, preco_venda: Number(it.valor) || 0, formato: 'simples', ativo: true };
+  });
+
+  const { data: criados, error } = await sb.from('produtos')
+    .upsert(novos, { onConflict: 'sku', ignoreDuplicates: true }).select('id,sku');
+  if (error) {
+    // Best-effort: se falhar, a maleta segue sem o vínculo — melhor uma peça
+    // sem produto_id do que travar a importação inteira por causa disso.
+    console.warn('[garantirProdutosDoBling] não cadastrou produtos novos:', error.message);
+    return mapa;
+  }
+  (criados || []).forEach(p => mapa.set(p.sku, p.id));
+
+  // ignoreDuplicates não devolve linha pra SKU que já existia (corrida com
+  // outra importação rodando ao mesmo tempo) — reconfere pra não deixar de
+  // vincular o produto que na real já foi criado por esse concorrente.
+  const aindaFaltando = faltando.filter(c => !mapa.has(c));
+  if (aindaFaltando.length) {
+    const { data: reconferidos } = await sbQ(sb.from('produtos').select('id,sku').in('sku', aindaFaltando));
+    (reconferidos || []).forEach(p => mapa.set(p.sku, p.id));
+  }
+  return mapa;
+}
+
 export async function importarItensBling(numero, btn) {
   const itens = state.blingItensAtual;
   if (!itens.length) { toast('Nenhum item para importar'); return; }
@@ -308,10 +353,12 @@ export async function importarItensBling(numero, btn) {
   btn.textContent = '⟳ Importando...'; btn.disabled = true;
 
   const maletaId = await garantirMaletaAtiva(revId);
+  const produtoIdPorCodigo = await garantirProdutosDoBling(itens);
   const { error } = await sb.from('consignados').insert(
     itens.map(it => ({
       revendedora_id: revId,
       maleta_id: maletaId,
+      produto_id: produtoIdPorCodigo.get((it.codigo || '').trim()) || null,
       descricao: it.descricao,
       referencia: it.codigo || null,
       quantidade_enviada: Number(it.quantidade),

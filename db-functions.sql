@@ -10,7 +10,19 @@
 --
 -- COMO APLICAR (só em banco NOVO, antes das migrações): Supabase → SQL Editor
 -- → cole este arquivo → Run. Idempotente (create or replace).
+--
+-- 19/08/2026: esse aviso já não foi suficiente uma vez — alguém (inclusive
+-- o Cowork) rodou o arquivo inteiro achando que era só pra atualizar UMA
+-- função, recriou o overload antigo de registrar_venda, e quase quebrou
+-- toda venda em produção. O bloco abaixo trava a execução na primeira
+-- linha (e não pode ser rodado sem querer, se o SQL Editor executar
+-- STATEMENT por STATEMENT em vez de misturar) — se você chegou até aqui de
+-- propósito porque precisa mesmo recriar um banco do zero, apague este
+-- bloco antes de rodar o resto.
 -- ════════════════════════════════════════════════════════════════════
+do $$ begin
+  raise exception 'db-functions.sql é histórico — NÃO rode em banco existente. Correções de função viram migration numerada em supabase/migrations/. Leia o aviso no topo do arquivo antes de prosseguir.';
+end $$;
 
 -- registrar_venda: cria a venda, os itens, o recebimento (se houver) e
 -- incrementa quantidade_vendida — tudo numa única transação. Resolve:
