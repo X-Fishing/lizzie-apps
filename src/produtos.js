@@ -220,7 +220,7 @@ export async function loadProdutos() {
   // fetchPaginado: o PostgREST devolve no máx. 1000 linhas por chamada — sem
   // isso, catálogo acima de 1000 produtos aparece truncado na grid.
   const { data, error } = await fetchPaginado(() => sb.from('produtos')
-    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,custo_compra,estoque_qtd,foto_url,descricao_curta,ativo,categoria_id,colecao_id,fornecedor_id,formato,nuvemshop_product_id,nuvemshop_variant_id,nuvemshop_sync_status,nuvemshop_sync_erro')
+    .select('id,nome,sku,codigo_barras,codigo_fornecedor,preco_venda,custo_compra,estoque_qtd,foto_url,descricao_curta,ativo,categoria_id,colecao_id,fornecedor_id,formato,created_at,nuvemshop_product_id,nuvemshop_variant_id,nuvemshop_sync_status,nuvemshop_sync_erro')
     .order('nome', { ascending: true }));
   // handleSupabaseError devolve TRUE para qualquer erro (utils.js): sair pelo
   // retorno dele deixaria a tela presa em "Carregando produtos..." para
@@ -531,6 +531,10 @@ function listaUnidades(lista = listaFiltrada()) {
     preco:   u => u.tipo === 'grupo' ? Math.min(...u.membros.map(m => Number(m.p.preco_venda) || 0))
            : u.tipo === 'varprod' ? Math.min(...u.vars.map(v => Number(v.preco_venda ?? u.p.preco_venda) || 0))
            : (Number(u.p.preco_venda) || 0),
+    // "Cadastrado por último" (pedido da equipe): grupo/anel usa o membro
+    // mais recente — é o que faz o grupo "subir" quando um aro novo entra.
+    cadastro: u => u.tipo === 'grupo' ? Math.max(...u.membros.map(m => new Date(m.p.created_at || 0).getTime()))
+           : new Date(u.p.created_at || 0).getTime(),
   });
   return units;
 }
@@ -578,7 +582,12 @@ function tabelaHTML() {
   const idsPagina = pagina.flatMap(u => u.tipo === 'grupo' ? u.membros.map(m => m.p.id) : [u.p.id]);
   const pagInteiraMarcada = idsPagina.length > 0 && idsPagina.every(id => selecionados.has(String(id)));
 
+  const jaRecentes = ordProdutos.col === 'cadastro' && ordProdutos.dir === 'desc';
+  const btnRecentes = !jaRecentes
+    ? `<button class="btn-secondary btn-sm" style="margin-bottom:8px" onclick="produtoOrdenarRecentes()"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="10"/></svg> Últimos cadastrados</button>`
+    : '';
   return `
+    ${btnRecentes}
     ${barraMassaHTML(idsPagina, pagInteiraMarcada, lista)}
     <div class="pag-wrap"><table class="pag-table"><thead><tr>
       <th class="pag-th" style="width:34px;text-align:center">
@@ -808,6 +817,15 @@ export function produtoPagina(pagina) {
 export function produtoOrdenar(col) {
   alternarOrdenacao(ordProdutos, col);
   paginaAtual = 1;   // trocar de critério com a página 7 aberta desorienta
+  renderTabela();
+}
+
+// Botão dedicado (pedido da equipe): últimos cadastrados primeiro, sem
+// precisar achar/clicar numa coluna de data que a tabela nem mostra hoje.
+export function produtoOrdenarRecentes() {
+  ordProdutos.col = 'cadastro';
+  ordProdutos.dir = 'desc';
+  paginaAtual = 1;
   renderTabela();
 }
 
