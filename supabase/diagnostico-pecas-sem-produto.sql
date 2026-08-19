@@ -49,3 +49,32 @@ select c.id, p.nome as revendedora, c.referencia, c.descricao, c.pedido_numero,
    )
  order by c.created_at desc
  limit 20;
+
+-- ═══════════════════════════════════════════════════════════════════
+-- 4) BACKFILL (não é read-only — revise as seções 1-3 antes de rodar).
+-- A migration 0063 já corrigiu a causa — isto aqui só conserta o que
+-- ficou pra trás. Cria em `produtos` o que falta (1 produto por SKU
+-- distinto, usando a descrição/preço da peça mais recente daquele SKU)
+-- e depois vincula `consignados.produto_id` nas linhas afetadas.
+-- ═══════════════════════════════════════════════════════════════════
+-- insert into public.produtos (nome, sku, preco_venda, formato, ativo)
+-- select distinct on (c.referencia)
+--        c.descricao, c.referencia, coalesce(c.preco_venda, 0), 'simples', true
+--   from public.consignados c
+--  where c.pedido_numero is not null
+--    and c.referencia is not null and c.referencia <> ''
+--    and not exists (select 1 from public.produtos pr where pr.sku = c.referencia or pr.codigo_barras = c.referencia)
+--  order by c.referencia, c.created_at desc
+-- on conflict (sku) where sku is not null and sku <> '' do nothing;
+--
+-- update public.consignados c
+--    set produto_id = pr.id
+--   from public.produtos pr
+--  where c.produto_id is null
+--    and c.referencia is not null and c.referencia <> ''
+--    and (pr.sku = c.referencia or pr.codigo_barras = c.referencia);
+
+-- ── Conferência pós-backfill (deve voltar 0) ────────────────────────────
+-- select count(*) from public.consignados c
+--  where c.pedido_numero is not null and c.referencia is not null and c.referencia <> ''
+--    and not exists (select 1 from public.produtos pr where pr.sku = c.referencia or pr.codigo_barras = c.referencia);
