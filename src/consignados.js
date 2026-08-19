@@ -375,10 +375,17 @@ export function historicoCatalogosHtml(list) {
     const vend = pecas.reduce((s, c) => s + (c.quantidade_vendida || 0), 0);
     const recv = pecas.reduce((s, c) => s + ((c.quantidade_vendida || 0) * Number(c.preco_venda || 0)), 0);
     const dataFmt = data ? data.split('-').reverse().join('/') : 'sem data';
+    // Observação (0064) daquela maleta — ícone só aparece se tiver texto,
+    // o hover (title nativo) mostra o conteúdo, igual o campo Observações do Bling.
+    const maletaId = pecas[0]?.maleta_id || null;
+    const obs = maletaId ? (maletaObsMap.get(maletaId) || '') : '';
+    const iconObs = obs.trim()
+      ? `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true" style="color:var(--success);flex:none" title="${esc(obs)}"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>`
+      : '';
     return `<div class="hist-ciclo-card" onclick="abrirHistoricoCiclo('${data}')"
       style="cursor:pointer;border:1px solid var(--line,#eee);border-radius:10px;margin-bottom:8px;padding:12px 14px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;transition:background .15s"
       onmouseover="this.style.background='rgba(0,0,0,0.02)'" onmouseout="this.style.background=''">
-        <span style="font-weight:600;color:var(--plum)">Fechado em ${dataFmt}</span>
+        <span style="font-weight:600;color:var(--plum);display:flex;align-items:center;gap:8px">Fechado em ${dataFmt}${iconObs}</span>
         <span style="font-size:12px;color:var(--muted)">${pecas.length} peça${pecas.length!==1?'s':''} · ${vend}/${env} vendidas · <span style="color:var(--rose)">${fmtBRL(recv)}</span> <span style="color:var(--muted);margin-left:6px">›</span></span>
       </div>`;
   }).join('');
@@ -475,6 +482,7 @@ export function statsRevendedora(list) {
 // Estado da tela de cards (client-side, não persiste no banco).
 let cicloAdmBusca = '';
 let cicloAdmOrdem = 'vendas';   // 'vendas' | 'conversao' | 'nome'
+let maletaObsMap = new Map();   // maleta_id -> observação (0064) — carregado ao abrir uma revendedora
 const cicloIniciais = n => (n || '?').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase() || '?';
 
 // Monta a lista de revendedoras já enriquecida (stats + conversão), aplicando
@@ -632,6 +640,16 @@ export function renderCicloAdminDetalhe(revId, list) {
     ? `<div class="empty-state"><div class="empty-icon"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div><p>${msgVazio}</p></div>`
     : cicloTableHtml(listaTabela, true);
 
+  // Observações da maleta ATIVA (0064) — texto livre, tipo o campo
+  // "Observações" do pedido no Bling (peças da maleta passada, combinados
+  // com a revendedora etc.). Salva ao sair do campo (onblur).
+  const maletaAtivaId = ativos[0]?.maleta_id || null;
+  const obsHtml = maletaAtivaId ? `<div style="margin-top:14px">
+      <label class="form-label" style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.5px">Observações desta maleta</label>
+      <textarea class="form-control" rows="3" placeholder="Anotações sobre esta maleta — ex.: peças que voltaram da maleta passada, combinados com a revendedora..."
+        onblur="salvarObservacaoMaleta('${maletaAtivaId}', this.value)">${esc(maletaObsMap.get(maletaAtivaId) || '')}</textarea>
+    </div>` : '';
+
   // Avisos de sincronização (0062) que ficaram pendentes pra esta revendedora
   // — persistem até alguém marcar resolvido, não somem sozinhos como o banner
   // do modal de sincronização (motivo do item ter sumido da relação da Leina).
@@ -660,9 +678,21 @@ export function renderCicloAdminDetalhe(revId, list) {
       ${acoesTopo}
       ${avisosHtml}
       ${tabelaHtml}
+      ${obsHtml}
       ${acoes}
     </div>
     ${historicoCatalogosHtml(list)}`;
+}
+
+// Observação da maleta (0064) — salva ao sair do campo (onblur). Best-effort
+// silencioso na leitura (maletaObsMap), erro de verdade só se o UPDATE falhar.
+export async function salvarObservacaoMaleta(maletaId, valor) {
+  if (!maletaId) return;
+  const texto = (valor || '').trim() || null;
+  const { error } = await sbQ(sb.from('maletas').update({ observacao: texto }).eq('id', maletaId));
+  if (await handleSupabaseError(error, 'Erro ao salvar observação')) return;
+  maletaObsMap.set(maletaId, texto || '');
+  toast('Observação salva.');
 }
 
 // Marca um aviso de sincronização (0062) como resolvido — não apaga (fica
@@ -677,13 +707,17 @@ export async function resolverAvisoSync(id) {
   renderCicloGrid();
 }
 
-export function abrirCicloRev(revId) {
+export async function abrirCicloRev(revId) {
   confTelaAberta = false; fechTelaAberta = false;
   state.cicloRevSelecionada = revId;
   state.historicoCicloSel = null;
   const cs = document.getElementById('c-search');
   if (cs) cs.value = '';
   limparFiltrosVendidos();
+  // Observações por maleta (0064) — cobre a ativa e as já fechadas dela,
+  // pro histórico também conseguir mostrar o ícone com o texto no hover.
+  const { data } = await sbQ(sb.from('maletas').select('id,observacao').eq('revendedora_id', revId));
+  maletaObsMap = new Map((data || []).map(m => [m.id, m.observacao || '']));
   renderCicloGrid();
 }
 
