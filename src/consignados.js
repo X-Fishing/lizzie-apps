@@ -1,7 +1,7 @@
 // Catalogo/ciclo: grade, detalhe, historico de catalogos, carrinho de venda, fechamento (PDF), busca de peca.
 import { sb } from './supabase.js';
 import { state } from './state.js';
-import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, diaMesPartes, fmtDiaMes, hojeBR, escAttrJs, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado, ehFormaAReceber, podeCompartilharArquivo, compartilharArquivos } from './utils.js';
+import { esc, fmtBRL, formatDate, sbQ, fetchPaginado, toast, handleSupabaseError, confirmarAcao, openModal, closeModal, qtdDisp, detectarCategoria, CAT_LABEL, parseMoneyBR, moneyToInput, maskMoneyBR, brToISO, isoToBR, diaMesParaISO, diaMesPartes, fmtDiaMes, hojeBR, ehRevTeste, marcarRevsTeste, soDigitos, telValido, telNormalizado, telFmt, ehFormaAReceber, podeCompartilharArquivo, compartilharArquivos } from './utils.js';
 import { IS_ADMIN, PERMISSOES } from './menu.js';
 import { abrirModalPosVenda } from './pos-venda.js';
 
@@ -2292,11 +2292,16 @@ async function buscarClientePorTelefone(tel) {
   }
 }
 
-// ── Sugestão de nome (clientes SEM telefone repetem compra e a revendedora
-// acaba cadastrando a mesma pessoa com nomes levemente diferentes a cada
-// venda — como não há celular, não há como achar por telefone). Busca só
-// nas vendas da PRÓPRIA revendedora (RLS já restringe) por nome parecido.
+// ── Sugestão de nome (autocomplete pelas clientes da PRÓPRIA revendedora,
+// RLS já restringe). Existia só pra manter o NOME consistente com clientes
+// sem telefone (repetia a mesma pessoa com grafias diferentes a cada venda,
+// sem como achar por telefone). Passou a também trazer telefone/aniversário
+// quando a venda tem cliente_id — escolher pelo nome preenche o telefone
+// junto, então a venda nasce vinculada à cliente certa e ganha selo sozinha.
+// Sem isso, ela ficava com cliente_id nulo (bipe/histórico contava a venda,
+// fidelidade não — foi exatamente o que aconteceu com a Luiz DHL da Pamela).
 let _vendaNomeTimer = null;
+let _sugestoesNome = [];   // [{nome, celular, aniversario_dia, aniversario_mes}]
 export function vendaNomeInput(valor) {
   clearTimeout(_vendaNomeTimer);
   const termo = (valor || '').trim();
@@ -2306,8 +2311,11 @@ export function vendaNomeInput(valor) {
 
 async function buscarNomesSugeridos(termo) {
   const el = document.getElementById('f-cliente-sugestoes');
+  // Embed via FK (vendas.cliente_id -> clientes): traz telefone/aniversário
+  // quando a venda já tem cliente vinculada; vem null pras que não têm
+  // (aí a sugestão só ajuda no nome, igual sempre foi).
   const { data, error } = await sbQ(sb.from('vendas')
-    .select('nome_cliente')
+    .select('nome_cliente, cliente_id, clientes(nome, celular, aniversario_dia, aniversario_mes)')
     .eq('revendedora_id', state.currentUser.id)
     .ilike('nome_cliente', `%${termo}%`)
     .order('data_venda', { ascending: false })
@@ -2315,29 +2323,39 @@ async function buscarNomesSugeridos(termo) {
   if (!el) return;
   if (document.getElementById('f-cliente').value.trim() !== termo) return; // digitou mais enquanto buscava
   if (error || !data?.length) { el.innerHTML = ''; return; }
+  // Dedup por cliente_id quando existe (junta "Ana"/"Ana Paula" da MESMA
+  // pessoa em vez de mostrar as duas); sem cliente_id, cai pro texto mesmo.
   const vistos = new Set();
-  const nomes = [];
+  const sugestoes = [];
   for (const v of data) {
-    const nome = (v.nome_cliente || '').trim();
-    const chave = nome.toLowerCase();
-    if (!nome || vistos.has(chave) || chave === termo.toLowerCase()) continue;
+    const nome = (v.clientes?.nome || v.nome_cliente || '').trim();
+    const chave = v.cliente_id ? `c:${v.cliente_id}` : `n:${nome.toLowerCase()}`;
+    if (!nome || vistos.has(chave) || nome.toLowerCase() === termo.toLowerCase()) continue;
     vistos.add(chave);
-    nomes.push(nome);
-    if (nomes.length >= 6) break;
+    sugestoes.push({ nome, celular: v.clientes?.celular || null,
+      aniversario_dia: v.clientes?.aniversario_dia ?? null, aniversario_mes: v.clientes?.aniversario_mes ?? null });
+    if (sugestoes.length >= 6) break;
   }
-  el.innerHTML = nomes.length
-    ? `<div class="nome-sugestoes">${nomes.map(n =>
-        // escAttrJs e não o replace manual de aspa simples: `n` é
-        // vendas.nome_cliente, TEXTO LIVRE digitado no PDV. O replace antigo
-        // não escapava a aspa DUPLA, então um nome como `a" onmouseover="…`
-        // saía da string e do próprio atributo.
-        `<button type="button" class="nome-sugestao-item" onmousedown="event.preventDefault();vendaNomeEscolher('${escAttrJs(n)}')">${esc(n)}</button>`).join('')}</div>`
+  _sugestoesNome = sugestoes;
+  el.innerHTML = sugestoes.length
+    ? `<div class="nome-sugestoes">${sugestoes.map((s, i) =>
+        // Índice na lista (não o texto) — mais seguro pra interpolar no
+        // onclick, e já carrega telefone/aniversário sem precisar reescapar nada.
+        `<button type="button" class="nome-sugestao-item" onmousedown="event.preventDefault();vendaNomeEscolher(${i})">${esc(s.nome)}${s.celular ? ` <span style="color:var(--muted);font-size:11px">· ${esc(telFmt(s.celular))}</span>` : ''}</button>`).join('')}</div>`
     : '';
 }
 
-export function vendaNomeEscolher(nome) {
-  document.getElementById('f-cliente').value = nome;
+export function vendaNomeEscolher(i) {
+  const s = _sugestoesNome[i];
+  if (!s) return;
+  document.getElementById('f-cliente').value = s.nome;
   document.getElementById('f-cliente-sugestoes').innerHTML = '';
+  if (!s.celular || document.getElementById('f-sem-zap')?.checked) return;
+  const telEl = document.getElementById('f-tel');
+  if (telEl) telEl.value = telFmt(s.celular);
+  const nascEl = document.getElementById('f-nasc');
+  if (nascEl && !nascEl.value.trim()) nascEl.value = fmtDiaMes(s.aniversario_dia, s.aniversario_mes);
+  vendaTelefoneInput();   // reaproveita a mesma busca/validação de sempre
 }
 
 // Fecha a lista ao sair do campo (onmousedown na sugestão já capturou o clique antes).
