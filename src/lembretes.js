@@ -2,15 +2,20 @@
 // LEMBRETES — painel flutuante no canto inferior direito (SÓ STAFF).
 //
 // Junta num lugar só o que hoje só aparece se alguém abrir a tela certa:
-// troca de mostruário chegando, revendedora devendo, cliente no fiado
-// atrasado e conta a pagar vencida. Sem isso, o que está vencendo só é
-// descoberto por acaso.
+// troca de mostruário chegando, revendedora devendo e conta a pagar vencida.
+// Sem isso, o que está vencendo só é descoberto por acaso.
 //
 // Regras que sustentam este módulo:
 //  - STAFF-ONLY. O gate real é o `if (ehStaff())` em auth.js, não o CSS —
-//    as 4 consultas são globais (não filtram por revendedora), então montar
+//    as consultas são globais (não filtram por revendedora), então montar
 //    isso para uma revendedora mostraria dado de todo mundo. A RLS do
 //    Postgres já cobre o resto (todas as tabelas aqui são is_staff()).
+//  - NÃO existe (e não deve voltar a existir) uma seção com dado de fiado
+//    da CLIENTE FINAL de uma revendedora (quem deve, quanto, quando
+//    combinou) — não é dívida da revendedora com a Lizzie, é um combinado
+//    dela com a cliente dela; a empresa não precisa saber (removido em
+//    20/08/2026 por isso). Isso é diferente de coletarRecebimentos abaixo,
+//    que é a revendedora devendo À LIZZIE — esse continua.
 //  - Cada seção é gated pela permissão da TELA que ela abre, e quando a
 //    pessoa não tem a permissão a consulta nem sai — não se busca dado que
 //    não se pode ver.
@@ -119,36 +124,12 @@ async function coletarRecebimentos() {
   return { chave: 'receber', titulo: 'Revendedoras devendo', panel: 'financeiro', itens };
 }
 
-// Cliente no fiado com a data combinada vencida. SEM link: a tela de
-// Pagamentos filtra por revendedora_id = usuário logado, então mandar staff
-// pra lá abriria uma tela vazia. Fica informativo, inline.
-async function coletarFiado() {
-  const { data, error } = await sbQ(sb.from('vendas')
-    .select('id,nome_cliente,revendedora_id,valor_total,valor_pago,data_combinada')
-    .not('data_combinada', 'is', null)
-    .lt('data_combinada', hojeISO())
-    .order('data_combinada').limit(50));
-  if (error) { console.warn('[lembretes] fiado:', error.message); return null; }
-  const devendo = (data || []).filter(v => Number(v.valor_total || 0) - Number(v.valor_pago || 0) > 0.001);
-  if (!devendo.length) return null;
-
-  const ids = [...new Set(devendo.map(v => v.revendedora_id).filter(Boolean))];
-  const { data: perfis } = ids.length
-    ? await sbQ(sb.from('profiles').select('id,nome').in('id', ids))
-    : { data: [] };
-  const nomePor = Object.fromEntries((perfis || []).map(p => [p.id, p.nome]));
-
-  const itens = devendo.map(v => {
-    const resta = Number(v.valor_total || 0) - Number(v.valor_pago || 0);
-    const rev = nomePor[v.revendedora_id];
-    return {
-      txt: v.nome_cliente || 'Cliente',
-      sub: `${fmtBRL(resta)} · combinou ${formatDate(v.data_combinada)}${rev ? ` · com ${rev}` : ''}`,
-      urgente: true,
-    };
-  });
-  return { chave: 'fiado', titulo: 'Clientes no fiado', panel: null, itens };
-}
+// REMOVIDO (20/08/2026, LGPD): mostrava, pra qualquer conta staff, qual
+// cliente final de qual revendedora estava devendo — dado que não interessa
+// à Lizzie (é um combinado entre a revendedora e a cliente dela, não uma
+// dívida da revendedora com a empresa; essa outra existe em coletarRecebimentos,
+// abaixo, e continua). Não trocar por uma versão "escopada por revendedora":
+// a decisão foi que esse dado simplesmente não deve aparecer aqui.
 
 async function coletarContasPagar() {
   if (!podeAcessarPanel('contas-a-pagar')) return null;
@@ -169,7 +150,7 @@ async function coletarContasPagar() {
 
 export async function carregarAvisos() {
   const res = await Promise.all([
-    coletarTrocas(), coletarSolicitacoesTroca(), coletarRecebimentos(), coletarFiado(), coletarContasPagar(),
+    coletarTrocas(), coletarSolicitacoesTroca(), coletarRecebimentos(), coletarContasPagar(),
   ].map(p => Promise.resolve(p).catch(e => { console.warn('[lembretes]', e); return null; })));
   return res.filter(Boolean);
 }
