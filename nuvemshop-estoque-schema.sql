@@ -248,6 +248,12 @@ set search_path = public
 as $$
 begin
   if p_produto_id is null then return; end if;
+  -- Produto já não existe mais (ex.: exclusão em cascata que zerou o
+  -- produto_id de um consignado dentro do mesmo DELETE — ver migration
+  -- 0065) — nada a sincronizar, e enfileirar aqui só ia esbarrar na FK.
+  if not exists (select 1 from public.produtos where id = p_produto_id) then
+    return;
+  end if;
   insert into public.nuvemshop_sync_queue (produto_id, produto_variacao_id)
   select p_produto_id, p_variacao_id
   where not exists (
